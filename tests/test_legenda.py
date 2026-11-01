@@ -41,6 +41,17 @@ def test_nome_do_glossario_mantem_maiuscula_no_inicio():
     assert " ".join(montar_cues(p, inteiro(p), ["Gripen"])[0].linhas).startswith("Gripen")
 
 
+def test_palavra_minuscula_do_glossario_nao_preserva_maiuscula():
+    p = falas(["E", "o", "Massa", "voltou."])
+    texto = " ".join(montar_cues(p, inteiro(p), ["Tudo é Política"])[0].linhas)
+    assert texto == "e o Massa voltou"
+
+
+def test_fim_de_frase_fecha_a_tela_com_duas_palavras():
+    p = falas(["muito", "técnica.", "Qual", "que", "é", "a", "dificuldade?"])
+    assert " ".join(montar_cues(p, inteiro(p))[0].linhas) == "muito técnica"
+
+
 def test_remove_pontuacao_final():
     p = falas(["isso", "é", "verdade?"])
     assert montar_cues(p, inteiro(p))[0].linhas == ["isso é verdade"]

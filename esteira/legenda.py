@@ -69,8 +69,9 @@ def _tamanho_do_bloco(textos: list[str], inicio: int) -> int:
     n = min(MAX_PALAVRAS, restantes)
     while n > 1 and _disposicao(textos[inicio : inicio + n]) is None:
         n -= 1
-    for i in range(MIN_PALAVRAS, n):
-        if textos[inicio + i - 1][-1:] in PONTUACAO_FINAL:
+    for i in range(1, n):
+        ultimo = textos[inicio + i - 1][-1:]
+        if (ultimo in ".?!…" and i >= 2) or (ultimo in PONTUACAO_FINAL and i >= MIN_PALAVRAS):
             n = i
             break
     sobra = restantes - n
@@ -83,7 +84,7 @@ def _tamanho_do_bloco(textos: list[str], inicio: int) -> int:
 def montar_cues(
     palavras: list[Palavra], faixas: list[tuple[float, float]], nomes: list[str] = ()
 ) -> list[Cue]:
-    conhecidos = {_chave(parte) for nome in nomes for parte in nome.split()}
+    conhecidos = {_chave(parte) for nome in nomes for parte in nome.split() if parte[0].isupper()}
     visiveis: list[tuple[str, float, float]] = []
     inicio_de_frase = True
     for palavra in palavras:
