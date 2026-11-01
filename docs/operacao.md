@@ -44,7 +44,25 @@ Gravar `aprovados.json` e validar:
 .venv\Scripts\python.exe -m esteira validar "<pasta do episódio>"
 ```
 
-## 4. Cortar
+## 4. Enquadrar
+
+```bash
+.venv\Scripts\python.exe -m esteira planos "<pasta do episódio>"
+```
+
+O comando cria `enquadramento.json` e `planos.jpg` em cada corte. Abra a folha
+e leia a transcrição para saber quem fala. Em `enquadramento.json`, cada plano
+tem `inicio`, `fim`, `x`, `y` e `zoom`, com `x` e `y` entre 0 e 1 na imagem
+original:
+
+- Close: deixar quem fala centralizado.
+- Câmera aberta: dar zoom em quem fala. Se a fala mudar dentro do plano, dividir
+  o plano nesse momento.
+- Duas pessoas: manter as duas só quando a troca fizer parte da cena.
+
+Evite zoom acima de 2, porque o episódio é 1080p.
+
+## 5. Cortar
 
 ```bash
 .venv\Scripts\python.exe -m esteira cortar "<pasta do episódio>"
@@ -52,7 +70,7 @@ Gravar `aprovados.json` e validar:
 
 Revisar `edicoes.md` com o dono do canal. Se um corte falhar, ler `registro.json`.
 
-## 5. Sugerir imagens
+## 6. Sugerir imagens
 
 Ler `legenda.srt` e escrever `imagens.md` com 4 a 8 sugestões, usando os tempos
 do corte final.
@@ -78,7 +96,7 @@ Regras:
 - Objeto ou cenário: escrever o prompt para geração manual.
 - Baixar arquivos somente depois da aprovação, informando nome, origem e tamanho.
 
-## 6. Escrever textos
+## 7. Escrever textos
 
 Escrever `post.md` com título e descrição do YouTube, textos de Instagram e
 TikTok, clima da música e aviso de IA quando houver imagem de IA.
