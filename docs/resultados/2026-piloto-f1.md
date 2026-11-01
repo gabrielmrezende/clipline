@@ -10,9 +10,10 @@
 Serqueira (Cerqueira), Lando Nobis (Norris), RAS (Haas), Brau GP (Brawn GP),
 Carapaguá (Jacarepaguá), Fernando Sfaster -Denil (Fernando is faster than you).
 
-## Pendente de avaliação do dono do canal
-- Abertura no CapCut sem conversão.
-- Qualidade do enquadramento central.
-- Qualidade das remoções de pausas e da legenda, ouvindo o resultado.
+## Ajustes após a primeira avaliação
+- Legenda aumentada para o tamanho 90, abaixo da faixa do vídeo.
+- Recorte central substituído por enquadramento por plano.
+- Resultado aprovado pelo dono do canal.
+
+## Pendente
 - Tempo total por corte.
-- Decisão sobre manter o recorte central ou abrir novo ciclo.
