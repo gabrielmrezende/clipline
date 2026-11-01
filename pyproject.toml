@@ -1,0 +1,17 @@
+[project]
+name = "esteira"
+version = "0.1.0"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "faster-whisper",
+    "pillow",
+    "nvidia-cublas-cu12",
+    "nvidia-cudnn-cu12",
+]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
