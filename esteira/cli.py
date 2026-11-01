@@ -5,9 +5,10 @@ from pathlib import Path
 
 from esteira.caminhos import CONTEXTO, garantir_escrita
 from esteira.cartao import gerar_cartao
-from esteira.cortar import cortar_episodio, ler_aprovados
+from esteira.cortar import cortar_episodio, ler_aprovados, pasta_do_corte
 from esteira.episodio import criar_episodio
 from esteira.midia import ErroMidia
+from esteira.planos import gerar_folha, gravar_planos, ler_planos, planos_iniciais
 from esteira.transcrever import carregar_glossario, ler_palavras, transcrever
 from esteira.validar import validar_trecho
 
@@ -41,6 +42,23 @@ def _cortar(args) -> int:
     return 0 if all(r == "ok" for r in resultados.values()) else 1
 
 
+def _planos(args) -> int:
+    pasta = garantir_escrita(Path(args.pasta))
+    video = Path(json.loads((pasta / "episodio.json").read_text("utf-8"))["video"])
+    for corte in ler_aprovados(pasta):
+        if args.numero and corte.numero not in args.numero:
+            continue
+        destino = pasta_do_corte(pasta, corte)
+        destino.mkdir(exist_ok=True)
+        planos = ler_planos(destino)
+        if not planos or args.forcar:
+            planos = planos_iniciais(video, corte.inicio, corte.fim)
+            gravar_planos(destino, planos)
+        gerar_folha(video, planos, destino / "planos.jpg")
+        print(f"{corte.numero:02d}: {len(planos)} planos")
+    return 0
+
+
 def _cartao(args) -> int:
     saida = garantir_escrita(Path(args.saida))
     print(gerar_cartao(args.manchete, args.veiculo, args.data, saida))
@@ -69,6 +87,12 @@ def principal(argv: list[str] | None = None) -> int:
     c.add_argument("--numero", type=int, action="append")
     c.add_argument("--forcar", action="store_true")
     c.set_defaults(funcao=_cortar)
+
+    c = comandos.add_parser("planos")
+    c.add_argument("pasta")
+    c.add_argument("--numero", type=int, action="append")
+    c.add_argument("--forcar", action="store_true")
+    c.set_defaults(funcao=_planos)
 
     c = comandos.add_parser("cartao")
     c.add_argument("--manchete", required=True)

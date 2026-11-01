@@ -30,6 +30,13 @@ def executar_ffmpeg(args: list[str], cwd: Path | None = None) -> None:
         raise ErroMidia(f"ffmpeg falhou: {resultado.stderr[-800:]}")
 
 
+def saida_ffmpeg(args: list[str]) -> str:
+    resultado = _rodar([str(BIN / "ffmpeg.exe"), "-hide_banner", *args], None)
+    if resultado.returncode != 0:
+        raise ErroMidia(f"ffmpeg falhou: {resultado.stderr[-800:]}")
+    return resultado.stderr
+
+
 def versao_ffmpeg() -> str:
     return _rodar([str(BIN / "ffmpeg.exe"), "-version"], None).stdout.split("\n")[0]
 

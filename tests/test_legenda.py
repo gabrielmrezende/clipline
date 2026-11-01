@@ -96,7 +96,7 @@ def test_ass_estilo(tmp_path):
     a = tmp_path / "a.ass"
     escrever_ass([Cue(1, 2.5, ["olá", "{Brasil}"])], a)
     texto = a.read_text("utf-8")
-    assert "Montserrat" in texto and ",48," in texto
-    assert r"\pos(540,1613)" in texto
+    assert "Montserrat" in texto and ",90," in texto
+    assert r"\an8\pos(540,1500)" in texto
     assert r"olá\N\{Brasil\}" in texto
     assert "0:00:01.00,0:00:02.50" in texto

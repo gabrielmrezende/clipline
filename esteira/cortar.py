@@ -9,6 +9,7 @@ from esteira.legenda import corrigir_palavras, escrever_ass, escrever_srt, monta
 from esteira.limpeza import planejar_limpeza
 from esteira.midia import ErroMidia, versao_ffmpeg
 from esteira.modelos import Corte, Edicao, Palavra
+from esteira.planos import ler_planos
 from esteira.render import queimar_legenda, renderizar_sem_legenda
 from esteira.transcrever import carregar_glossario, ler_palavras
 from esteira.validar import validar_trecho
@@ -59,7 +60,7 @@ def _cortar_um(
     escrever_srt(cues, destino / "legenda.srt")
     _escrever_edicoes(edicoes, destino / "edicoes.md")
     base = destino / "corte-sem-legenda.mp4"
-    renderizar_sem_legenda(video, faixas, cartao, base)
+    renderizar_sem_legenda(video, faixas, cartao, base, ler_planos(destino))
     ass = destino / "legenda.ass"
     escrever_ass(cues, ass)
     try:

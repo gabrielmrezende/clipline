@@ -6,6 +6,7 @@ from esteira import cortar
 from esteira.cortar import cortar_episodio, ler_aprovados
 from esteira.midia import ErroMidia
 from esteira.modelos import Corte, Palavra
+from esteira.planos import Plano, gravar_planos
 from tests.auxiliares import gerar_video_teste
 
 
@@ -78,6 +79,23 @@ def test_forcar_com_falha_nao_deixa_corte_antigo(tmp_path, monkeypatch):
     monkeypatch.setattr(cortar, "queimar_legenda", falhar)
     assert cortar_episodio(pasta, cartao=cartao, nomes=[], forcar=True)[1].startswith("erro")
     assert not (pasta / "01-bom-corte" / "corte.mp4").exists()
+
+
+def test_usa_enquadramento_gravado(tmp_path, monkeypatch):
+    pasta, cartao = preparar(tmp_path, [BOM])
+    corte = pasta / "01-bom-corte"
+    corte.mkdir()
+    gravar_planos(corte, [Plano(1.0, 62.9, x=0.3, zoom=2)])
+    usados = []
+    original = cortar.renderizar_sem_legenda
+
+    def espiar(video, faixas, fim, saida, planos=None):
+        usados.append(planos)
+        original(video, faixas, fim, saida, planos)
+
+    monkeypatch.setattr(cortar, "renderizar_sem_legenda", espiar)
+    cortar_episodio(pasta, cartao=cartao, nomes=[])
+    assert usados == [[Plano(1.0, 62.9, x=0.3, zoom=2)]]
 
 
 def test_filtra_por_numero(tmp_path):

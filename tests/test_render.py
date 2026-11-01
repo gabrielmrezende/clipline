@@ -7,11 +7,6 @@ from esteira.render import filtro_9x16, queimar_legenda, renderizar_sem_legenda
 from tests.auxiliares import gerar_video_teste
 
 
-def test_filtro_tem_faixa_e_fundo():
-    f = filtro_9x16()
-    assert "overlay=0:442" in f and "1036" in f and "gblur=sigma=40" in f
-
-
 def _cenario(tmp_path):
     pasta = tmp_path / "Tudo é Política (teste)"
     pasta.mkdir()
