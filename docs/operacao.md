@@ -108,6 +108,7 @@ Sempre gerar `calendario.md` na pasta do episódio, sem esperar pedido. Colocar
 todas as sugestões dentro de 1 semana, porque o próximo episódio costuma sair
 nesse intervalo. Usar os horários de `Contexto/redes-e-publicacao.md` e, se não
 couberem todos os cortes, acrescentar outro dia no mesmo horário. Usar um corte
-por horário e informar o motivo da ordem. Começar pelos cortes mais amplos. Se houver métricas novas,
+por horário e informar o motivo da ordem. Quando a data do próximo episódio for
+conhecida, nenhum corte do episódio atual pode ficar nessa data ou depois dela. Começar pelos cortes mais amplos. Se houver métricas novas,
 usar esses dados e dizer de onde vieram. Nunca afirmar que um horário é
 garantidamente o melhor.
