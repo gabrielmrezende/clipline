@@ -71,7 +71,7 @@ def _tamanho_do_bloco(textos: list[str], inicio: int) -> int:
         n -= 1
     for i in range(1, n):
         ultimo = textos[inicio + i - 1][-1:]
-        if (ultimo in ".?!…" and i >= 2) or (ultimo in PONTUACAO_FINAL and i >= MIN_PALAVRAS):
+        if ultimo in ".?!…" or (ultimo in PONTUACAO_FINAL and i >= MIN_PALAVRAS):
             n = i
             break
     sobra = restantes - n
@@ -93,6 +93,11 @@ def montar_cues(
             continue
         de = remapear(palavra.inicio, faixas)
         ate = remapear(palavra.fim, faixas)
+        if palavra.texto.startswith("-") and visiveis:
+            texto, inicio, _ = visiveis[-1]
+            visiveis[-1] = (texto + palavra.texto, inicio, meio if ate is None else ate)
+            inicio_de_frase = palavra.texto.endswith((".", "?", "!"))
+            continue
         visiveis.append(
             (
                 _caixa(palavra.texto, inicio_de_frase, conhecidos),

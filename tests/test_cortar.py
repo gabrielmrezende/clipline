@@ -2,7 +2,9 @@ import json
 
 import pytest
 
+from esteira import cortar
 from esteira.cortar import cortar_episodio, ler_aprovados
+from esteira.midia import ErroMidia
 from esteira.modelos import Corte, Palavra
 from tests.auxiliares import gerar_video_teste
 
@@ -49,6 +51,33 @@ def test_nao_sobrescreve_sem_forcar(tmp_path):
     cortar_episodio(pasta, cartao=cartao, nomes=[])
     assert cortar_episodio(pasta, cartao=cartao, nomes=[])[1].startswith("erro")
     assert cortar_episodio(pasta, cartao=cartao, nomes=[], forcar=True)[1] == "ok"
+
+
+def test_erro_de_sistema_nao_para_os_outros(tmp_path, monkeypatch):
+    pasta, cartao = preparar(tmp_path, [BOM, {**BOM, "numero": 2, "titulo": "Outro"}])
+    original = cortar.queimar_legenda
+
+    def falhar_no_primeiro(base, ass, saida):
+        if "01-" in str(saida):
+            raise PermissionError("arquivo aberto")
+        original(base, ass, saida)
+
+    monkeypatch.setattr(cortar, "queimar_legenda", falhar_no_primeiro)
+    r = cortar_episodio(pasta, cartao=cartao, nomes=[])
+    assert r[1].startswith("erro") and r[2] == "ok"
+    assert (pasta / "01-bom-corte" / "registro.json").exists()
+
+
+def test_forcar_com_falha_nao_deixa_corte_antigo(tmp_path, monkeypatch):
+    pasta, cartao = preparar(tmp_path, [BOM])
+    cortar_episodio(pasta, cartao=cartao, nomes=[])
+
+    def falhar(base, ass, saida):
+        raise ErroMidia("falhou")
+
+    monkeypatch.setattr(cortar, "queimar_legenda", falhar)
+    assert cortar_episodio(pasta, cartao=cartao, nomes=[], forcar=True)[1].startswith("erro")
+    assert not (pasta / "01-bom-corte" / "corte.mp4").exists()
 
 
 def test_filtra_por_numero(tmp_path):

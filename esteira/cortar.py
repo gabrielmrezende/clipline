@@ -97,9 +97,11 @@ def cortar_episodio(
         try:
             if problemas:
                 raise ErroMidia("; ".join(problemas))
+            for nome in ("corte.mp4", "corte-sem-legenda.mp4"):
+                (destino / nome).unlink(missing_ok=True)
             faixas = _cortar_um(video, destino, corte, palavras, nomes, cartao)
             resultado = "ok"
-        except ErroMidia as erro:
+        except (ErroMidia, OSError) as erro:
             resultado = f"erro: {erro}"
         _registrar(destino, video, corte, faixas, resultado)
         resultados[corte.numero] = resultado

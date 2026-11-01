@@ -17,7 +17,9 @@ def _motivo_remocao(palavras: list[Palavra], indice: int) -> str | None:
     atual = _normalizar(palavras[indice].texto)
     if atual in HESITACOES:
         return "hesitação"
-    if indice + 1 < len(palavras) and atual not in PROTEGIDAS:
+    texto = palavras[indice].texto
+    fecha_frase = texto.endswith((".", "?", "!")) and not texto.endswith("...")
+    if indice + 1 < len(palavras) and atual not in PROTEGIDAS and not fecha_frase:
         seguinte = palavras[indice + 1]
         if atual == _normalizar(seguinte.texto) and seguinte.inicio - palavras[indice].fim < PAUSA_LONGA:
             return "repetição"

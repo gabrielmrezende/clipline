@@ -1,4 +1,5 @@
 import json
+import weakref
 from types import SimpleNamespace as N
 
 import pytest
@@ -50,6 +51,25 @@ def test_oom_na_iteracao_repete_mais_leve_desde_o_inicio(tmp_path):
     falha = Modelo([SEG, RuntimeError("CUDA failed: out of memory")])
     palavras = transcrever(tmp_path / "v.mp4", tmp_path, [], fabrica(falha, Modelo([outro])))
     assert [p.texto for p in palavras] == ["Certo."]
+
+
+def test_libera_modelo_antes_de_carregar_o_proximo(tmp_path):
+    vivo = []
+
+    def criar(modo):
+        if not vivo:
+            modelo = Modelo([RuntimeError("out of memory")])
+            vivo.append(weakref.ref(modelo))
+            return modelo
+        assert vivo[0]() is None
+        return Modelo([SEG])
+
+    assert transcrever(tmp_path / "v.mp4", tmp_path, [], criar)
+
+
+def test_erro_de_alocacao_cublas_tenta_modo_leve(tmp_path):
+    falha = Modelo([RuntimeError("cuDNN failed: CUDNN_STATUS_ALLOC_FAILED")])
+    assert transcrever(tmp_path / "v.mp4", tmp_path, [], fabrica(falha, Modelo([SEG])))
 
 
 def test_falha_total_nao_deixa_saida(tmp_path):

@@ -29,6 +29,11 @@ def test_repeticao_remove_a_primeira_ocorrencia():
     assert remapear(0.3, faixas) is not None
 
 
+def test_nao_remove_fim_de_frase_igual_ao_inicio_da_seguinte():
+    p = [P("começa?", 0, 0.3), P("Começa", 0.35, 0.6), P("cedo.", 0.6, 1)]
+    assert planejar_limpeza(p, 0, 1)[1] == []
+
+
 def test_mantem_ne_ta_e_nao_nao():
     for texto in ("né", "tá", "não"):
         p = [P(texto, 0, 0.2), P(texto, 0.25, 0.45)]

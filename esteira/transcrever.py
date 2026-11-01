@@ -1,3 +1,4 @@
+import gc
 import json
 import os
 import sys
@@ -11,6 +12,7 @@ MODOS = [
     ("large-v3", "cuda", "int8_float16"),
     ("medium", "cuda", "int8_float16"),
 ]
+FALTA_DE_MEMORIA = ("out of memory", "alloc_failed", "status_not_initialized")
 
 
 def carregar_glossario(caminho: Path) -> list[str]:
@@ -61,7 +63,10 @@ def transcrever(
     if arquivo.exists() and not forcar:
         raise FileExistsError(f"Transcrição já existe: {arquivo}")
 
+    modelo = segmentos = None
     for indice, modo in enumerate(MODOS):
+        modelo = segmentos = None
+        gc.collect()
         try:
             modelo = criar_modelo(modo)
             segmentos, _ = modelo.transcribe(
@@ -76,7 +81,8 @@ def transcrever(
             ]
             break
         except RuntimeError as erro:
-            if "out of memory" not in str(erro).lower() or indice == len(MODOS) - 1:
+            mensagem = str(erro).lower()
+            if not any(m in mensagem for m in FALTA_DE_MEMORIA) or indice == len(MODOS) - 1:
                 raise
 
     saida.mkdir(parents=True, exist_ok=True)

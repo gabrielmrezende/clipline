@@ -52,6 +52,16 @@ def test_fim_de_frase_fecha_a_tela_com_duas_palavras():
     assert " ".join(montar_cues(p, inteiro(p))[0].linhas) == "muito técnica"
 
 
+def test_fim_de_frase_nao_fica_preso_a_frase_seguinte():
+    p = falas(["polêmico.", "Vou", "falar", "da", "Espanha."])
+    assert montar_cues(p, inteiro(p))[0].linhas == ["polêmico"]
+
+
+def test_junta_parte_com_hifen_a_palavra_anterior():
+    p = falas(["esporte", "-washing", "é", "assim."])
+    assert " ".join(montar_cues(p, inteiro(p))[0].linhas) == "esporte-washing é assim"
+
+
 def test_remove_pontuacao_final():
     p = falas(["isso", "é", "verdade?"])
     assert montar_cues(p, inteiro(p))[0].linhas == ["isso é verdade"]
