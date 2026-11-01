@@ -1,0 +1,18 @@
+from PIL import Image
+
+from esteira import cartao
+
+
+def test_cartao_tamanho_e_manchete_longa(tmp_path):
+    saida = cartao.gerar_cartao("Manchete muito longa " * 10, "O Globo", "14/08/2002", tmp_path / "c.png")
+    assert Image.open(saida).size == (1080, 1920)
+
+
+def test_manchete_longa_cabe_nas_margens():
+    linhas, fonte = cartao.ajustar_manchete("Manchete muito longa " * 10)
+    assert all(fonte.getlength(l) <= cartao.LARGURA_TEXTO for l in linhas)
+    assert len(linhas) * fonte.size * 1.25 <= cartao.ALTURA_TEXTO
+
+
+def test_linha_de_fonte():
+    assert cartao.linha_fonte("O Globo", "14/08/2002") == "Fonte: O Globo, 14/08/2002"

@@ -24,7 +24,8 @@ def validar_trecho(palavras: list[Palavra], corte: Corte, duracao_video: float) 
     if not indices:
         return problemas + ["trecho sem palavras na transcrição"]
 
-    primeira, ultima = indices[0], indices[-1]
+    primeira = min(indices, key=lambda i: abs(palavras[i].inicio - corte.inicio))
+    ultima = min(indices, key=lambda i: abs(palavras[i].fim - corte.fim))
     if abs(palavras[primeira].inicio - corte.inicio) > TOLERANCIA:
         problemas.append("início não bate com uma palavra da transcrição")
     elif primeira > 0:
