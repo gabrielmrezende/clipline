@@ -99,4 +99,13 @@ Regras:
 ## 7. Escrever textos
 
 Escrever `post.md` com título e descrição do YouTube, textos de Instagram e
-TikTok, clima da música e aviso de IA quando houver imagem de IA.
+TikTok, clima da música, aviso de IA quando houver imagem de IA e a seção
+"Publicação sugerida".
+
+## 8. Sugerir calendário
+
+Sempre gerar `calendario.md` na pasta do episódio, sem esperar pedido. Usar os
+próximos horários de `Contexto/redes-e-publicacao.md`, com um corte por horário
+e o motivo da ordem. Começar pelos cortes mais amplos. Se houver métricas novas,
+usar esses dados e dizer de onde vieram. Nunca afirmar que um horário é
+garantidamente o melhor.
