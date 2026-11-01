@@ -12,6 +12,8 @@ ALTURA_TEXTO = 1000
 TOPO_TEXTO = 620
 TAMANHOS = range(96, 31, -4)
 ARQUIVO_FONTE = FONTES / "Montserrat-Bold.ttf"
+ARROBA = "@tudoepoliticabr"
+AZUL = "#1E50DC"
 
 
 def linha_fonte(veiculo: str, data: str) -> str:
@@ -40,6 +42,27 @@ def ajustar_manchete(manchete: str) -> tuple[list[str], ImageFont.FreeTypeFont]:
         ):
             return linhas, fonte
     return linhas, fonte
+
+
+def gerar_sobreposicao(saida: Path) -> Path:
+    imagem = Image.new("RGBA", (LARGURA, ALTURA), (0, 0, 0, 0))
+    logo = Image.open(LOGO).convert("RGBA")
+    logo.thumbnail((500, 500))
+    imagem.alpha_composite(logo, ((LARGURA - logo.width) // 2, 70))
+
+    desenho = ImageDraw.Draw(imagem)
+    fonte = ImageFont.truetype(str(ARQUIVO_FONTE), 66)
+    siga = "SIGA "
+    largura = fonte.getlength(siga + ARROBA)
+    x = (LARGURA - largura) / 2
+    y = 70 + logo.height + 30
+    desenho.text((x, y), siga, font=fonte, fill=AZUL, stroke_width=3, stroke_fill="#000000")
+    desenho.text(
+        (x + fonte.getlength(siga), y), ARROBA, font=fonte, fill="#FFFFFF",
+        stroke_width=3, stroke_fill="#000000",
+    )
+    imagem.save(saida)
+    return Path(saida)
 
 
 def gerar_cartao(manchete: str, veiculo: str, data: str, saida: Path) -> Path:

@@ -56,8 +56,8 @@ tem `inicio`, `fim`, `x`, `y` e `zoom`, com `x` e `y` entre 0 e 1 na imagem
 original:
 
 - Close: deixar quem fala centralizado.
-- Câmera aberta: dar zoom em quem fala. Se a fala mudar dentro do plano, dividir
-  o plano nesse momento.
+- Câmera aberta: dar zoom em quem fala. No convidado, usar zoom leve, perto de
+  1,35. Se a fala mudar dentro do plano, dividir o plano nesse momento.
 - Duas pessoas: manter as duas só quando a troca fizer parte da cena.
 
 Evite zoom acima de 2, porque o episódio é 1080p.

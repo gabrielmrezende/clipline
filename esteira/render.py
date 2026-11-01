@@ -32,6 +32,7 @@ def _filtro_completo(
     deslocamento: float,
     cartao_tem_audio: bool,
     duracao_cartao: float,
+    com_sobreposicao: bool = False,
 ) -> str:
     partes: list[str] = []
     rotulos = ""
@@ -44,7 +45,13 @@ def _filtro_completo(
             f"aresample=44100,aformat=channel_layouts=stereo[a{i}]"
         )
         rotulos += f"[v{i}][a{i}]"
-    partes.append("[1:v]scale=1080:1920,setsar=1,fps=30,format=yuv420p[vfim]")
+    fim = "[1:v]scale=1080:1920,setsar=1,fps=30"
+    if com_sobreposicao:
+        partes.append(f"{fim}[base]")
+        partes.append("[2:v]format=rgba,fade=t=in:st=0:d=0.4:alpha=1[logo]")
+        partes.append("[base][logo]overlay=0:0:shortest=1,format=yuv420p[vfim]")
+    else:
+        partes.append(f"{fim},format=yuv420p[vfim]")
     if cartao_tem_audio:
         partes.append("[1:a]aresample=44100,aformat=channel_layouts=stereo[afim]")
     else:
@@ -77,17 +84,22 @@ def renderizar_sem_legenda(
     cartao: Path,
     saida: Path,
     planos: list[Plano] | None = None,
+    sobreposicao: Path | None = None,
 ) -> None:
     origem, fim = sondar(video), sondar(cartao)
     deslocamento = max(0.0, faixas[0][0] - FOLGA_BUSCA)
     segmentos = dividir_em_segmentos(faixas, planos or [])
     filtro = _filtro_completo(
-        segmentos, origem.largura, origem.altura, deslocamento, fim.tem_audio, fim.duracao
+        segmentos, origem.largura, origem.altura, deslocamento, fim.tem_audio, fim.duracao,
+        sobreposicao is not None,
     )
     entrada = [
         "-ss", f"{deslocamento:.3f}", "-t", f"{faixas[-1][1] - deslocamento + FOLGA_BUSCA:.3f}", "-i", str(video),
-        "-i", str(cartao), "-filter_complex", filtro, "-map", "[vsaida]", "-map", "[asaida]",
+        "-i", str(cartao),
     ]
+    if sobreposicao is not None:
+        entrada += ["-loop", "1", "-framerate", "30", "-i", str(sobreposicao)]
+    entrada += ["-filter_complex", filtro, "-map", "[vsaida]", "-map", "[asaida]"]
     esperado = sum(b - a for a, b in faixas) + fim.duracao
     _codificar(entrada, Path(saida), esperado)
 

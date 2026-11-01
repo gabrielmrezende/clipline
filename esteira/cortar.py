@@ -3,7 +3,8 @@ from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
 
-from esteira.caminhos import CARTAO_FINAL, CONTEXTO
+from esteira.caminhos import CONTEXTO, ENCERRAMENTOS, SOBREPOSICAO
+from esteira.cartao import gerar_sobreposicao
 from esteira.episodio import slug
 from esteira.legenda import corrigir_palavras, escrever_ass, escrever_srt, montar_cues
 from esteira.limpeza import planejar_limpeza
@@ -18,6 +19,10 @@ from esteira.validar import validar_trecho
 def ler_aprovados(pasta: Path) -> list[Corte]:
     dados = json.loads((Path(pasta) / "aprovados.json").read_text("utf-8"))
     return [Corte(**c) for c in dados["cortes"]]
+
+
+def escolher_encerramento(numero: int) -> Path:
+    return ENCERRAMENTOS[(numero - 1) % len(ENCERRAMENTOS)]
 
 
 def pasta_do_corte(pasta: Path, corte: Corte) -> Path:
@@ -60,7 +65,9 @@ def _cortar_um(
     escrever_srt(cues, destino / "legenda.srt")
     _escrever_edicoes(edicoes, destino / "edicoes.md")
     base = destino / "corte-sem-legenda.mp4"
-    renderizar_sem_legenda(video, faixas, cartao, base, ler_planos(destino))
+    if not SOBREPOSICAO.exists():
+        gerar_sobreposicao(SOBREPOSICAO)
+    renderizar_sem_legenda(video, faixas, cartao, base, ler_planos(destino), SOBREPOSICAO)
     ass = destino / "legenda.ass"
     escrever_ass(cues, ass)
     try:
@@ -74,7 +81,7 @@ def cortar_episodio(
     pasta: Path,
     numeros: set[int] | None = None,
     forcar: bool = False,
-    cartao: Path = CARTAO_FINAL,
+    cartao: Path | None = None,
     nomes: list[str] | None = None,
 ) -> dict[int, str]:
     pasta = Path(pasta)
@@ -100,7 +107,8 @@ def cortar_episodio(
                 raise ErroMidia("; ".join(problemas))
             for nome in ("corte.mp4", "corte-sem-legenda.mp4"):
                 (destino / nome).unlink(missing_ok=True)
-            faixas = _cortar_um(video, destino, corte, palavras, nomes, cartao)
+            encerramento = cartao or escolher_encerramento(corte.numero)
+            faixas = _cortar_um(video, destino, corte, palavras, nomes, encerramento)
             resultado = "ok"
         except (ErroMidia, OSError) as erro:
             resultado = f"erro: {erro}"

@@ -6,7 +6,11 @@ CONTEXTO = RAIZ / "Contexto"
 CORTES = RAIZ / "Cortes"
 BIN = AUTOMACAO / "bin"
 FONTES = AUTOMACAO / "assets" / "fonts"
-CARTAO_FINAL = RAIZ / "Entre Assuntos" / "Juliano Viegas" / "Cortes" / "Final Vídeo.mp4"
+ENCERRAMENTOS = [
+    RAIZ / f"Final Corte ({nome}).mp4"
+    for nome in ("Gabriel 1", "Tigas 1", "Gabriel 2", "Tigas 2")
+]
+SOBREPOSICAO = AUTOMACAO / "assets" / "encerramento.png"
 LOGO = RAIZ / "Logos" / "Logo sem Fundo.png"
 
 

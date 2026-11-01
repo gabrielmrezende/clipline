@@ -1,6 +1,7 @@
 import pytest
+from PIL import Image
 
-from esteira.midia import ErroMidia, sondar
+from esteira.midia import ErroMidia, executar_ffmpeg, sondar
 from esteira.modelos import Cue
 from esteira.legenda import escrever_ass
 from esteira.render import filtro_9x16, queimar_legenda, renderizar_sem_legenda
@@ -39,6 +40,18 @@ def test_cartao_sem_audio_recebe_silencio(tmp_path):
     saida = pasta / "s.mp4"
     renderizar_sem_legenda(origem, [(0.0, 1.0)], mudo, saida)
     assert sondar(saida).tem_audio
+
+
+def test_encerramento_recebe_sobreposicao(tmp_path):
+    pasta, origem, cartao = _cenario(tmp_path)
+    logo = pasta / "logo.png"
+    Image.new("RGBA", (1080, 1920), (255, 0, 0, 255)).save(logo)
+    saida = pasta / "s.mp4"
+    renderizar_sem_legenda(origem, [(0.0, 1.0)], cartao, saida, sobreposicao=logo)
+    quadro = pasta / "q.png"
+    executar_ffmpeg(["-y", "-sseof", "-0.2", "-i", str(saida), "-frames:v", "1", str(quadro)])
+    assert Image.open(quadro).convert("RGB").getpixel((540, 960))[0] > 200
+    assert sondar(saida).duracao == pytest.approx(2, abs=0.2)
 
 
 def test_falha_nao_deixa_arquivo_final(tmp_path):

@@ -145,7 +145,7 @@ def _escapar_ass(texto: str) -> str:
 def escrever_ass(cues: list[Cue], caminho: Path) -> None:
     eventos = [
         f"Dialogue: 0,{_tempo_ass(c.inicio)},{_tempo_ass(c.fim)},Default,,0,0,0,,"
-        + r"{\an8\pos(540,1500)}"
+        + r"{\an8\pos(540,1530)}"
         + r"\N".join(_escapar_ass(l) for l in c.linhas)
         for c in cues
     ]

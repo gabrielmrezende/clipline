@@ -89,13 +89,20 @@ def test_usa_enquadramento_gravado(tmp_path, monkeypatch):
     usados = []
     original = cortar.renderizar_sem_legenda
 
-    def espiar(video, faixas, fim, saida, planos=None):
+    def espiar(video, faixas, fim, saida, planos=None, sobreposicao=None):
         usados.append(planos)
-        original(video, faixas, fim, saida, planos)
+        original(video, faixas, fim, saida, planos, sobreposicao)
 
     monkeypatch.setattr(cortar, "renderizar_sem_legenda", espiar)
     cortar_episodio(pasta, cartao=cartao, nomes=[])
     assert usados == [[Plano(1.0, 62.9, x=0.3, zoom=2)]]
+
+
+def test_encerramento_alterna_entre_os_quatro_videos():
+    escolhidos = [cortar.escolher_encerramento(n).name for n in range(1, 6)]
+    assert len(set(escolhidos[:4])) == 4
+    assert escolhidos[4] == escolhidos[0]
+    assert all(n.startswith("Final Corte") for n in escolhidos)
 
 
 def test_filtra_por_numero(tmp_path):
