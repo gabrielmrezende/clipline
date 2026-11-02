@@ -61,7 +61,7 @@ O motor só lê a receita. As partes 2 e 3 só preenchem campos dela.
   "versao": 1,
   "faixas": [[724.12, 760.30], [761.10, 801.40]],
   "planos": [{"inicio": 724.12, "fim": 740.0, "x": 0.5, "y": 0.4, "zoom": 1.35}],
-  "legenda": [{"inicio": 0.0, "fim": 1.8, "texto": "o gripen é um caça", "destaque": "gripen"}],
+  "legenda": [{"inicio": 0.0, "fim": 1.8, "linhas": ["o gripen é um caça"], "destaque": "gripen"}],
   "imagens": [{"inicio": 18.0, "fim": 21.0, "arquivo": "imagens/01-gripen.jpg"}],
   "musica": {"arquivo": "...", "volume_db": -20},
   "encerramento": true
