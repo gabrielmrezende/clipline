@@ -99,8 +99,15 @@ Regras:
 ## 7. Escrever textos
 
 Escrever `post.md` com título e descrição do YouTube, textos de Instagram e
-TikTok, clima da música, aviso de IA quando houver imagem de IA e a seção
-"Publicação sugerida".
+TikTok, aviso de IA quando houver imagem de IA e a seção "Publicação sugerida".
+
+A seção "Música" traz:
+- clima sugerido;
+- termos de busca para o CapCut, com filtro de uso comercial;
+- gênero e humor para a biblioteca de áudio do YouTube;
+- alerta para músicas protegidas ligadas ao tema;
+- campos para registrar nome, artista, origem e licença da música usada.
+Prefira música sem letra. Não sugira música comercial famosa.
 
 ## 8. Sugerir calendário
 
