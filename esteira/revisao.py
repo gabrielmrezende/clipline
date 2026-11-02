@@ -26,7 +26,10 @@ def _bloco(pasta: Path, corte: Corte, palavras: list[Palavra]) -> list[str]:
     destino = pasta_do_corte(pasta, corte)
     linhas = [f"## {corte.numero}. {corte.titulo}"]
     arquivo = destino / "registro.json"
-    registro = json.loads(arquivo.read_text("utf-8")) if arquivo.exists() else {}
+    try:
+        registro = json.loads(arquivo.read_text("utf-8")) if arquivo.exists() else {}
+    except (OSError, ValueError):
+        return linhas + ["Erro: registro ilegível", ""]
     resultado = registro.get("resultado", "")
     if resultado.startswith("erro:"):
         return linhas + [f"Erro: {resultado[len('erro:'):].strip()}", ""]
@@ -35,7 +38,10 @@ def _bloco(pasta: Path, corte: Corte, palavras: list[Palavra]) -> list[str]:
 
     antes, depois = contexto_do_trecho(palavras, corte.inicio, corte.fim)
     redes = "YouTube, TikTok e Instagram" if corte.instagram else "YouTube e TikTok"
-    alertas = _alertas(destino, registro)
+    try:
+        alertas = _alertas(destino, registro)
+    except (OSError, ValueError, KeyError, TypeError):
+        return linhas + ["Erro: montagem ilegível", ""]
     return linhas + [
         f"Vídeo: [final.mp4]({destino.name}/final.mp4)",
         f"Redes: {redes}",

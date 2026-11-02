@@ -88,3 +88,20 @@ def test_revisao_e_sobrescrita(tmp_path):
     _montado(pasta, a)
     (pasta / "revisao.md").write_text("velho", "utf-8")
     assert "velho" not in escrever_revisao(pasta).read_text("utf-8")
+
+
+def test_revisao_com_json_ilegivel_afeta_so_o_proprio_corte(tmp_path):
+    a = Corte(1, "Registro Ruim", 10, 20, "tenso")
+    b = Corte(2, "Montagem Ruim", 10, 20, "tenso")
+    c = Corte(3, "Bom", 10, 20, "tenso")
+    pasta = _episodio(tmp_path, [a, b, c])
+    for corte in (a, b, c):
+        _montado(pasta, corte)
+    (pasta_do_corte(pasta, a) / "registro.json").write_text("{quebrado", "utf-8")
+    (pasta_do_corte(pasta, b) / "montagem.json").write_text("{quebrado", "utf-8")
+
+    blocos = escrever_revisao(pasta).read_text("utf-8").split("## ")
+
+    assert "Erro: registro ilegível" in blocos[1] and "Vídeo:" not in blocos[1]
+    assert "Erro: montagem ilegível" in blocos[2] and "Vídeo:" not in blocos[2]
+    assert "Alertas: nenhum" in blocos[3] and "ilegível" not in blocos[3]
