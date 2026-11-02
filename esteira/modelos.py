@@ -15,6 +15,8 @@ class Corte:
     inicio: float
     fim: float
     clima: str
+    instagram: bool = False
+    data: str = ""
 
 
 @dataclass
@@ -30,3 +32,4 @@ class Cue:
     inicio: float
     fim: float
     linhas: list[str]
+    destaque: str | None = None
