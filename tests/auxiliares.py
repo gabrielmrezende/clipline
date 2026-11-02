@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 from esteira.midia import executar_ffmpeg
@@ -14,3 +15,15 @@ def gerar_video_teste(
         args += ["-c:a", "aac"]
     executar_ffmpeg(args + [str(saida)])
     return saida
+
+
+def preparar_episodio_teste(tmp_path: Path, cortes: list[dict]) -> tuple[Path, Path]:
+    pasta = tmp_path / "ep"
+    (pasta / "transcricao").mkdir(parents=True)
+    video = gerar_video_teste(tmp_path / "v.mp4", 80)
+    cartao = gerar_video_teste(tmp_path / "fim.mp4", 1, 1080, 1920)
+    (pasta / "episodio.json").write_text(json.dumps({"video": str(video), "duracao": 80}), "utf-8")
+    palavras = [{"texto": "fala.", "inicio": t + 0.0, "fim": t + 0.9} for t in range(1, 70)]
+    (pasta / "transcricao" / "palavras.json").write_text(json.dumps(palavras), "utf-8")
+    (pasta / "aprovados.json").write_text(json.dumps({"cortes": cortes}), "utf-8")
+    return pasta, cartao

@@ -3,15 +3,15 @@ from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
 
-from esteira.caminhos import CONTEXTO, ENCERRAMENTOS, SOBREPOSICAO
-from esteira.cartao import gerar_sobreposicao
+from esteira.caminhos import CONTEXTO, ENCERRAMENTOS
 from esteira.episodio import slug
-from esteira.legenda import corrigir_palavras, escrever_ass, escrever_srt, montar_cues
+from esteira.imagens import ler_imagens
+from esteira.legenda import corrigir_palavras, escrever_srt, montar_cues
 from esteira.limpeza import planejar_limpeza
 from esteira.midia import ErroMidia, versao_ffmpeg
 from esteira.modelos import Corte, Edicao, Palavra
 from esteira.planos import ler_planos
-from esteira.render import queimar_legenda, renderizar_sem_legenda
+from esteira.receita import NOME_ARQUIVO, Receita, gravar_receita, ler_receita
 from esteira.transcrever import carregar_glossario, ler_palavras
 from esteira.validar import validar_trecho
 
@@ -37,7 +37,9 @@ def _escrever_edicoes(edicoes: list[Edicao], caminho: Path) -> None:
     caminho.write_text("\n".join(linhas) + "\n", "utf-8")
 
 
-def _registrar(destino: Path, video: Path, corte: Corte, faixas: list, resultado: str) -> None:
+def registrar(
+    destino: Path, video: Path, corte: Corte, faixas: list, resultado: str, alertas: list[str] | None = None
+) -> None:
     (destino / "registro.json").write_text(
         json.dumps(
             {
@@ -47,6 +49,7 @@ def _registrar(destino: Path, video: Path, corte: Corte, faixas: list, resultado
                 "ffmpeg": versao_ffmpeg(),
                 "data": datetime.now().isoformat(timespec="seconds"),
                 "resultado": resultado,
+                "alertas": alertas or [],
             },
             ensure_ascii=False,
             indent=2,
@@ -55,33 +58,28 @@ def _registrar(destino: Path, video: Path, corte: Corte, faixas: list, resultado
     )
 
 
-def _cortar_um(
-    video: Path, destino: Path, corte: Corte, palavras: list[Palavra], nomes: list[str], cartao: Path
-) -> list:
+def _preparar_um(destino: Path, corte: Corte, palavras: list[Palavra], nomes: list[str]) -> list:
     faixas, edicoes = planejar_limpeza(palavras, corte.inicio, corte.fim)
     trecho = [p for p in palavras if p.fim > corte.inicio and p.inicio < corte.fim]
     cues = montar_cues(corrigir_palavras(trecho, nomes), faixas, nomes)
     (destino / "imagens").mkdir(exist_ok=True)
     escrever_srt(cues, destino / "legenda.srt")
     _escrever_edicoes(edicoes, destino / "edicoes.md")
-    base = destino / "corte-sem-legenda.mp4"
-    if not SOBREPOSICAO.exists():
-        gerar_sobreposicao(SOBREPOSICAO)
-    renderizar_sem_legenda(video, faixas, cartao, base, ler_planos(destino), SOBREPOSICAO)
-    ass = destino / "legenda.ass"
-    escrever_ass(cues, ass)
-    try:
-        queimar_legenda(base, ass, destino / "corte.mp4")
-    finally:
-        ass.unlink(missing_ok=True)
+    gravar_receita(destino, Receita(faixas, ler_planos(destino), cues, ler_imagens(destino)))
     return faixas
 
 
-def cortar_episodio(
+def atualizar_imagens(pasta_corte: Path) -> int:
+    receita = ler_receita(pasta_corte)
+    receita.imagens = ler_imagens(pasta_corte)
+    gravar_receita(pasta_corte, receita)
+    return len(receita.imagens)
+
+
+def preparar_episodio(
     pasta: Path,
     numeros: set[int] | None = None,
     forcar: bool = False,
-    cartao: Path | None = None,
     nomes: list[str] | None = None,
 ) -> dict[int, str]:
     pasta = Path(pasta)
@@ -96,8 +94,8 @@ def cortar_episodio(
         if numeros is not None and corte.numero not in numeros:
             continue
         destino = pasta_do_corte(pasta, corte)
-        if (destino / "corte.mp4").exists() and not forcar:
-            resultados[corte.numero] = "erro: corte já existe, use --forcar"
+        if (destino / NOME_ARQUIVO).exists() and not forcar:
+            resultados[corte.numero] = f"erro: {NOME_ARQUIVO} já existe, use --forcar"
             continue
         destino.mkdir(exist_ok=True)
         problemas = validar_trecho(palavras, corte, episodio["duracao"])
@@ -105,13 +103,10 @@ def cortar_episodio(
         try:
             if problemas:
                 raise ErroMidia("; ".join(problemas))
-            for nome in ("corte.mp4", "corte-sem-legenda.mp4"):
-                (destino / nome).unlink(missing_ok=True)
-            encerramento = cartao or escolher_encerramento(corte.numero)
-            faixas = _cortar_um(video, destino, corte, palavras, nomes, encerramento)
+            faixas = _preparar_um(destino, corte, palavras, nomes)
             resultado = "ok"
         except (ErroMidia, OSError) as erro:
             resultado = f"erro: {erro}"
-        _registrar(destino, video, corte, faixas, resultado)
+        registrar(destino, video, corte, faixas, resultado)
         resultados[corte.numero] = resultado
     return resultados

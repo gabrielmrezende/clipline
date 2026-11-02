@@ -12,7 +12,8 @@ from esteira.planos import (
     planos_iniciais,
     recorte,
 )
-from esteira.render import filtro_9x16, renderizar_sem_legenda
+from esteira.receita import Receita
+from esteira.render import filtro_9x16, renderizar_final
 from tests.auxiliares import gerar_video_teste
 
 
@@ -101,7 +102,7 @@ def test_render_aplica_planos_diferentes(tmp_path):
     cartao = gerar_video_teste(tmp_path / "f.mp4", 1, 1080, 1920)
     saida = tmp_path / "s.mp4"
     planos = [Plano(0, 2, x=0.2, zoom=2), Plano(2, 4, x=0.8, zoom=1.5)]
-    renderizar_sem_legenda(origem, [(0.0, 3.0)], cartao, saida, planos)
+    renderizar_final(Receita([(0.0, 3.0)], planos, []), origem, cartao, tmp_path, saida)
     m = sondar(saida)
     assert (m.largura, m.altura) == (1080, 1920)
     assert m.duracao == pytest.approx(4, abs=0.2)

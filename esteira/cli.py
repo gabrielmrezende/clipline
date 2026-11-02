@@ -5,9 +5,10 @@ from pathlib import Path
 
 from esteira.caminhos import CONTEXTO, garantir_escrita
 from esteira.cartao import gerar_cartao
-from esteira.cortar import cortar_episodio, ler_aprovados, pasta_do_corte
+from esteira.cortar import atualizar_imagens, ler_aprovados, pasta_do_corte, preparar_episodio
 from esteira.episodio import criar_episodio
 from esteira.midia import ErroMidia
+from esteira.montar import montar_episodio
 from esteira.planos import gerar_folha, gravar_planos, ler_planos, planos_iniciais
 from esteira.transcrever import carregar_glossario, ler_palavras, transcrever
 from esteira.validar import validar_trecho
@@ -33,13 +34,34 @@ def _validar(args) -> int:
     return 1 if erros else 0
 
 
-def _cortar(args) -> int:
-    pasta = garantir_escrita(Path(args.pasta))
-    numeros = set(args.numero) if args.numero else None
-    resultados = cortar_episodio(pasta, numeros, args.forcar)
+def _imprimir(resultados: dict[int, str]) -> int:
     for numero, resultado in resultados.items():
         print(f"{numero:02d}: {resultado}")
-    return 0 if all(r == "ok" for r in resultados.values()) else 1
+    return 0 if all(r.startswith("ok") for r in resultados.values()) else 1
+
+
+def _preparar(args) -> int:
+    pasta = garantir_escrita(Path(args.pasta))
+    numeros = set(args.numero) if args.numero else None
+    return _imprimir(preparar_episodio(pasta, numeros, args.forcar))
+
+
+def _montar(args) -> int:
+    pasta = garantir_escrita(Path(args.pasta))
+    numeros = set(args.numero) if args.numero else None
+    return _imprimir(montar_episodio(pasta, numeros, args.forcar))
+
+
+def _imagens(args) -> int:
+    pasta = garantir_escrita(Path(args.pasta))
+    for corte in ler_aprovados(pasta):
+        if args.numero and corte.numero not in args.numero:
+            continue
+        try:
+            print(f"{corte.numero:02d}: {atualizar_imagens(pasta_do_corte(pasta, corte))} imagens")
+        except FileNotFoundError:
+            print(f"{corte.numero:02d}: erro: montagem.json não encontrado, rode preparar")
+    return 0
 
 
 def _planos(args) -> int:
@@ -82,11 +104,22 @@ def principal(argv: list[str] | None = None) -> int:
     c.add_argument("pasta")
     c.set_defaults(funcao=_validar)
 
-    c = comandos.add_parser("cortar")
+    c = comandos.add_parser("preparar")
     c.add_argument("pasta")
     c.add_argument("--numero", type=int, action="append")
     c.add_argument("--forcar", action="store_true")
-    c.set_defaults(funcao=_cortar)
+    c.set_defaults(funcao=_preparar)
+
+    c = comandos.add_parser("imagens")
+    c.add_argument("pasta")
+    c.add_argument("--numero", type=int, action="append")
+    c.set_defaults(funcao=_imagens)
+
+    c = comandos.add_parser("montar")
+    c.add_argument("pasta")
+    c.add_argument("--numero", type=int, action="append")
+    c.add_argument("--forcar", action="store_true")
+    c.set_defaults(funcao=_montar)
 
     c = comandos.add_parser("planos")
     c.add_argument("pasta")

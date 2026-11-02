@@ -64,21 +64,6 @@ def _filtro_cartao(cartao: int, logo: int | None, tem_audio: bool, duracao: floa
     return partes
 
 
-def _filtro_completo(
-    segmentos: list[tuple[float, float, Plano]],
-    largura: int,
-    altura: int,
-    deslocamento: float,
-    cartao_tem_audio: bool,
-    duracao_cartao: float,
-    com_sobreposicao: bool = False,
-) -> str:
-    partes, rotulos = _filtro_segmentos(segmentos, largura, altura, deslocamento)
-    partes += _filtro_cartao(1, 2 if com_sobreposicao else None, cartao_tem_audio, duracao_cartao)
-    partes.append(f"{rotulos}[vfim][afim]concat=n={len(segmentos) + 1}:v=1:a=1[vsaida][asaida]")
-    return ";".join(partes)
-
-
 def _filtro_imagem(entrada: int, saida: str, ordem: int, imagem: Imagem) -> str:
     filtro = f"[{entrada}:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920"
     if ZOOM_IMAGEM > 1:
@@ -121,45 +106,6 @@ def _codificar(args_entrada: list[str], saida: Path, duracao_esperada: float, cw
         temporario.replace(saida)
     finally:
         temporario.unlink(missing_ok=True)
-
-
-def renderizar_sem_legenda(
-    video: Path,
-    faixas: list[tuple[float, float]],
-    cartao: Path,
-    saida: Path,
-    planos: list[Plano] | None = None,
-    sobreposicao: Path | None = None,
-) -> None:
-    origem, fim = sondar(video), sondar(cartao)
-    deslocamento = max(0.0, faixas[0][0] - FOLGA_BUSCA)
-    segmentos = dividir_em_segmentos(faixas, planos or [])
-    filtro = _filtro_completo(
-        segmentos, origem.largura, origem.altura, deslocamento, fim.tem_audio, fim.duracao,
-        sobreposicao is not None,
-    )
-    entrada = [
-        "-ss", f"{deslocamento:.3f}", "-t", f"{faixas[-1][1] - deslocamento + FOLGA_BUSCA:.3f}", "-i", str(video),
-        "-i", str(cartao),
-    ]
-    if sobreposicao is not None:
-        entrada += ["-loop", "1", "-framerate", "30", "-i", str(sobreposicao)]
-    entrada += ["-filter_complex", filtro, "-map", "[vsaida]", "-map", "[asaida]"]
-    esperado = sum(b - a for a, b in faixas) + fim.duracao
-    _codificar(entrada, Path(saida), esperado)
-
-
-def queimar_legenda(base: Path, ass: Path, saida: Path) -> None:
-    saida = Path(saida)
-    pasta = saida.parent / ".legenda_tmp"
-    pasta.mkdir(exist_ok=True)
-    try:
-        shutil.copy(ass, pasta / "legenda.ass")
-        shutil.copy(FONTES / "Montserrat-Bold.ttf", pasta / "Montserrat-Bold.ttf")
-        entrada = ["-i", str(base), "-vf", "ass=.legenda_tmp/legenda.ass:fontsdir=.legenda_tmp"]
-        _codificar(entrada, saida, sondar(base).duracao, cwd=saida.parent)
-    finally:
-        shutil.rmtree(pasta, ignore_errors=True)
 
 
 def renderizar_final(
