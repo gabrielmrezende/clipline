@@ -55,14 +55,19 @@ def _montar(args) -> int:
 
 def _imagens(args) -> int:
     pasta = garantir_escrita(Path(args.pasta))
+    falhas = 0
     for corte in ler_aprovados(pasta):
         if args.numero and corte.numero not in args.numero:
             continue
         try:
             print(f"{corte.numero:02d}: {atualizar_imagens(pasta_do_corte(pasta, corte))} imagens")
         except FileNotFoundError:
+            falhas += 1
             print(f"{corte.numero:02d}: erro: montagem.json não encontrado, rode preparar")
-    return 0
+        except (OSError, ValueError, KeyError, TypeError) as erro:
+            falhas += 1
+            print(f"{corte.numero:02d}: erro: {erro}")
+    return 1 if falhas else 0
 
 
 def _planos(args) -> int:
