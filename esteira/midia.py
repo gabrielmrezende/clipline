@@ -1,4 +1,5 @@
 import json
+import re
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
@@ -35,6 +36,14 @@ def saida_ffmpeg(args: list[str]) -> str:
     if resultado.returncode != 0:
         raise ErroMidia(f"ffmpeg falhou: {resultado.stderr[-800:]}")
     return resultado.stderr
+
+
+def pico_de_audio(video: Path) -> float:
+    log = saida_ffmpeg(["-i", str(video), "-vn", "-af", "volumedetect", "-f", "null", "-"])
+    achado = re.search(r"max_volume:\s*(-?[\d.]+|-inf) dB", log)
+    if not achado:
+        raise ErroMidia(f"Não consegui medir o áudio de {video}")
+    return float(achado.group(1))
 
 
 def versao_ffmpeg() -> str:
