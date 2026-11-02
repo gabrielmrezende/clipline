@@ -10,6 +10,7 @@ from esteira.episodio import criar_episodio
 from esteira.midia import ErroMidia
 from esteira.montar import montar_episodio
 from esteira.planos import gerar_folha, gravar_planos, ler_planos, planos_iniciais
+from esteira.revisao import escrever_revisao
 from esteira.transcrever import carregar_glossario, ler_palavras, transcrever
 from esteira.validar import validar_trecho
 
@@ -81,6 +82,12 @@ def _planos(args) -> int:
     return 0
 
 
+def _revisao(args) -> int:
+    pasta = garantir_escrita(Path(args.pasta))
+    print(escrever_revisao(pasta))
+    return 0
+
+
 def _cartao(args) -> int:
     saida = garantir_escrita(Path(args.saida))
     print(gerar_cartao(args.manchete, args.veiculo, args.data, saida))
@@ -126,6 +133,10 @@ def principal(argv: list[str] | None = None) -> int:
     c.add_argument("--numero", type=int, action="append")
     c.add_argument("--forcar", action="store_true")
     c.set_defaults(funcao=_planos)
+
+    c = comandos.add_parser("revisao")
+    c.add_argument("pasta")
+    c.set_defaults(funcao=_revisao)
 
     c = comandos.add_parser("cartao")
     c.add_argument("--manchete", required=True)
