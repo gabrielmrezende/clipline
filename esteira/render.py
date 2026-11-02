@@ -1,4 +1,5 @@
 import shutil
+from collections.abc import Callable
 from pathlib import Path
 
 from esteira.caminhos import FONTES
@@ -90,7 +91,13 @@ def _filtro_musica(entrada: int, musica: Musica, duracao: float) -> list[str]:
     ]
 
 
-def _codificar(args_entrada: list[str], saida: Path, duracao_esperada: float, cwd: Path | None = None) -> None:
+def _codificar(
+    args_entrada: list[str],
+    saida: Path,
+    duracao_esperada: float,
+    cwd: Path | None = None,
+    verificar: Callable[[Path], None] | None = None,
+) -> None:
     temporario = saida.with_name(saida.stem + ".tmp.mp4")
     try:
         for indice, encoder in enumerate(ENCODERS):
@@ -103,6 +110,8 @@ def _codificar(args_entrada: list[str], saida: Path, duracao_esperada: float, cw
         real = sondar(temporario).duracao
         if abs(real - duracao_esperada) > 0.5:
             raise ErroMidia(f"Duração inesperada em {saida.name}: {real:.1f}s, esperado {duracao_esperada:.1f}s")
+        if verificar:
+            verificar(temporario)
         temporario.replace(saida)
     finally:
         temporario.unlink(missing_ok=True)
@@ -164,15 +173,20 @@ def renderizar_final(
     args += ["-filter_complex", ";".join(partes), "-map", f"[{rotulo_video}]", "-map", f"[{rotulo_audio}]"]
     temporaria = saida.parent / ".legenda_tmp"
     temporaria.mkdir(exist_ok=True)
+    pico = 0.0
+
+    def medir(arquivo: Path) -> None:
+        nonlocal pico
+        pico = pico_de_audio(arquivo, duracao_principal(receita))
+
     try:
         intervalos = [(i.inicio, i.fim) for i in receita.imagens]
         escrever_ass(ocultar_durante(receita.legenda, intervalos), temporaria / "legenda.ass")
         shutil.copy(FONTES / "Montserrat-Bold.ttf", temporaria / "Montserrat-Bold.ttf")
-        _codificar(args, saida, esperado, cwd=saida.parent)
+        _codificar(args, saida, esperado, cwd=saida.parent, verificar=medir)
     finally:
         shutil.rmtree(temporaria, ignore_errors=True)
 
-    pico = pico_de_audio(saida)
     if pico > LIMIAR_PICO:
         alertas.append(f"áudio perto de saturar: {pico:.1f} dB")
     return alertas

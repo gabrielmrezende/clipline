@@ -162,9 +162,31 @@ def test_falha_nao_deixa_final(tmp_path):
 
 def test_alerta_de_audio_perto_de_saturar(tmp_path, monkeypatch):
     pasta, origem, cartao = _cenario(tmp_path)
-    monkeypatch.setattr(render, "pico_de_audio", lambda _: -0.06)
+    monkeypatch.setattr(render, "pico_de_audio", lambda *_: -0.06)
     alertas = renderizar_final(Receita([(0.0, 1.0)], [], []), origem, cartao, pasta, pasta / "final.mp4")
     assert "áudio perto de saturar: -0.1 dB" in alertas
+
+
+def test_falha_na_medicao_do_pico_nao_deixa_final(tmp_path, monkeypatch):
+    pasta, origem, cartao = _cenario(tmp_path)
+
+    def falhar(*args):
+        raise ErroMidia("não mediu")
+
+    monkeypatch.setattr(render, "pico_de_audio", falhar)
+    saida = pasta / "final.mp4"
+    with pytest.raises(ErroMidia):
+        renderizar_final(Receita([(0.0, 1.0)], [], []), origem, cartao, pasta, saida)
+    assert not saida.exists()
+    assert not list(pasta.glob("*.tmp.mp4"))
+
+
+def test_pico_e_medido_so_na_parte_principal(tmp_path, monkeypatch):
+    pasta, origem, cartao = _cenario(tmp_path)
+    medidas = []
+    monkeypatch.setattr(render, "pico_de_audio", lambda arquivo, duracao=None: medidas.append((arquivo, duracao)) or -9)
+    renderizar_final(Receita([(0.0, 1.0)], [], []), origem, cartao, pasta, pasta / "final.mp4")
+    assert [(a.name, d) for a, d in medidas] == [("final.tmp.mp4", 1.0)]
 
 
 def test_pico_de_audio(tmp_path):

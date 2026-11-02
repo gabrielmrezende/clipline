@@ -38,8 +38,9 @@ def saida_ffmpeg(args: list[str]) -> str:
     return resultado.stderr
 
 
-def pico_de_audio(video: Path) -> float:
-    log = saida_ffmpeg(["-i", str(video), "-vn", "-af", "volumedetect", "-f", "null", "-"])
+def pico_de_audio(video: Path, duracao: float | None = None) -> float:
+    limite = ["-t", f"{duracao:.3f}"] if duracao is not None else []
+    log = saida_ffmpeg(["-i", str(video), *limite, "-vn", "-af", "volumedetect", "-f", "null", "-"])
     achado = re.search(r"max_volume:\s*(-?[\d.]+|-inf) dB", log)
     if not achado:
         raise ErroMidia(f"Não consegui medir o áudio de {video}")
