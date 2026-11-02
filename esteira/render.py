@@ -2,6 +2,8 @@ import shutil
 from collections.abc import Callable
 from pathlib import Path
 
+from PIL import Image
+
 from esteira.caminhos import FONTES
 from esteira.legenda import escrever_ass, ocultar_durante
 from esteira.midia import ErroMidia, executar_ffmpeg, pico_de_audio, sondar
@@ -9,6 +11,7 @@ from esteira.planos import Plano, dividir_em_segmentos, recorte
 from esteira.receita import Imagem, Musica, Receita, duracao_principal
 
 ZOOM_IMAGEM = 1.08
+PROPORCAO_TELA_CHEIA = 1.5
 FADE_MUSICA_ENTRADA = 0.5
 FADE_MUSICA_SAIDA = 1.5
 LIMIAR_PICO = -0.5
@@ -65,8 +68,21 @@ def _filtro_cartao(cartao: int, logo: int | None, tem_audio: bool, duracao: floa
     return partes
 
 
-def _filtro_imagem(entrada: int, saida: str, ordem: int, imagem: Imagem) -> str:
-    filtro = f"[{entrada}:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920"
+def _tela_cheia(arquivo: Path) -> bool:
+    with Image.open(arquivo) as imagem:
+        largura, altura = imagem.size
+    return altura / largura >= PROPORCAO_TELA_CHEIA
+
+
+def _filtro_imagem(entrada: int, saida: str, ordem: int, imagem: Imagem, tela_cheia: bool) -> str:
+    cobrir = "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920"
+    if tela_cheia:
+        filtro = f"[{entrada}:v]{cobrir}"
+    else:
+        filtro = (
+            f"[{entrada}:v]split=2[{saida}f][{saida}t];[{saida}f]{cobrir},gblur=sigma=40[{saida}d];"
+            f"[{saida}t]scale=1080:-2[{saida}c];[{saida}d][{saida}c]overlay=0:(H-h)/2"
+        )
     if ZOOM_IMAGEM > 1:
         quadros = round((imagem.fim - imagem.inicio) * 30)
         passo = f"{ZOOM_IMAGEM - 1:.4f}*in/{max(quadros - 1, 1)}"
@@ -137,7 +153,7 @@ def renderizar_final(
         arquivo = (Path(pasta) / imagem.arquivo).resolve()
         duracao = imagem.fim - imagem.inicio
         entradas.append(["-loop", "1", "-framerate", "30", "-t", f"{duracao:.3f}", "-i", str(arquivo)])
-        partes.append(_filtro_imagem(len(entradas) - 1, f"img{ordem}", ordem, imagem))
+        partes.append(_filtro_imagem(len(entradas) - 1, f"img{ordem}", ordem, imagem, _tela_cheia(arquivo)))
         partes.append(
             f"[{rotulo_video}][img{ordem}]overlay=enable='between(t,{imagem.inicio:.3f},{imagem.fim:.3f})'"
             f":eof_action=pass[vi{ordem}]"

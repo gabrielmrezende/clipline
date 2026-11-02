@@ -89,6 +89,42 @@ def test_imagem_aparece_no_tempo(tmp_path):
     assert not _vermelho(depois.getpixel((540, 100)))
 
 
+def _faixas_verticais(caminho, largura, altura):
+    caminho.parent.mkdir(parents=True, exist_ok=True)
+    imagem = Image.new("RGB", (largura, altura), (0, 255, 0))
+    imagem.paste((255, 0, 0), (0, 0, largura // 3, altura))
+    imagem.paste((0, 0, 255), (largura - largura // 3, 0, largura, altura))
+    imagem.save(caminho)
+    return caminho
+
+
+def _azul(pixel):
+    r, g, b = pixel
+    return b > 200 and r < 70 and g < 70
+
+
+def test_imagem_horizontal_aparece_inteira(tmp_path):
+    pasta, origem, cartao = _cenario(tmp_path)
+    _faixas_verticais(pasta / "imagens" / "01.png", 1800, 900)
+    saida = pasta / "final.mp4"
+    receita = Receita([(0.0, 3.0)], [], [], imagens=[Imagem(0.5, 2.5, "imagens/01.png")])
+    renderizar_final(receita, origem, cartao, pasta, saida)
+    durante = _quadro(saida, 1.5, pasta / "q.png")
+    assert _vermelho(durante.getpixel((150, 960)))
+    assert _azul(durante.getpixel((930, 960)))
+
+
+def test_imagem_vertical_continua_em_tela_cheia(tmp_path):
+    pasta, origem, cartao = _cenario(tmp_path)
+    _faixas_verticais(pasta / "imagens" / "01.png", 1080, 1920)
+    saida = pasta / "final.mp4"
+    receita = Receita([(0.0, 3.0)], [], [], imagens=[Imagem(0.5, 2.5, "imagens/01.png")])
+    renderizar_final(receita, origem, cartao, pasta, saida)
+    durante = _quadro(saida, 1.5, pasta / "q.png")
+    assert _vermelho(durante.getpixel((150, 100)))
+    assert _azul(durante.getpixel((930, 1800)))
+
+
 def test_legenda_some_durante_imagem(tmp_path):
     pasta, origem, cartao = _cenario(tmp_path)
     _imagem_vermelha(pasta / "imagens" / "01.png")
