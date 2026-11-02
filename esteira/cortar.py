@@ -105,8 +105,10 @@ def preparar_episodio(
                 raise ErroMidia("; ".join(problemas))
             faixas = _preparar_um(destino, corte, palavras, nomes)
             resultado = "ok"
-        except (ErroMidia, OSError) as erro:
+        except (ErroMidia, OSError, ValueError) as erro:
             resultado = f"erro: {erro}"
+        if resultado != "ok" and forcar:
+            (destino / NOME_ARQUIVO).unlink(missing_ok=True)
         registrar(destino, video, corte, faixas, resultado)
         resultados[corte.numero] = resultado
     return resultados

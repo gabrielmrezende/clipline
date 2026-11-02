@@ -112,3 +112,34 @@ def test_encerramento_alterna_entre_os_quatro_videos():
 def test_filtra_por_numero(tmp_path):
     pasta, _ = preparar_episodio_teste(tmp_path, [RUIM, BOM])
     assert list(preparar_episodio(pasta, {1}, nomes=[])) == [1]
+
+
+def test_forcar_com_trecho_invalido_apaga_a_receita_antiga(tmp_path):
+    pasta, _ = preparar_episodio_teste(tmp_path, [BOM])
+    preparar_episodio(pasta, nomes=[])
+    receita = pasta / "01-bom-corte" / "montagem.json"
+    assert receita.exists()
+    json.dump({"cortes": [{**BOM, "fim": 10.9}]}, (pasta / "aprovados.json").open("w", encoding="utf-8"))
+    assert preparar_episodio(pasta, forcar=True, nomes=[])[1].startswith("erro")
+    assert not receita.exists()
+
+
+def test_forcar_com_erro_de_sistema_apaga_a_receita_antiga(tmp_path, monkeypatch):
+    pasta, _ = preparar_episodio_teste(tmp_path, [BOM])
+    preparar_episodio(pasta, nomes=[])
+
+    def falhar(cues, caminho):
+        raise PermissionError("arquivo aberto")
+
+    monkeypatch.setattr(cortar, "escrever_srt", falhar)
+    assert preparar_episodio(pasta, forcar=True, nomes=[])[1].startswith("erro")
+    assert not (pasta / "01-bom-corte" / "montagem.json").exists()
+
+
+def test_imagens_md_fora_de_utf8_nao_para_os_outros(tmp_path):
+    pasta, _ = preparar_episodio_teste(tmp_path, [BOM, {**BOM, "numero": 2, "titulo": "Outro"}])
+    corte = pasta / "01-bom-corte"
+    (corte / "imagens").mkdir(parents=True)
+    (corte / "imagens.md").write_bytes("## 1. 00:00:05 a 00:00:08 - Avião\n".encode("latin-1"))
+    r = preparar_episodio(pasta, nomes=[])
+    assert r[1].startswith("erro") and r[2] == "ok"
