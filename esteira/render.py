@@ -12,6 +12,7 @@ from esteira.receita import Imagem, Musica, Receita, duracao_principal
 
 ZOOM_IMAGEM = 1.08
 PROPORCAO_TELA_CHEIA = 1.5
+TRANSICAO_ENCERRAMENTO = 0.5
 FADE_MUSICA_ENTRADA = 0.5
 FADE_MUSICA_SAIDA = 1.5
 LIMIAR_PICO = -0.5
@@ -179,9 +180,14 @@ def renderizar_final(
             entradas.append(["-loop", "1", "-framerate", "30", "-i", str(Path(sobreposicao).resolve())])
             indice_logo = len(entradas) - 1
         partes += _filtro_cartao(indice_cartao, indice_logo, fim.tem_audio, fim.duracao)
-        partes.append(f"[vleg][{rotulo_audio}][vfim][afim]concat=n=2:v=1:a=1[vsaida][asaida]")
+        inicio = esperado - TRANSICAO_ENCERRAMENTO
+        partes.append("[vleg]fps=30,settb=1/30[vleg30];[vfim]fps=30,settb=1/30[vfim30]")
+        partes.append(
+            f"[vleg30][vfim30]xfade=transition=fade:duration={TRANSICAO_ENCERRAMENTO}:offset={inicio:.3f}[vsaida]"
+        )
+        partes.append(f"[{rotulo_audio}][afim]acrossfade=d={TRANSICAO_ENCERRAMENTO}[asaida]")
         rotulo_video, rotulo_audio = "vsaida", "asaida"
-        esperado += fim.duracao
+        esperado += fim.duracao - TRANSICAO_ENCERRAMENTO
     else:
         rotulo_video = "vleg"
 

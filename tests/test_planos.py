@@ -105,4 +105,4 @@ def test_render_aplica_planos_diferentes(tmp_path):
     renderizar_final(Receita([(0.0, 3.0)], planos, []), origem, cartao, tmp_path, saida)
     m = sondar(saida)
     assert (m.largura, m.altura) == (1080, 1920)
-    assert m.duracao == pytest.approx(4, abs=0.2)
+    assert m.duracao == pytest.approx(3.5, abs=0.2)

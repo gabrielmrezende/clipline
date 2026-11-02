@@ -59,7 +59,7 @@ def test_final_sem_imagem_nem_musica(tmp_path):
     alertas = renderizar_final(receita, origem, cartao, pasta, saida)
     m = sondar(saida)
     assert (m.largura, m.altura) == (1080, 1920)
-    assert m.duracao == pytest.approx(3, abs=0.2)
+    assert m.duracao == pytest.approx(2.5, abs=0.2)
     assert m.tem_audio
     assert "sem música" in alertas
 
@@ -144,11 +144,11 @@ def test_musica_curta_repete_e_duracao_mantem(tmp_path):
     receita = Receita([(0.0, 3.0)], [], [], musica=Musica(str(musica), -20.0))
     alertas = renderizar_final(receita, origem, cartao, pasta, saida)
     m = sondar(saida)
-    assert m.duracao == pytest.approx(4, abs=0.2)
+    assert m.duracao == pytest.approx(3.5, abs=0.2)
     assert m.tem_audio
     assert "sem música" not in alertas
     assert _nivel_da_musica(saida, 1.6, 2.4) > -60
-    assert _nivel_da_musica(saida, 3.3, 3.9) < -60
+    assert _nivel_da_musica(saida, 3.1, 3.4) < -60
 
 
 def test_musica_longa_e_cortada(tmp_path):
@@ -157,7 +157,7 @@ def test_musica_longa_e_cortada(tmp_path):
     saida = pasta / "final.mp4"
     receita = Receita([(0.0, 2.0)], [], [], musica=Musica(str(musica), -20.0))
     renderizar_final(receita, origem, cartao, pasta, saida)
-    assert sondar(saida).duracao == pytest.approx(3, abs=0.2)
+    assert sondar(saida).duracao == pytest.approx(2.5, abs=0.2)
 
 
 def test_caminhos_com_acento_em_imagem_e_musica(tmp_path):
@@ -171,7 +171,7 @@ def test_caminhos_com_acento_em_imagem_e_musica(tmp_path):
     )
     renderizar_final(receita, origem, cartao, pasta, saida)
     assert _vermelho(_quadro(saida, 1.5, pasta / "q.png").getpixel((540, 960)))
-    assert sondar(saida).duracao == pytest.approx(4, abs=0.2)
+    assert sondar(saida).duracao == pytest.approx(3.5, abs=0.2)
 
 
 def test_final_com_sobreposicao_no_encerramento(tmp_path):
@@ -228,3 +228,26 @@ def test_pico_e_medido_so_na_parte_principal(tmp_path, monkeypatch):
 def test_pico_de_audio(tmp_path):
     pasta, origem, _ = _cenario(tmp_path)
     assert -30 < pico_de_audio(origem) <= 0
+
+
+def _cor_solida(caminho, cor, largura, altura, segundos):
+    executar_ffmpeg([
+        "-y", "-f", "lavfi", "-i", f"color=c={cor}:s={largura}x{altura}:r=30:d={segundos}",
+        "-f", "lavfi", "-i", f"sine=frequency=440:duration={segundos}",
+        "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p", "-c:a", "aac", str(caminho),
+    ])
+    return caminho
+
+
+def test_transicao_suave_para_o_encerramento(tmp_path):
+    pasta = tmp_path / "Tudo é Política (teste)"
+    pasta.mkdir()
+    origem = _cor_solida(pasta / "origem.mp4", "blue", 1920, 1080, 3)
+    cartao = _cor_solida(pasta / "fim.mp4", "red", 1080, 1920, 1.5)
+    saida = pasta / "final.mp4"
+    renderizar_final(Receita([(0.0, 2.0)], [], []), origem, cartao, pasta, saida)
+    assert sondar(saida).duracao == pytest.approx(3.0, abs=0.2)
+    r, _, b = _quadro(saida, 1.75, pasta / "meio.png").getpixel((540, 960))
+    assert 50 < r < 210 and 50 < b < 210
+    assert _azul(_quadro(saida, 1.2, pasta / "antes.png").getpixel((540, 960)))
+    assert _vermelho(_quadro(saida, 2.4, pasta / "depois.png").getpixel((540, 960)))
