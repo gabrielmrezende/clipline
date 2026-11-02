@@ -72,6 +72,9 @@ Evite zoom acima de 2, porque o episódio é 1080p. Não parar para aprovação.
 Cria `montagem.json`, `legenda.srt` e `registro.json` em cada corte. Use
 `--numero N` para um corte só e `--forcar` para refazer.
 
+Se o enquadramento mudar depois do `preparar`, rodar `preparar --numero N
+--forcar` (perde os destaques) ou editar `planos` no `montagem.json`.
+
 ## 5. Marcar destaques
 
 Em `montagem.json`, preencher `destaque` nas telas de legenda. Regras:
@@ -163,6 +166,9 @@ Gravar a data de cada corte no campo `data` de `aprovados.json`.
 Gera `revisao.md` na pasta do episódio, com um bloco por corte: link do
 `final.mp4`, título, redes, data, frase anterior e posterior ao trecho e
 alertas. No fim, os descartados e o motivo.
+
+O comando `revisao` regrava o arquivo; por isso, rodá-lo antes de acrescentar
+à mão qualquer alerta.
 
 Antes de parar, acrescentar aos alertas de cada corte os nomes que podem ter
 saído errados na legenda, comparando com `Contexto/glossario.md`.
