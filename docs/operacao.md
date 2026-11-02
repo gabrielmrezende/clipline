@@ -75,15 +75,9 @@ Cria `montagem.json`, `legenda.srt` e `registro.json` em cada corte. Use
 Se o enquadramento mudar depois do `preparar`, rodar `preparar --numero N
 --forcar` (perde os destaques) ou editar `planos` no `montagem.json`.
 
-## 5. Marcar destaques
+## 5. Destaques
 
-Em `montagem.json`, preencher `destaque` nas telas de legenda. Regras:
-- no máximo uma palavra por tela;
-- não em todas as telas;
-- só nomes, números e a palavra central do argumento;
-- a palavra precisa estar no texto da tela.
-
-O motor mostra o destaque em amarelo.
+Não marcar destaques. A legenda é toda branca.
 
 ## 6. Imagens
 
@@ -120,6 +114,11 @@ Imagens usadas vão para `imagens/` na pasta do corte, numeradas como em
 
 As imagens entram em corte seco, com zoom lento de cerca de 8%. O motor faz o
 zoom. Durante a imagem, a legenda não aparece.
+
+Para imagens de IA, gerar `prompts-chatgpt.md` na pasta do episódio, com os
+prompts numerados, e criar a pasta `ia-entrada/`. O dono do canal gera as
+imagens no ChatGPT e baixa na ordem. O enquadramento de cada imagem é
+automático: vertical em tela cheia, horizontal inteira sobre fundo desfocado.
 
 ## 7. Montar
 
