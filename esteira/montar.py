@@ -42,10 +42,10 @@ def montar_episodio(
         if final.exists() and not forcar:
             resultados[corte.numero] = "erro: final.mp4 já existe, use --forcar"
             continue
-        final.unlink(missing_ok=True)
         faixas: list = []
         alertas: list[str] = []
         try:
+            final.unlink(missing_ok=True)
             receita = ler_receita(destino)
             faixas = receita.faixas
             alertas = _renderizar(receita, destino, video, corte.numero, cartao)

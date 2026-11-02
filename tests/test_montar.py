@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 
 from esteira import montar
 from esteira.cortar import preparar_episodio
@@ -82,3 +83,23 @@ def test_erro_de_sistema_nao_para_os_outros(tmp_path, monkeypatch):
 def test_filtra_por_numero(tmp_path):
     pasta, cartao = _preparado(tmp_path, [BOM, OUTRO])
     assert list(montar_episodio(pasta, {2}, cartao=cartao)) == [2]
+
+
+def test_final_travado_com_forcar_nao_derruba_os_outros(tmp_path, monkeypatch):
+    pasta, cartao = _preparado(tmp_path, [BOM, OUTRO])
+    for nome in ("01-bom-corte", "02-outro"):
+        (pasta / nome / "final.mp4").write_bytes(b"")
+    unlink = Path.unlink
+
+    def travar(self, *args, **kwargs):
+        if self.name == "final.mp4" and "01-" in str(self):
+            raise PermissionError("em uso por outro processo")
+        return unlink(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "unlink", travar)
+    monkeypatch.setattr(montar, "renderizar_final", lambda *args, **kwargs: [])
+    r = montar_episodio(pasta, forcar=True, cartao=cartao)
+    assert r[1].startswith("erro: ") and "em uso" in r[1]
+    assert r[2] == "ok"
+    registro = json.loads((pasta / "01-bom-corte" / "registro.json").read_text("utf-8"))
+    assert registro["resultado"] == r[1]
