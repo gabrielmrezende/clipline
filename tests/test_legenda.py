@@ -1,6 +1,6 @@
 import pytest
 
-from esteira.legenda import corrigir_palavras, escrever_ass, escrever_srt, montar_cues
+from esteira.legenda import corrigir_palavras, escrever_ass, escrever_srt, montar_cues, ocultar_durante
 from esteira.modelos import Cue, Palavra as P
 
 
@@ -100,3 +100,64 @@ def test_ass_estilo(tmp_path):
     assert r"\an8\pos(540,1530)" in texto
     assert r"olá\N\{Brasil\}" in texto
     assert "0:00:01.00,0:00:02.50" in texto
+
+
+def test_ass_pinta_destaque(tmp_path):
+    escrever_ass([Cue(0, 1, ["o Gripen, sueco"], "gripen")], tmp_path / "a.ass")
+    assert r"{\c&H00FFFF&}Gripen{\c&HFFFFFF&}," in (tmp_path / "a.ass").read_text("utf-8")
+
+
+def test_ass_destaque_com_maiuscula_acento_e_pontuacao(tmp_path):
+    escrever_ass([Cue(0, 1, ["a (Última) vez"], "ULTIMA!")], tmp_path / "a.ass")
+    assert r"({\c&H00FFFF&}Última{\c&HFFFFFF&})" in (tmp_path / "a.ass").read_text("utf-8")
+
+
+def test_ass_sem_destaque_nao_muda(tmp_path):
+    escrever_ass([Cue(0, 1, ["o Gripen, sueco"])], tmp_path / "a.ass")
+    texto = (tmp_path / "a.ass").read_text("utf-8")
+    assert r"c&H" not in texto
+    assert "o Gripen, sueco" in texto
+
+
+def test_ass_destaque_ausente_nao_pinta(tmp_path):
+    escrever_ass([Cue(0, 1, ["o Gripen"], "lula")], tmp_path / "a.ass")
+    assert r"c&H" not in (tmp_path / "a.ass").read_text("utf-8")
+
+
+def test_destaque_pinta_so_uma_palavra(tmp_path):
+    escrever_ass([Cue(0, 1, ["lula e", "lula"], "lula")], tmp_path / "a.ass")
+    assert (tmp_path / "a.ass").read_text("utf-8").count(r"{\c&H00FFFF&}") == 1
+
+
+def test_destaque_continua_escapando_texto(tmp_path):
+    escrever_ass([Cue(0, 1, ["{x} Lula"], "lula")], tmp_path / "a.ass")
+    assert r"\{x\} {\c&H00FFFF&}Lula{\c&HFFFFFF&}" in (tmp_path / "a.ass").read_text("utf-8")
+
+
+def test_ocultar_remove_cue_dentro():
+    assert ocultar_durante([Cue(1, 2, ["a"])], [(0.5, 2.5)]) == []
+
+
+def test_ocultar_encurta_borda():
+    assert ocultar_durante([Cue(1, 3, ["a"])], [(2, 4)]) == [Cue(1, 2, ["a"])]
+    assert ocultar_durante([Cue(1, 3, ["a"])], [(0, 2)]) == [Cue(2, 3, ["a"])]
+
+
+def test_ocultar_cue_que_contem_imagem():
+    assert ocultar_durante([Cue(0, 10, ["a"])], [(2, 4)]) == [Cue(4, 10, ["a"])]
+
+
+def test_ocultar_cue_que_contem_imagem_parte_anterior_maior_ou_igual():
+    assert ocultar_durante([Cue(0, 10, ["a"])], [(6, 8)]) == [Cue(0, 6, ["a"])]
+    assert ocultar_durante([Cue(0, 10, ["a"])], [(4, 6)]) == [Cue(0, 4, ["a"])]
+
+
+def test_ocultar_sem_intervalo_ou_fora_nao_muda():
+    cues = [Cue(0, 1, ["a"]), Cue(5, 6, ["b"])]
+    assert ocultar_durante(cues, [(2, 4)]) == cues
+    assert ocultar_durante(cues, []) == cues
+
+
+def test_ocultar_varios_intervalos_e_preserva_destaque():
+    r = ocultar_durante([Cue(0, 10, ["a"], "a"), Cue(11, 12, ["b"])], [(0, 2), (3, 5), (10.5, 12)])
+    assert r == [Cue(5, 10, ["a"], "a")]

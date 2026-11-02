@@ -142,11 +142,47 @@ def _escapar_ass(texto: str) -> str:
     return texto.replace("\\", "\\\\").replace("{", r"\{").replace("}", r"\}")
 
 
+def _pintar_destaque(linhas: list[str], destaque: str | None) -> list[str]:
+    alvo = _chave(destaque or "")
+    resultado = []
+    for linha in linhas:
+        palavras = []
+        for palavra in linha.split(" "):
+            antes, miolo, depois = re.fullmatch(r"(\W*)(.*?)(\W*)", palavra).groups()
+            if alvo and miolo and _chave(miolo) == alvo:
+                miolo = r"{\c&H00FFFF&}" + _escapar_ass(miolo) + r"{\c&HFFFFFF&}"
+                alvo = ""
+            else:
+                miolo = _escapar_ass(miolo)
+            palavras.append(_escapar_ass(antes) + miolo + _escapar_ass(depois))
+        resultado.append(" ".join(palavras))
+    return resultado
+
+
 def escrever_ass(cues: list[Cue], caminho: Path) -> None:
     eventos = [
         f"Dialogue: 0,{_tempo_ass(c.inicio)},{_tempo_ass(c.fim)},Default,,0,0,0,,"
         + r"{\an8\pos(540,1530)}"
-        + r"\N".join(_escapar_ass(l) for l in c.linhas)
+        + r"\N".join(_pintar_destaque(c.linhas, c.destaque))
         for c in cues
     ]
     Path(caminho).write_text(CABECALHO_ASS + "\n".join(eventos) + "\n", "utf-8", newline="\n")
+
+
+def ocultar_durante(cues: list[Cue], intervalos: list[tuple[float, float]]) -> list[Cue]:
+    for de, ate in intervalos:
+        restantes = []
+        for cue in cues:
+            if cue.fim <= de or cue.inicio >= ate:
+                restantes.append(cue)
+            elif cue.inicio < de and cue.fim > ate:
+                if de - cue.inicio >= cue.fim - ate:
+                    restantes.append(replace(cue, fim=de))
+                else:
+                    restantes.append(replace(cue, inicio=ate))
+            elif cue.inicio < de:
+                restantes.append(replace(cue, fim=de))
+            elif cue.fim > ate:
+                restantes.append(replace(cue, inicio=ate))
+        cues = restantes
+    return cues
