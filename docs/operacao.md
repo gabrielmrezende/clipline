@@ -69,6 +69,8 @@ Evite zoom acima de 2, porque o episódio é 1080p.
 ```
 
 Revisar `edicoes.md` com o dono do canal. Se um corte falhar, ler `registro.json`.
+O dono do canal salva a versão finalizada no CapCut como `final.mp4` na pasta
+do corte. A esteira nunca substitui `final.mp4`.
 
 ## 6. Sugerir imagens
 
@@ -95,6 +97,9 @@ Regras:
 
 - Objeto ou cenário: escrever o prompt para geração manual.
 - Baixar arquivos somente depois da aprovação, informando nome, origem e tamanho.
+
+Imagens usadas vão para `imagens/` na pasta do corte, numeradas como em
+`imagens.md` (`01-nome.jpg`).
 
 ## 7. Escrever textos
 
