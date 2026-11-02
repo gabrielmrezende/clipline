@@ -106,3 +106,15 @@ def test_corte_aceita_campos_novos():
     c = Corte(1, "t", 0, 60, "leve")
     assert c.instagram is False
     assert c.data == ""
+
+
+def test_imagem_com_inicio_negativo(tmp_path):
+    r = _receita(tmp_path, [Imagem(-1.0, 2.0, "imagens/01-a.jpg")])
+    assert validar_receita(r, tmp_path) == ["imagem 1 começa antes do corte"]
+
+
+def test_legenda_passa_do_fim_do_corte(tmp_path):
+    r = _receita(tmp_path, legenda=[Cue(0.0, 5.0, ["o gripen é um caça"], None), Cue(9.0, 10.5, ["fim"], None)])
+    assert validar_receita(r, tmp_path) == ["tela 2 passa do fim do corte"]
+    r = _receita(tmp_path, legenda=[Cue(9.0, 10.05, ["fim"], None)])
+    assert validar_receita(r, tmp_path) == []

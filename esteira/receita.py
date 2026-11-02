@@ -67,6 +67,8 @@ def validar_receita(receita: Receita, pasta: Path) -> list[str]:
     duracao = duracao_principal(receita)
     numeradas = list(enumerate(receita.imagens, 1))
     for n, imagem in numeradas:
+        if imagem.inicio < -TOLERANCIA:
+            problemas.append(f"imagem {n} começa antes do corte")
         if imagem.fim > duracao + TOLERANCIA:
             problemas.append(f"imagem {n} passa do fim do corte")
         if not IMAGEM_MINIMA - TOLERANCIA <= imagem.fim - imagem.inicio <= IMAGEM_MAXIMA + TOLERANCIA:
@@ -83,6 +85,8 @@ def validar_receita(receita: Receita, pasta: Path) -> list[str]:
         if not VOLUME_MINIMO <= receita.musica.volume_db <= VOLUME_MAXIMO:
             problemas.append("volume da música fora de -22 a -18 dB")
     for n, cue in enumerate(receita.legenda, 1):
+        if cue.fim > duracao + TOLERANCIA:
+            problemas.append(f"tela {n} passa do fim do corte")
         if cue.destaque is None:
             continue
         palavras = {_chave(p) for linha in cue.linhas for p in linha.split()}
