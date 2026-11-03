@@ -361,7 +361,8 @@ def test_baixar_ordem_ia_ignora_corte_com_erro_no_listar(tmp_path):
     assert listar_episodio(ep, None, ["Chuva Forte"], falso, lambda u: 2048)[2].startswith("erro: momento 1: prompt cita pessoa")
     assert ler_pedidos(corte2)[0].numero == 1
     assert "Chuva forte" not in (ep / "prompts-chatgpt.md").read_text("utf-8")
-    assert [i["pasta"] for i in json.loads((ep / "ordem-ia.json").read_text("utf-8"))] == ["01-bom-corte"]
+    lista = json.loads((ep / "lista-imagens.json").read_text("utf-8"))
+    assert [i["pasta"] for i in lista["ia"]] == ["01-bom-corte"] and lista["cortes"] == ["01-bom-corte"]
     Image.new("RGB", (32, 56)).save(ep / "ia-entrada" / "a.png")
     assert baixar_episodio(ep, {1}, baixar) == {1: "ok: 2 imagens"}
     assert (ep / "ia-entrada" / ".mapa.tsv").read_text("utf-8").count(chr(10)) == 1
@@ -379,15 +380,26 @@ def test_baixar_ordem_mudou(tmp_path):
     assert not (corte1 / "imagens").exists() and not (ep / "ia-entrada" / ".mapa.tsv").exists()
 
 
-def test_baixar_sem_ordem_ia_nao_espera_imagens(tmp_path):
+def test_baixar_sem_lista_json_recusa(tmp_path):
     ep, corte = _listado(tmp_path)
-    (ep / "ordem-ia.json").unlink()
-    assert baixar_episodio(ep, None, baixar) == {1: "ok: 2 imagens"}
+    _ia(ep)
+    (ep / "lista-imagens.json").unlink()
+    assert baixar_episodio(ep, None, baixar) == {1: "erro: rode imagens lista antes de baixar"}
+    assert not (corte / "imagens").exists()
 
 
-def test_listar_grava_ordem_ia_vazia_sem_ia(tmp_path):
+def test_listar_grava_ia_vazia_sem_ia(tmp_path):
     ep, corte = _listado(tmp_path, ia=False)
-    assert json.loads((ep / "ordem-ia.json").read_text("utf-8")) == []
+    assert json.loads((ep / "lista-imagens.json").read_text("utf-8")) == {"cortes": ["01-bom-corte"], "ia": []}
+
+
+def test_baixar_recusa_corte_com_erro_na_ultima_lista(tmp_path):
+    ep, corte1, corte2 = _dois_cortes(tmp_path)
+    assert listar_episodio(ep, None, ["Chuva Forte"], falso, lambda u: 2048)[2].startswith("erro:")
+    Image.new("RGB", (32, 56)).save(ep / "ia-entrada" / "a.png")
+    resultado = baixar_episodio(ep, None, baixar)
+    assert resultado == {1: "ok: 2 imagens", 2: "erro: corte fora da última lista, rode imagens lista"}
+    assert not (corte2 / "imagens").exists()
 
 
 def test_baixar_imagem_a_mais_em_ia_entrada(tmp_path):

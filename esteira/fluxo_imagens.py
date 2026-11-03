@@ -21,8 +21,10 @@ from esteira.wikimedia import Consulta
 
 EXTENSOES_FOTO = {".jpg", ".jpeg", ".png", ".webp"}
 TIPOS_LEGIVEIS = {"foto": "foto livre", "noticia": "notícia", "ia": "ilustração de IA"}
-ORDEM_IA = "ordem-ia.json"
+LISTA_JSON = "lista-imagens.json"
 ERRO_ORDEM_IA = "erro: ordem das imagens de IA mudou, rode imagens lista de novo"
+ERRO_SEM_LISTA = "erro: rode imagens lista antes de baixar"
+ERRO_FORA_DA_LISTA = "erro: corte fora da última lista, rode imagens lista"
 ERRO_SEM_MONTAGEM = f"erro: {NOME_ARQUIVO} não encontrado, rode preparar"
 
 
@@ -239,7 +241,8 @@ def _gravar_episodio(pasta: Path, nome: str, cortes: list[tuple[Corte, Path, lis
         {"corte": c.numero, "pasta": d.name, "numero": m.numero, "nome": m.nome, "prompt": m.prompt}
         for c, m, d in ias
     ]
-    _gravar_texto(pasta / ORDEM_IA, json.dumps(ordem, ensure_ascii=False, indent=2) + chr(10))
+    dados = {"cortes": [destino.name for _, destino, _ in cortes], "ia": ordem}
+    _gravar_texto(pasta / LISTA_JSON, json.dumps(dados, ensure_ascii=False, indent=2) + chr(10))
     resumo = f"Total: {fotos} fotos, {round(total / 1_048_576)} MB; {len(ias)} imagens de IA a gerar."
     _gravar_texto(pasta / "lista-imagens.md", f"# Imagens para aprovar: {nome}\n\n" + "\n\n".join(secoes) + f"\n\n{resumo}\n")
     if not ias:
@@ -350,15 +353,15 @@ def _texto_linha(texto: str) -> str:
     return " ".join(str(texto).split())
 
 
-def _ler_ordem_ia(pasta: Path) -> list[dict] | None:
-    caminho = pasta / ORDEM_IA
-    if not caminho.exists():
-        return []
+def _ler_lista(pasta: Path) -> tuple[list[str], list[dict]] | None:
     try:
-        ordem = json.loads(caminho.read_text("utf-8"))
+        dados = json.loads((pasta / LISTA_JSON).read_text("utf-8"))
+        cortes, ordem = dados["cortes"], dados["ia"]
+        if not isinstance(cortes, list) or not all(isinstance(c, str) for c in cortes):
+            return None
         for item in ordem:
             item["corte"], item["pasta"], item["numero"], item["nome"], item["prompt"]
-        return ordem
+        return cortes, ordem
     except (OSError, ValueError, KeyError, TypeError):
         return None
 
@@ -388,13 +391,20 @@ def baixar_episodio(
     selecionados = _cortes_com_pedidos(pasta, numeros)
     if not selecionados:
         return {}
-    ordem = _ler_ordem_ia(pasta)
-    if ordem is None or not _ordem_confere(pasta, ordem):
+    if not (pasta / LISTA_JSON).exists():
+        return {corte.numero: ERRO_SEM_LISTA for corte, _ in selecionados}
+    lista = _ler_lista(pasta)
+    if lista is None or not _ordem_confere(pasta, lista[1]):
         return {corte.numero: ERRO_ORDEM_IA for corte, _ in selecionados}
+    listados, ordem = lista
     lidos: dict[Path, list[Momento]] = {}
     erros: dict[int, str] = {}
     pular: set[Path] = set()
     for corte, destino in _cortes_com_pedidos(pasta, None):
+        if destino.name not in listados:
+            erros[corte.numero] = ERRO_FORA_DA_LISTA
+            pular.add(destino)
+            continue
         try:
             momentos = ler_pedidos(destino)
         except (OSError, ValueError, KeyError, TypeError) as erro:
