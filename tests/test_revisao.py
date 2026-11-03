@@ -117,4 +117,4 @@ def test_revisao_mostra_musica(tmp_path):
     blocos = escrever_revisao(pasta).read_text("utf-8").split("## ")
 
     assert "Publicação sugerida: 2026-11-04 18:00\nMúsica: Carefree\n" in blocos[1]
-    assert "Publicação sugerida: sem data\nMúsica: nenhuma\n" in blocos[2]
+    assert "Publicação sugerida: sem data\nMúsica: nenhuma (sem música para o clima tenso)\n" in blocos[2]

@@ -22,9 +22,11 @@ def _alertas(registro: dict, receita: Receita | None) -> list[str]:
     return alertas
 
 
-def _linha_musica(receita: Receita | None) -> str:
+def _linha_musica(receita: Receita | None, clima: str) -> str:
     musica = receita.musica if receita else None
-    return f"Música: {musica.titulo or Path(musica.arquivo).name}" if musica else "Música: nenhuma"
+    if musica:
+        return f"Música: {musica.titulo or Path(musica.arquivo).name}"
+    return f"Música: nenhuma (sem música para o clima {clima})"
 
 
 def _bloco(pasta: Path, corte: Corte, palavras: list[Palavra]) -> list[str]:
@@ -52,7 +54,7 @@ def _bloco(pasta: Path, corte: Corte, palavras: list[Palavra]) -> list[str]:
         f"Vídeo: [final.mp4]({destino.name}/final.mp4)",
         f"Redes: {redes}",
         f"Publicação sugerida: {corte.data or 'sem data'}",
-        _linha_musica(receita),
+        _linha_musica(receita, corte.clima),
         f'Antes: "{"... " if antes else ""}{antes}"',
         f'Depois: "{depois}{" ..." if depois else ""}"',
         f"Alertas: {'; '.join(alertas) if alertas else 'nenhum'}",
