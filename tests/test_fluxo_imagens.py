@@ -426,3 +426,35 @@ def test_listar_apaga_motivo_so_quando_nao_e_descarte_manual(tmp_path):
     listar_episodio(ep, None, [], falso, lambda u: 1)
     primeiro = ler_pedidos(corte)[0]
     assert primeiro.descartar and primeiro.motivo == "foto ruim"
+
+
+def test_lista_informa_origem_e_licenca_da_foto(tmp_path):
+    ep, corte = _completo(tmp_path)
+    listar_episodio(ep, None, [], falso, lambda u: 2048)
+    lista = (ep / "lista-imagens.md").read_text("utf-8")
+    assert "- 1. 00:00:10,000 a 00:00:12,000 — Gripen — 01-gripen.jpg — Wikimedia Commons: https://c/A1 — CC BY-SA 4.0 — 2 KB" in lista
+    listar_episodio(ep, None, [], falso, lambda u: None)
+    assert "CC BY-SA 4.0 — tamanho desconhecido" in (ep / "lista-imagens.md").read_text("utf-8")
+
+
+def test_baixar_falhas_inesperadas_viram_alerta(tmp_path):
+    import http.client
+    ep, corte = _listado(tmp_path)
+    _ia(ep)
+
+    def incompleto(url, destino):
+        destino.write_bytes(b"meio")
+        raise http.client.IncompleteRead(b"")
+
+    assert baixar_episodio(ep, None, incompleto)[1] == "ok com alertas: imagem 1: download falhou"
+    assert not list((corte / "imagens").glob("*.parcial"))
+
+    def truncado(url, destino):
+        import io
+        buf = io.BytesIO()
+        Image.effect_noise((200, 200), 100).convert("RGB").save(buf, "JPEG")
+        destino.write_bytes(buf.getvalue()[:-400] if len(buf.getvalue()) > 800 else b"x")
+
+    assert baixar_episodio(ep, None, truncado)[1] == "ok com alertas: imagem 1: download falhou"
+    assert not list((corte / "imagens").glob("*.parcial"))
+    assert not (corte / "imagens" / "01-gripen.jpg").exists()

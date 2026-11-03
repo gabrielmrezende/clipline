@@ -208,7 +208,8 @@ def _linha_lista(m: Momento) -> str:
         return cabecalho + "cartão do canal"
     arquivo = nome_arquivo(m, _extensao(m)).removeprefix("imagens/")
     tamanho = f"{max(1, round(m.bytes / 1024))} KB" if m.bytes is not None else "tamanho desconhecido"
-    return cabecalho + f"{arquivo} — {tamanho}"
+    c = m.candidatas[m.escolha - 1]
+    return cabecalho + f"{arquivo} — Wikimedia Commons: {c['pagina']} — {c['licenca']} — {tamanho}"
 
 
 def _numerados(momentos: list[Momento]) -> list[Momento]:
@@ -312,10 +313,10 @@ def _baixar_foto(m: Momento, caminho: Path, baixar: Callable[[str, Path], None])
     try:
         baixar(m.url, parcial)
         with Image.open(parcial) as imagem:
-            imagem.verify()
+            imagem.load()
         parcial.replace(caminho)
         return True
-    except (OSError, ValueError):
+    except Exception:  # fronteira de isolamento de um item: qualquer falha vira alerta
         parcial.unlink(missing_ok=True)
         return False
 
