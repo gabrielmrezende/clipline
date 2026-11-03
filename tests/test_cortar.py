@@ -194,3 +194,19 @@ def test_atualizar_musica_preserva_legenda(tmp_path):
     assert nova.legenda[0].destaque == "fala" and len(nova.imagens) == 1
     assert nova.musica.titulo == "Alegre"
     assert ler_uso(musicas)["ep/01-bom-corte"]["arquivo"] == "leve/Alegre.mp3"
+
+
+def test_preparar_falha_da_musica_vira_alerta_e_nao_para_os_outros(tmp_path):
+    pasta, _ = preparar_episodio_teste(tmp_path, [BOM, {**BOM, "numero": 2, "titulo": "Outro"}])
+    musicas = tmp_path / "musicas"
+    _catalogo(musicas, "Alegre", "Feliz")
+    (musicas / "uso.json").write_text('{"ep/x": {"arquivo": "leve/Alegre.mp3"}}', "utf-8")
+    resultado = preparar_teste(pasta)
+    assert set(resultado) == {1, 2}
+    for texto in resultado.values():
+        assert texto.startswith("ok com alertas: música: erro ")
+    assert (pasta / "01-bom-corte" / "montagem.json").exists()
+    assert (pasta / "02-outro" / "montagem.json").exists()
+    assert ler_receita(pasta / "01-bom-corte").musica is None
+    registro = json.loads((pasta / "01-bom-corte" / "registro.json").read_text("utf-8"))
+    assert registro["alertas"][0].startswith("música: erro ")

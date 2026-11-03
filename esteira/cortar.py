@@ -107,8 +107,11 @@ def preparar_episodio(
             if problemas:
                 raise ErroMidia("; ".join(problemas))
             faixas = _preparar_um(destino, corte, palavras, nomes)
-            if atualizar_musica(destino, corte, f"{pasta.name}/{destino.name}", pasta_musicas) is None:
-                alertas.append(f"sem música para o clima {corte.clima}")
+            try:
+                if atualizar_musica(destino, corte, f"{pasta.name}/{destino.name}", pasta_musicas) is None:
+                    alertas.append(f"sem música para o clima {corte.clima}")
+            except (OSError, ValueError, KeyError, TypeError) as erro:
+                alertas.append(f"música: erro {erro}")
             resultado = f"ok com alertas: {'; '.join(alertas)}" if alertas else "ok"
         except (ErroMidia, OSError, ValueError) as erro:
             resultado = f"erro: {erro}"
