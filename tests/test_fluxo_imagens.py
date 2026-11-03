@@ -318,8 +318,101 @@ def test_baixar_corte_sem_pedidos_nao_aparece(tmp_path):
     assert baixar_episodio(ep, None, baixar) == {}
 
 
+def _dois_cortes(tmp_path):
+    """Corte 1: foto + IA; corte 2: IA + cartão. Já listado."""
+    ep, corte1 = _episodio(tmp_path, [
+        _foto(escolha=1, candidatas=[{"titulo": "File:A1.jpg", "pagina": "p", "miniatura": "m",
+                                      "largura": 2000, "altura": 1000, "autor": "F", "licenca": "CC BY 4.0"}]),
+        Momento(20.0, 23.0, "f", "ia", "Uno com escada", prompt="Um Uno com escada"),
+    ])
+    corte2 = ep / "02-segundo-corte"
+    corte2.mkdir()
+    gravar_receita(corte2, Receita([(0.0, 60.0)], [Plano(0.0, 60.0)], []))
+    gravar_pedidos(corte2, [
+        Momento(10.0, 13.0, "f", "ia", "Chuva forte", prompt="Chuva forte na avenida"),
+        Momento(30.0, 33.0, "f", "noticia", "Manchete", titulo="Titulo", veiculo="Folha", data="2026-01-02"),
+    ])
+    dados = json.loads((ep / "aprovados.json").read_text("utf-8"))
+    dados["cortes"].append({"numero": 2, "titulo": "Segundo corte", "inicio": 0.0, "fim": 60.0, "clima": "leve"})
+    (ep / "aprovados.json").write_text(json.dumps(dados), "utf-8")
+    listar_episodio(ep, None, [], falso, lambda u: 2048)
+    return ep, corte1, corte2
+
+
 def test_baixar_filtro_de_cortes_mantem_ia_de_todos(tmp_path):
+    ep, corte1, corte2 = _dois_cortes(tmp_path)
+    # ordem do prompts-chatgpt.md: corte 1 (Uno), corte 2 (Chuva); a de menor mtime é a primeira
+    Image.new("RGB", (32, 56), (1, 1, 1)).save(ep / "ia-entrada" / "a.png")
+    Image.new("RGB", (32, 56), (2, 2, 2)).save(ep / "ia-entrada" / "b.png")
+    import os
+    os.utime(ep / "ia-entrada" / "a.png", (100, 100))
+    os.utime(ep / "ia-entrada" / "b.png", (200, 200))
+    assert baixar_episodio(ep, {2}, baixar) == {2: "ok: 2 imagens"}
+    assert Image.open(corte1 / "imagens" / "02-uno-com-escada.png").getpixel((0, 0)) == (1, 1, 1)
+    assert Image.open(corte2 / "imagens" / "01-chuva-forte.png").getpixel((0, 0)) == (2, 2, 2)
+    assert not (corte1 / "imagens" / "01-gripen.jpg").exists()
+    assert ler_receita(corte1).imagens == [] and len(ler_receita(corte2).imagens) == 2
+
+
+def test_baixar_ordem_ia_ignora_corte_com_erro_no_listar(tmp_path):
+    ep, corte1, corte2 = _dois_cortes(tmp_path)
+    momentos = ler_pedidos(corte2)
+    assert momentos[0].numero == 1  # número antigo continua no pedidos.json
+    assert listar_episodio(ep, None, ["Chuva Forte"], falso, lambda u: 2048)[2].startswith("erro: momento 1: prompt cita pessoa")
+    assert ler_pedidos(corte2)[0].numero == 1
+    assert "Chuva forte" not in (ep / "prompts-chatgpt.md").read_text("utf-8")
+    assert [i["pasta"] for i in json.loads((ep / "ordem-ia.json").read_text("utf-8"))] == ["01-bom-corte"]
+    Image.new("RGB", (32, 56)).save(ep / "ia-entrada" / "a.png")
+    assert baixar_episodio(ep, {1}, baixar) == {1: "ok: 2 imagens"}
+    assert (ep / "ia-entrada" / ".mapa.tsv").read_text("utf-8").count(chr(10)) == 1
+
+
+def test_baixar_ordem_mudou(tmp_path):
+    ep, corte1, corte2 = _dois_cortes(tmp_path)
+    for nome in ("a.png", "b.png"):
+        Image.new("RGB", (32, 56)).save(ep / "ia-entrada" / nome)
+    momentos = ler_pedidos(corte2)
+    momentos[0].nome = "Outro nome"
+    gravar_pedidos(corte2, momentos)
+    esperado = "erro: ordem das imagens de IA mudou, rode imagens lista de novo"
+    assert baixar_episodio(ep, None, baixar) == {1: esperado, 2: esperado}
+    assert not (corte1 / "imagens").exists() and not (ep / "ia-entrada" / ".mapa.tsv").exists()
+
+
+def test_baixar_sem_ordem_ia_nao_espera_imagens(tmp_path):
+    ep, corte = _listado(tmp_path)
+    (ep / "ordem-ia.json").unlink()
+    assert baixar_episodio(ep, None, baixar) == {1: "ok: 2 imagens"}
+
+
+def test_listar_grava_ordem_ia_vazia_sem_ia(tmp_path):
+    ep, corte = _listado(tmp_path, ia=False)
+    assert json.loads((ep / "ordem-ia.json").read_text("utf-8")) == []
+
+
+def test_baixar_imagem_a_mais_em_ia_entrada(tmp_path):
+    ep, corte = _listado(tmp_path)
+    _ia(ep, "a.png")
+    _ia(ep, "b.png")
+    assert baixar_episodio(ep, None, baixar) == {1: "erro: ia-entrada/: esperadas 1 imagens, encontradas 2"}
+    assert not (corte / "imagens").exists()
+
+
+def test_baixar_foto_que_falhou_vem_na_segunda_rodada(tmp_path):
     ep, corte = _listado(tmp_path)
     _ia(ep)
-    assert baixar_episodio(ep, {2}, baixar) == {}
-    assert not (corte / "imagens").exists()
+    assert baixar_episodio(ep, None, baixar_html)[1].startswith("ok com alertas")
+    chamadas = []
+    assert baixar_episodio(ep, None, _contador(chamadas)) == {1: "ok: 3 imagens"}
+    assert len(chamadas) == 1  # só a foto; IA e cartão já existiam
+
+
+def test_baixar_cartao_que_falha_vira_alerta(tmp_path, monkeypatch):
+    ep, corte = _listado(tmp_path)
+    _ia(ep)
+
+    def quebra_cartao(*args):
+        raise OSError("sem fonte")
+
+    monkeypatch.setattr("esteira.fluxo_imagens.gerar_cartao", quebra_cartao)
+    assert baixar_episodio(ep, None, baixar)[1] == "ok com alertas: imagem 3: cartão falhou"

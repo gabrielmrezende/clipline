@@ -21,6 +21,8 @@ from esteira.wikimedia import Consulta
 
 EXTENSOES_FOTO = {".jpg", ".jpeg", ".png", ".webp"}
 TIPOS_LEGIVEIS = {"foto": "foto livre", "noticia": "notícia", "ia": "ilustração de IA"}
+ORDEM_IA = "ordem-ia.json"
+ERRO_ORDEM_IA = "erro: ordem das imagens de IA mudou, rode imagens lista de novo"
 ERRO_SEM_MONTAGEM = f"erro: {NOME_ARQUIVO} não encontrado, rode preparar"
 
 
@@ -226,10 +228,15 @@ def _gravar_episodio(pasta: Path, nome: str, cortes: list[tuple[Corte, Path, lis
         secoes.append(f"## {destino.name}\n" + "\n".join(_linha_lista(m) for m in ativos))
         for m in ativos:
             if m.tipo == "ia":
-                ias.append((corte, m))
+                ias.append((corte, m, destino))
             elif m.tipo == "foto":
                 fotos += 1
                 total += m.bytes or 0
+    ordem = [
+        {"corte": c.numero, "pasta": d.name, "numero": m.numero, "nome": m.nome, "prompt": m.prompt}
+        for c, m, d in ias
+    ]
+    _gravar_texto(pasta / ORDEM_IA, json.dumps(ordem, ensure_ascii=False, indent=2) + chr(10))
     resumo = f"Total: {fotos} fotos, {round(total / 1_048_576)} MB; {len(ias)} imagens de IA a gerar."
     _gravar_texto(pasta / "lista-imagens.md", f"# Imagens para aprovar: {nome}\n\n" + "\n\n".join(secoes) + f"\n\n{resumo}\n")
     if not ias:
@@ -237,8 +244,8 @@ def _gravar_episodio(pasta: Path, nome: str, cortes: list[tuple[Corte, Path, lis
         return
     (pasta / "ia-entrada").mkdir(exist_ok=True)
     quantidade = len(ias)
-    prompts = "\n\n".join(f"{i}. {m.prompt}" for i, (_, m) in enumerate(ias, 1))
-    destinos = "\n".join(f"{i} → corte {c.numero:02d}, imagem {m.numero} ({m.nome})" for i, (c, m) in enumerate(ias, 1))
+    prompts = "\n\n".join(f"{i}. {m.prompt}" for i, (_, m, _) in enumerate(ias, 1))
+    destinos = "\n".join(f"{i} → corte {c.numero:02d}, imagem {m.numero} ({m.nome})" for i, (c, m, _) in enumerate(ias, 1))
     _gravar_texto(pasta / "prompts-chatgpt.md", (
         f"# Prompts para o ChatGPT: {nome}\n\n"
         f"Cole o bloco abaixo numa conversa nova do ChatGPT. Baixe as imagens na ordem (1 a {quantidade}) "
@@ -306,7 +313,7 @@ def _baixar_foto(m: Momento, caminho: Path, baixar: Callable[[str, Path], None])
             imagem.verify()
         parcial.replace(caminho)
         return True
-    except Exception:
+    except (OSError, ValueError):
         parcial.unlink(missing_ok=True)
         return False
 
@@ -324,7 +331,11 @@ def _baixar_um(destino: Path, momentos: list[Momento], baixar: Callable[[str, Pa
             if not _baixar_foto(m, caminho, baixar):
                 alertas.append(f"imagem {m.numero}: download falhou")
         else:
-            gerar_cartao(m.titulo, m.veiculo, m.data, caminho)
+            try:
+                gerar_cartao(m.titulo, m.veiculo, m.data, caminho)
+            except Exception:
+                caminho.unlink(missing_ok=True)
+                alertas.append(f"imagem {m.numero}: cartão falhou")
     try:
         quantidade = atualizar_imagens(destino)
     except FileNotFoundError:
@@ -333,7 +344,36 @@ def _baixar_um(destino: Path, momentos: list[Momento], baixar: Callable[[str, Pa
 
 
 def _texto_linha(texto: str) -> str:
-    return " ".join(texto.split())
+    return " ".join(str(texto).split())
+
+
+def _ler_ordem_ia(pasta: Path) -> list[dict] | None:
+    caminho = pasta / ORDEM_IA
+    if not caminho.exists():
+        return []
+    try:
+        ordem = json.loads(caminho.read_text("utf-8"))
+        for item in ordem:
+            item["corte"], item["pasta"], item["numero"], item["nome"], item["prompt"]
+        return ordem
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
+
+
+def _ordem_confere(pasta: Path, ordem: list[dict]) -> bool:
+    pedidos: dict[str, list[Momento]] = {}
+    for item in ordem:
+        if item["pasta"] not in pedidos:
+            try:
+                pedidos[item["pasta"]] = ler_pedidos(pasta / item["pasta"])
+            except (OSError, ValueError, KeyError, TypeError):
+                return False
+        if not any(
+            m.tipo == "ia" and m.numero == item["numero"] and m.nome == item["nome"]
+            for m in pedidos[item["pasta"]]
+        ):
+            return False
+    return True
 
 
 def baixar_episodio(
@@ -345,10 +385,12 @@ def baixar_episodio(
     selecionados = _cortes_com_pedidos(pasta, numeros)
     if not selecionados:
         return {}
+    ordem = _ler_ordem_ia(pasta)
+    if ordem is None or not _ordem_confere(pasta, ordem):
+        return {corte.numero: ERRO_ORDEM_IA for corte, _ in selecionados}
     lidos: dict[Path, list[Momento]] = {}
     erros: dict[int, str] = {}
     pular: set[Path] = set()
-    destinos: list[tuple[Path, str, str]] = []
     for corte, destino in _cortes_com_pedidos(pasta, None):
         try:
             momentos = ler_pedidos(destino)
@@ -357,19 +399,19 @@ def baixar_episodio(
             pular.add(destino)
             continue
         lidos[destino] = momentos
-        numerados = _numerados(momentos)
-        ias = [m for m in numerados if m.tipo == "ia"]
-        esperados = {f"{m.numero:02d}-": f"{m.numero:02d}-{slug(m.nome)}" for m in numerados}
+        esperados = {f"{m.numero:02d}-": f"{m.numero:02d}-{slug(m.nome)}" for m in _numerados(momentos)}
         if not (destino / NOME_ARQUIVO).exists():
             erros.setdefault(corte.numero, ERRO_SEM_MONTAGEM)
             pular.add(destino)
         elif conflitos := _conflitos(destino, esperados):
             erros.setdefault(corte.numero, f"erro: imagens/ tem arquivo antigo com o mesmo número: {', '.join(conflitos)}")
             pular.add(destino)
-        for m in ias:
-            rotulo = f"{corte.numero:02d}	{m.numero}	{_texto_linha(m.nome)}	{_texto_linha(m.prompt)}"
-            destinos.append((destino, nome_arquivo(m, "").removeprefix("imagens/"), rotulo))
 
+    destinos = []
+    for item in ordem:
+        rotulo = f"{int(item['corte']):02d}\t{item['numero']}\t{_texto_linha(item['nome'])}\t{_texto_linha(item['prompt'])}"
+        nome = f"{item['numero']:02d}-{slug(item['nome'])}"
+        destinos.append((pasta / item["pasta"], nome, rotulo))
     try:
         encaixar_ia(pasta, destinos, pular)
     except ValueError as erro:
