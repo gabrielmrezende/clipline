@@ -38,3 +38,41 @@ def test_cli_musica(tmp_path, monkeypatch, capsys):
     assert "03: erro: montagem.json não encontrado, rode preparar" in saida
     assert cli.principal(["musica", str(pasta), "--numero", "1"]) == 0
     assert capsys.readouterr().out == "01: Alegre\n"
+
+
+def _proposta_falsa(monkeypatch, tmp_path):
+    monkeypatch.setattr(cli, "MUSICAS", tmp_path / "musicas")
+    monkeypatch.setattr(cli, "baixar_catalogo", lambda: [])
+    monkeypatch.setattr(cli, "propor", lambda pecas: {"leve": [
+        {"filename": "A.mp3", "title": "A", "length": "1:00"},
+    ]})
+
+
+def test_musicas_propor_recusa_sobrescrever_aprovadas(tmp_path, monkeypatch, capsys):
+    _proposta_falsa(monkeypatch, tmp_path)
+    aprovadas = tmp_path / "musicas" / "aprovadas.json"
+    aprovadas.parent.mkdir()
+    aprovadas.write_text('{"tenso": ["X.mp3"]}', "utf-8")
+    assert cli.principal(["musicas", "propor"]) == 1
+    assert "--forcar" in capsys.readouterr().err
+    assert aprovadas.read_text("utf-8") == '{"tenso": ["X.mp3"]}'
+    assert not (tmp_path / "musicas" / "proposta.md").exists()
+    assert cli.principal(["musicas", "propor", "--forcar"]) == 0
+    assert "A.mp3" in aprovadas.read_text("utf-8")
+
+
+def test_musicas_propor_sem_aprovadas_grava(tmp_path, monkeypatch, capsys):
+    _proposta_falsa(monkeypatch, tmp_path)
+    assert cli.principal(["musicas", "propor"]) == 0
+    assert (tmp_path / "musicas" / "aprovadas.json").exists()
+
+
+def test_musicas_baixar_retorna_um_com_erros(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(cli, "MUSICAS", tmp_path / "musicas")
+    monkeypatch.setattr(cli, "baixar_catalogo", lambda: [])
+    monkeypatch.setattr(cli, "ler_catalogo", lambda pasta: [])
+    monkeypatch.setattr(cli, "baixar_musicas", lambda *a: ["erro: X.mp3"])
+    assert cli.principal(["musicas", "baixar"]) == 1
+    assert "erro: X.mp3" in capsys.readouterr().out
+    monkeypatch.setattr(cli, "baixar_musicas", lambda *a: [])
+    assert cli.principal(["musicas", "baixar"]) == 0

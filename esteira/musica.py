@@ -85,7 +85,9 @@ def propor(pecas: list[dict], por_clima: int = 10) -> dict[str, list[dict]]:
     }
 
 
-def escrever_proposta(selecao: dict[str, list[dict]], pasta: Path) -> None:
+def escrever_proposta(selecao: dict[str, list[dict]], pasta: Path, forcar: bool = False) -> None:
+    if (pasta / "aprovadas.json").exists() and not forcar:
+        raise FileExistsError("musicas/aprovadas.json já existe e pode ter sido aprovado, use --forcar")
     pasta.mkdir(parents=True, exist_ok=True)
     linhas = ["# Proposta de músicas", ""]
     for clima, pecas in selecao.items():

@@ -130,9 +130,9 @@ def _musicas(args) -> int:
         print(f"{len(ler_catalogo(MUSICAS))} faixas no catálogo")
         for erro in erros:
             print(erro)
-        return 0
+        return 1 if erros else 0
     selecao = propor(baixar_catalogo())
-    escrever_proposta(selecao, MUSICAS)
+    escrever_proposta(selecao, MUSICAS, args.forcar)
     for clima, pecas in selecao.items():
         print(f"{clima}: {len(pecas)} faixas")
     print(f"Proposta em {MUSICAS / 'proposta.md'}")
@@ -197,6 +197,7 @@ def principal(argv: list[str] | None = None) -> int:
 
     c = comandos.add_parser("musicas")
     c.add_argument("acao", choices=["propor", "baixar"])
+    c.add_argument("--forcar", action="store_true")
     c.set_defaults(funcao=_musicas)
 
     args = parser.parse_args(argv)
