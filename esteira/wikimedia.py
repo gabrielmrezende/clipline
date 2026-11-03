@@ -1,6 +1,7 @@
 import html
 import json
 import re
+import time
 import urllib.parse
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -13,6 +14,10 @@ LADO_MINIMO = 800
 LARGURA_MINIATURA = 640
 LARGURA_FINAL = 1920
 RESULTADOS_BUSCA = 20
+INTERVALO_CONSULTAS = 2.0
+ERROS_TEMPORARIOS = {"cirrussearch-too-busy-error", "ratelimited", "maxlag"}
+TENTATIVAS_OCUPADA = 4
+ESPERA_OCUPADA = 10.0
 
 Consulta = Callable[[dict], dict]
 
@@ -28,14 +33,25 @@ class Candidata:
     licenca: str
 
 
+_ultima_consulta = 0.0
+
+
 def consultar(params: dict) -> dict:
+    global _ultima_consulta
     consulta = urllib.parse.urlencode({**params, "format": "json", "formatversion": 2})
-    with abrir(f"{API_URL}?{consulta}") as resposta:
-        dados = json.loads(resposta.read().decode("utf-8"))
-    if isinstance(dados, dict) and "error" in dados:
+    for tentativa in range(1, TENTATIVAS_OCUPADA + 1):
+        # A API limita pedidos seguidos; espaçar evita o 429.
+        time.sleep(max(0.0, _ultima_consulta + INTERVALO_CONSULTAS - time.monotonic()))
+        _ultima_consulta = time.monotonic()
+        with abrir(f"{API_URL}?{consulta}") as resposta:
+            dados = json.loads(resposta.read().decode("utf-8"))
+        if not (isinstance(dados, dict) and "error" in dados):
+            return dados
         erro = dados["error"] if isinstance(dados["error"], dict) else {}
-        raise ValueError(f"Wikimedia: {erro.get('code', 'desconhecido')}: {erro.get('info', dados['error'])}")
-    return dados
+        codigo = erro.get("code", "desconhecido")
+        if codigo not in ERROS_TEMPORARIOS or tentativa == TENTATIVAS_OCUPADA:
+            raise ValueError(f"Wikimedia: {codigo}: {erro.get('info', dados['error'])}")
+        time.sleep(ESPERA_OCUPADA * tentativa)
 
 
 def licenca_aceita(nome: str) -> bool:

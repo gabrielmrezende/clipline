@@ -138,8 +138,46 @@ def test_autor_desescapa_entidades_html():
 def test_consultar_levanta_valueerror_com_chave_error(monkeypatch):
     class Erro(_Resposta):
         def read(self):
-            return b'{"error": {"code": "ratelimited", "info": "devagar"}}'
+            return b'{"error": {"code": "badvalue", "info": "devagar"}}'
 
     monkeypatch.setattr(wikimedia, "abrir", lambda url, metodo="GET": Erro())
-    with pytest.raises(ValueError, match="Wikimedia: ratelimited: devagar"):
+    with pytest.raises(ValueError, match="Wikimedia: badvalue: devagar"):
+        wikimedia.consultar({"action": "query"})
+
+
+def test_consultar_espaca_consultas_seguidas(monkeypatch):
+    relogio = [100.0]
+    esperas = []
+    monkeypatch.setattr(wikimedia.time, "monotonic", lambda: relogio[0])
+    monkeypatch.setattr(wikimedia.time, "sleep", lambda s: esperas.append(s) or relogio.__setitem__(0, relogio[0] + s))
+    monkeypatch.setattr(wikimedia, "_ultima_consulta", 0.0)
+    monkeypatch.setattr(wikimedia, "abrir", lambda url, metodo="GET": _Resposta())
+    wikimedia.consultar({"action": "query"})
+    relogio[0] += 0.3
+    wikimedia.consultar({"action": "query"})
+    assert esperas[0] == 0.0
+    assert esperas[1] == pytest.approx(wikimedia.INTERVALO_CONSULTAS - 0.3)
+
+
+def test_consultar_repete_quando_busca_esta_ocupada(monkeypatch):
+    class Ocupada(_Resposta):
+        def read(self):
+            return b'{"error": {"code": "cirrussearch-too-busy-error", "info": "ocupada"}}'
+
+    respostas = [Ocupada(), Ocupada(), _Resposta()]
+    esperas = []
+    monkeypatch.setattr(wikimedia.time, "sleep", esperas.append)
+    monkeypatch.setattr(wikimedia, "abrir", lambda url, metodo="GET": respostas.pop(0))
+    assert wikimedia.consultar({"action": "query"}) == {"query": {}}
+    assert [e for e in esperas if e >= wikimedia.ESPERA_OCUPADA] == [wikimedia.ESPERA_OCUPADA, 2 * wikimedia.ESPERA_OCUPADA]
+
+
+def test_consultar_desiste_se_busca_continua_ocupada(monkeypatch):
+    class Ocupada(_Resposta):
+        def read(self):
+            return b'{"error": {"code": "cirrussearch-too-busy-error", "info": "ocupada"}}'
+
+    monkeypatch.setattr(wikimedia.time, "sleep", lambda s: None)
+    monkeypatch.setattr(wikimedia, "abrir", lambda url, metodo="GET": Ocupada())
+    with pytest.raises(ValueError, match="too-busy"):
         wikimedia.consultar({"action": "query"})
