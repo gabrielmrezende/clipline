@@ -1,4 +1,5 @@
 from esteira.modelos import Corte, Palavra
+from esteira.musica import CLIMAS_VALIDOS
 
 DURACAO_MIN = 60
 DURACAO_MAX = 120
@@ -16,6 +17,8 @@ def validar_trecho(palavras: list[Palavra], corte: Corte, duracao_video: float) 
         problemas.append("tempos fora da duração do vídeo")
     if not DURACAO_MIN <= corte.fim - corte.inicio <= DURACAO_MAX:
         problemas.append(f"duração fora de {DURACAO_MIN} a {DURACAO_MAX} segundos")
+    if corte.clima not in CLIMAS_VALIDOS:
+        problemas.append(f"clima fora de {', '.join(CLIMAS_VALIDOS)}")
 
     indices = [
         i for i, p in enumerate(palavras)

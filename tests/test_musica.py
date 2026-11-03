@@ -3,7 +3,8 @@ import json
 from esteira import cli
 from esteira.midia import executar_ffmpeg, pico_de_audio
 from esteira.musica import (
-    CLIMAS_VALIDOS, baixar_musicas, clima_da_faixa, credito, escrever_proposta, ler_catalogo, propor,
+    CLIMAS_VALIDOS, Faixa, baixar_musicas, clima_da_faixa, credito, escolher_musica, escrever_proposta,
+    gravar_uso, ler_catalogo, ler_uso, propor,
 )
 
 PECAS = [
@@ -165,3 +166,64 @@ def test_cli_musicas_baixar(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(cli, "baixar_url", _baixar_falso())
     assert cli.principal(["musicas", "baixar"]) == 0
     assert "1 faixas no catálogo" in capsys.readouterr().out
+
+
+def _faixa(titulo, clima="leve", duracao=200.0):
+    return Faixa(titulo, clima, duracao, f"{clima}/{titulo}.mp3", credito(titulo))
+
+
+def _uso(*arquivos, dia=1):
+    return {
+        f"ep/{n:02d}": {"arquivo": arquivo, "data": f"2026-10-{dia + n:02d}T10:00:00"}
+        for n, arquivo in enumerate(arquivos)
+    }
+
+
+def test_escolhe_do_clima_e_prefere_mais_longa():
+    catalogo = [_faixa("Tenso", "tenso"), _faixa("Curta", duracao=60.0), _faixa("Longa", duracao=200.0)]
+    assert escolher_musica("leve", catalogo, {}, 90.0, "ep/novo").titulo == "Longa"
+    assert escolher_musica("leve", catalogo[:2], {}, 90.0, "ep/novo").titulo == "Curta"
+
+
+def test_prefere_a_ha_mais_tempo_sem_uso():
+    catalogo = [_faixa(t) for t in "ABCDEFGHIJKL"]
+    uso = _uso(*(f"leve/{t}.mp3" for t in "ABCDEFGHIJ"))
+    uso["ep/velho"] = {"arquivo": "leve/L.mp3", "data": "2026-01-01T10:00:00"}
+    assert escolher_musica("leve", catalogo, uso, 90.0, "ep/novo").titulo == "K"
+
+
+def test_evita_as_ultimas_dez():
+    catalogo = [_faixa(t) for t in "ABCDEFGHIJKL"]
+    uso = _uso(*(f"leve/{t}.mp3" for t in "ABCDEFGHIJK"))
+    assert escolher_musica("leve", catalogo, uso, 90.0, "ep/novo").titulo == "L"
+    uso.pop("ep/10")
+    uso["ep/antigo"] = {"arquivo": "leve/K.mp3", "data": "2026-01-01T10:00:00"}
+    assert escolher_musica("leve", catalogo, uso, 90.0, "ep/novo").titulo == "L"
+    uso["ep/zz"] = {"arquivo": "leve/L.mp3", "data": "2026-12-01T10:00:00"}
+    assert escolher_musica("leve", catalogo, uso, 90.0, "ep/novo").titulo == "K"
+
+
+def test_todas_recentes_volta_a_menos_recente():
+    catalogo = [_faixa(t) for t in "ABC"]
+    uso = _uso("leve/B.mp3", "leve/C.mp3", "leve/A.mp3", "leve/B.mp3")
+    assert escolher_musica("leve", catalogo, uso, 90.0, "ep/novo").titulo == "C"
+
+
+def test_mesmo_corte_de_novo_mantem_a_faixa():
+    catalogo = [_faixa(t) for t in "AB"]
+    primeira = escolher_musica("leve", catalogo, {}, 90.0, "ep/01")
+    uso = {"ep/01": {"arquivo": primeira.arquivo, "data": "2026-11-02T10:00:00"}}
+    assert escolher_musica("leve", catalogo, uso, 90.0, "ep/01") == primeira
+    assert escolher_musica("leve", catalogo, uso, 90.0, "ep/02") != primeira
+
+
+def test_clima_sem_faixas_retorna_none():
+    assert escolher_musica("tenso", [_faixa("A")], {}, 90.0, "ep/01") is None
+    assert escolher_musica("leve", [], {}, 90.0, "ep/01") is None
+
+
+def test_uso_ida_e_volta(tmp_path):
+    assert ler_uso(tmp_path / "nada") == {}
+    uso = _uso("leve/Á b.mp3")
+    gravar_uso(tmp_path / "musicas", uso)
+    assert ler_uso(tmp_path / "musicas") == uso

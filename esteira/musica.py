@@ -3,9 +3,13 @@ import urllib.parse
 import urllib.request
 from collections.abc import Callable
 from dataclasses import asdict, dataclass
+from datetime import datetime
 from pathlib import Path
 
+from esteira.caminhos import MUSICAS
 from esteira.midia import duracao_audio, executar_ffmpeg
+from esteira.modelos import Corte
+from esteira.receita import Musica, duracao_principal, gravar_receita, ler_receita
 
 CATALOGO_URL = "https://incompetech.com/music/royalty-free/pieces.json"
 ARQUIVOS_URL = "https://incompetech.com/music/royalty-free/mp3-royaltyfree/"
@@ -23,6 +27,7 @@ MARCACOES_EXCLUIDAS = {"eerie", "unnerving", "dark", "aggressive", "action"}
 INSTRUMENTOS_EXCLUIDOS = ("voice", "vocal", "choir")
 DURACAO_MINIMA = 90
 DURACAO_MAXIMA = 360
+RECENTES = 10
 TERMOS_LEVES = ("piano", "strings", "guitar", "synth", "pad")
 TERMOS_PESADOS = ("drums", "brass", "percussion")
 
@@ -171,3 +176,39 @@ def baixar_musicas(
     ordenadas += [f for a, f in catalogo.items() if a not in ordem]
     gravar_catalogo(pasta, ordenadas)
     return erros
+
+
+def ler_uso(pasta: Path) -> dict[str, dict]:
+    arquivo = pasta / "uso.json"
+    return json.loads(arquivo.read_text("utf-8")) if arquivo.exists() else {}
+
+
+def gravar_uso(pasta: Path, uso: dict[str, dict]) -> None:
+    pasta.mkdir(parents=True, exist_ok=True)
+    texto = json.dumps(uso, ensure_ascii=False, indent=2) + "\n"
+    (pasta / "uso.json").write_text(texto, "utf-8", newline="\n")
+
+
+def escolher_musica(
+    clima: str, catalogo: list[Faixa], uso: dict[str, dict], duracao: float, chave: str
+) -> Faixa | None:
+    candidatas = [f for f in catalogo if f.clima == clima]
+    outros = sorted((u for c, u in uso.items() if c != chave), key=lambda u: u["data"], reverse=True)
+    recentes = {u["arquivo"] for u in outros[:RECENTES]}
+    livres = [f for f in candidatas if f.arquivo not in recentes] or candidatas
+    ultimo_uso = {u["arquivo"]: u["data"] for u in reversed(outros)}
+    return min(livres, key=lambda f: (f.duracao < duracao, ultimo_uso.get(f.arquivo, "")), default=None)
+
+
+def atualizar_musica(pasta_corte: Path, corte: Corte, chave: str, pasta_musicas: Path = MUSICAS) -> str | None:
+    receita = ler_receita(pasta_corte)
+    uso = ler_uso(pasta_musicas)
+    faixa = escolher_musica(corte.clima, ler_catalogo(pasta_musicas), uso, duracao_principal(receita), chave)
+    receita.musica = Musica(str(pasta_musicas / faixa.arquivo), -20.0, faixa.titulo, faixa.credito) if faixa else None
+    gravar_receita(pasta_corte, receita)
+    if faixa:
+        uso[chave] = {"arquivo": faixa.arquivo, "data": datetime.now().isoformat(timespec="seconds")}
+    elif uso.pop(chave, None) is None:
+        return None
+    gravar_uso(pasta_musicas, uso)
+    return faixa.titulo if faixa else None

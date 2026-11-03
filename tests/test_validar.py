@@ -43,3 +43,12 @@ def test_recusa_inicio_no_meio_da_frase():
 
 def test_recusa_trecho_sem_palavras():
     assert any("palavras" in x for x in validar_trecho([], corte(0, 70), 500))
+
+
+def test_clima_invalido_na_validacao():
+    p = frase()
+    for clima in ("Leve", "inspiradora", ""):
+        c = Corte(1, "t", p[1].inicio, p[-2].fim, clima)
+        assert validar_trecho(p, c, 500) == ["clima fora de leve, tenso, inspirador, reflexivo"]
+    for clima in ("leve", "tenso", "inspirador", "reflexivo"):
+        assert validar_trecho(p, Corte(1, "t", p[1].inicio, p[-2].fim, clima), 500) == []

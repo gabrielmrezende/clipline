@@ -2,11 +2,10 @@ import json
 from pathlib import Path
 
 from esteira import montar
-from esteira.cortar import preparar_episodio
 from esteira.midia import ErroMidia, sondar
 from esteira.montar import montar_episodio
 from esteira.receita import Imagem, gravar_receita, ler_receita
-from tests.auxiliares import preparar_episodio_teste
+from tests.auxiliares import preparar_episodio_teste, preparar_teste
 
 BOM = {"numero": 1, "titulo": "Bom corte", "inicio": 1.0, "fim": 62.9, "clima": "leve"}
 OUTRO = {**BOM, "numero": 2, "titulo": "Outro"}
@@ -14,7 +13,7 @@ OUTRO = {**BOM, "numero": 2, "titulo": "Outro"}
 
 def _preparado(tmp_path, cortes=(BOM,)):
     pasta, cartao = preparar_episodio_teste(tmp_path, list(cortes))
-    preparar_episodio(pasta, nomes=[])
+    preparar_teste(pasta)
     return pasta, cartao
 
 

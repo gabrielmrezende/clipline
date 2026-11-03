@@ -26,6 +26,8 @@ class Imagem:
 class Musica:
     arquivo: str
     volume_db: float = -20.0
+    titulo: str = ""
+    credito: str = ""
 
 
 @dataclass

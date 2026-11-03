@@ -3,13 +3,14 @@ from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
 
-from esteira.caminhos import CONTEXTO, ENCERRAMENTOS
+from esteira.caminhos import CONTEXTO, ENCERRAMENTOS, MUSICAS
 from esteira.episodio import slug
 from esteira.imagens import ler_imagens
 from esteira.legenda import corrigir_palavras, escrever_srt, montar_cues
 from esteira.limpeza import planejar_limpeza
 from esteira.midia import ErroMidia, versao_ffmpeg
 from esteira.modelos import Corte, Edicao, Palavra
+from esteira.musica import atualizar_musica
 from esteira.planos import ler_planos
 from esteira.receita import NOME_ARQUIVO, Receita, gravar_receita, ler_receita
 from esteira.transcrever import carregar_glossario, ler_palavras
@@ -81,6 +82,7 @@ def preparar_episodio(
     numeros: set[int] | None = None,
     forcar: bool = False,
     nomes: list[str] | None = None,
+    pasta_musicas: Path = MUSICAS,
 ) -> dict[int, str]:
     pasta = Path(pasta)
     episodio = json.loads((pasta / "episodio.json").read_text("utf-8"))
@@ -100,15 +102,18 @@ def preparar_episodio(
         destino.mkdir(exist_ok=True)
         problemas = validar_trecho(palavras, corte, episodio["duracao"])
         faixas: list = []
+        alertas: list[str] = []
         try:
             if problemas:
                 raise ErroMidia("; ".join(problemas))
             faixas = _preparar_um(destino, corte, palavras, nomes)
-            resultado = "ok"
+            if atualizar_musica(destino, corte, f"{pasta.name}/{destino.name}", pasta_musicas) is None:
+                alertas.append(f"sem música para o clima {corte.clima}")
+            resultado = f"ok com alertas: {'; '.join(alertas)}" if alertas else "ok"
         except (ErroMidia, OSError, ValueError) as erro:
             resultado = f"erro: {erro}"
-        if resultado != "ok" and forcar:
+        if resultado.startswith("erro") and forcar:
             (destino / NOME_ARQUIVO).unlink(missing_ok=True)
-        registrar(destino, video, corte, faixas, resultado)
+        registrar(destino, video, corte, faixas, resultado, alertas)
         resultados[corte.numero] = resultado
     return resultados

@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
 
+from esteira.cortar import preparar_episodio
 from esteira.midia import executar_ffmpeg
 
 
@@ -27,3 +28,9 @@ def preparar_episodio_teste(tmp_path: Path, cortes: list[dict]) -> tuple[Path, P
     (pasta / "transcricao" / "palavras.json").write_text(json.dumps(palavras), "utf-8")
     (pasta / "aprovados.json").write_text(json.dumps({"cortes": cortes}), "utf-8")
     return pasta, cartao
+
+
+def preparar_teste(
+    pasta: Path, numeros: set[int] | None = None, forcar: bool = False, pasta_musicas: Path | None = None
+) -> dict[int, str]:
+    return preparar_episodio(pasta, numeros, forcar, [], pasta_musicas or pasta.parent / "musicas")

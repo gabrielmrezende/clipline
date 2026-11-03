@@ -10,9 +10,10 @@ from esteira.episodio import criar_episodio
 from esteira.midia import ErroMidia
 from esteira.montar import montar_episodio
 from esteira.musica import (
-    baixar_catalogo, baixar_musicas, baixar_url, escrever_proposta, ler_catalogo, propor,
+    atualizar_musica, baixar_catalogo, baixar_musicas, baixar_url, escrever_proposta, ler_catalogo, propor,
 )
 from esteira.planos import gerar_folha, gravar_planos, ler_planos, planos_iniciais
+from esteira.receita import NOME_ARQUIVO
 from esteira.revisao import escrever_revisao
 from esteira.transcrever import carregar_glossario, ler_palavras, transcrever
 from esteira.validar import validar_trecho
@@ -70,6 +71,27 @@ def _imagens(args) -> int:
         except (OSError, ValueError, KeyError, TypeError) as erro:
             falhas += 1
             print(f"{corte.numero:02d}: erro: {erro}")
+    return 1 if falhas else 0
+
+
+def _musica(args) -> int:
+    pasta = garantir_escrita(Path(args.pasta))
+    falhas = 0
+    for corte in ler_aprovados(pasta):
+        if args.numero and corte.numero not in args.numero:
+            continue
+        destino = pasta_do_corte(pasta, corte)
+        if not (destino / NOME_ARQUIVO).exists():
+            falhas += 1
+            print(f"{corte.numero:02d}: erro: {NOME_ARQUIVO} não encontrado, rode preparar")
+            continue
+        try:
+            titulo = atualizar_musica(destino, corte, f"{pasta.name}/{destino.name}", MUSICAS)
+        except (OSError, ValueError, KeyError, TypeError) as erro:
+            falhas += 1
+            print(f"{corte.numero:02d}: erro: {erro}")
+            continue
+        print(f"{corte.numero:02d}: {titulo or f'sem música para o clima {corte.clima}'}")
     return 1 if falhas else 0
 
 
@@ -150,6 +172,11 @@ def principal(argv: list[str] | None = None) -> int:
     c.add_argument("--numero", type=int, action="append")
     c.add_argument("--forcar", action="store_true")
     c.set_defaults(funcao=_montar)
+
+    c = comandos.add_parser("musica")
+    c.add_argument("pasta")
+    c.add_argument("--numero", type=int, action="append")
+    c.set_defaults(funcao=_musica)
 
     c = comandos.add_parser("planos")
     c.add_argument("pasta")
