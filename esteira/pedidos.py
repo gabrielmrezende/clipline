@@ -48,10 +48,14 @@ def pessoas_do_glossario(caminho: Path) -> list[str]:
     for linha in Path(caminho).read_text("utf-8").splitlines():
         if linha.startswith("## "):
             em_secao_de_pessoas = any(p in linha for p in SECOES_DE_PESSOAS)
-        elif em_secao_de_pessoas and not linha.rstrip().endswith("."):
-            for nome in re.split(r"[,;]", linha.lstrip("-* ")):
-                if nome.strip():
-                    pessoas.append(nome.strip())
+        elif em_secao_de_pessoas:
+            texto = linha.strip().lstrip("-* ")
+            if texto.endswith(".") and not re.search(r"[,;]", texto):
+                continue
+            for nome in re.split(r"[,;]", texto):
+                nome = nome.strip().rstrip(".").strip()
+                if nome:
+                    pessoas.append(nome)
     return pessoas
 
 
@@ -96,7 +100,21 @@ def validar_pedidos(momentos: list[Momento], duracao: float, pessoas: list[str])
 
 
 def ajustar_tempos(momentos: list[Momento], duracao: float) -> list[str]:
-    avisos = []
+    mantidos = [m for m in momentos if not m.descartar]
+    originais = [(m.inicio, m.fim) for m in mantidos]
+    avisos: list[str] = []
+    while True:
+        novos = _ajustar_uma_vez(momentos, duracao)
+        if not novos:
+            return avisos
+        avisos.extend(f"momento {i + 1} ({momentos[i].nome}) descartado: {momentos[i].motivo}" for i in novos)
+        for m, (inicio, fim) in zip(mantidos, originais):
+            if not m.descartar:
+                m.inicio, m.fim = inicio, fim
+
+
+def _ajustar_uma_vez(momentos: list[Momento], duracao: float) -> list[int]:
+    descartados = []
     ordem = sorted((i for i, m in enumerate(momentos) if not m.descartar), key=lambda i: momentos[i].inicio)
     anterior_fim = 0.0
     for posicao, i in enumerate(ordem):
@@ -110,7 +128,7 @@ def ajustar_tempos(momentos: list[Momento], duracao: float) -> list[str]:
         if m.fim - m.inicio < receita.IMAGEM_MINIMA - receita.TOLERANCIA:
             m.descartar = True
             m.motivo = f"não cabe em {receita.IMAGEM_MINIMA:g} s"
-            avisos.append(f"momento {i + 1} ({m.nome}) descartado: {m.motivo}")
+            descartados.append(i)
             continue
         anterior_fim = m.fim
-    return avisos
+    return descartados

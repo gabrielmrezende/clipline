@@ -35,9 +35,20 @@ def test_descartado_nao_e_validado():
 
 
 def test_pessoas_do_glossario(tmp_path):
-    (tmp_path / "g.md").write_text("# G\n\n## Canal\nTudo é Política\n\n## Pessoas citadas\nLula, Messi\n\n"
-        "## Pessoas do automobilismo\nMax Verstappen\n\n## Automobilismo\nFerrari\n", "utf-8")
+    (tmp_path / "g.md").write_text("# G\n\n## Canal\nTudo é Política\n\n## Pessoas citadas\nOs apresentadores também foram convidados do Por Trás do TCC.\n"
+        "Lula, Messi\n\n## Pessoas do automobilismo\nMax Verstappen\n\n## Automobilismo\nFerrari\n", "utf-8")
     assert pessoas_do_glossario(tmp_path / "g.md") == ["Lula", "Messi", "Max Verstappen"]
+
+
+def test_pessoas_do_glossario_ponto_final(tmp_path):
+    (tmp_path / "g.md").write_text("## Pessoas citadas\nLula, Messi.\n", "utf-8")
+    assert pessoas_do_glossario(tmp_path / "g.md") == ["Lula", "Messi"]
+
+
+def test_proximo_mantido_ignora_descartado():
+    m = [Momento(10, 18, "f", "foto", "A"), Momento(12, 12.5, "f", "foto", "B"), Momento(13.5, 14, "f", "foto", "C")]
+    assert ajustar_tempos(m, 60) == ["momento 2 (B) descartado: não cabe em 2 s"]
+    assert [(x.inicio, x.fim) for x in (m[0], m[2])] == [(10, 13.5), (13.5, 15.5)] and m[1].descartar
 
 
 def test_estende_curto_para_frente():
