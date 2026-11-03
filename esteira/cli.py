@@ -3,12 +3,13 @@ import json
 import sys
 from pathlib import Path
 
-from esteira.caminhos import CONTEXTO, garantir_escrita
+from esteira.caminhos import CONTEXTO, MUSICAS, garantir_escrita
 from esteira.cartao import gerar_cartao
 from esteira.cortar import atualizar_imagens, ler_aprovados, pasta_do_corte, preparar_episodio
 from esteira.episodio import criar_episodio
 from esteira.midia import ErroMidia
 from esteira.montar import montar_episodio
+from esteira.musica import baixar_catalogo, escrever_proposta, propor
 from esteira.planos import gerar_folha, gravar_planos, ler_planos, planos_iniciais
 from esteira.revisao import escrever_revisao
 from esteira.transcrever import carregar_glossario, ler_palavras, transcrever
@@ -99,6 +100,15 @@ def _cartao(args) -> int:
     return 0
 
 
+def _musicas(args) -> int:
+    selecao = propor(baixar_catalogo())
+    escrever_proposta(selecao, MUSICAS)
+    for clima, pecas in selecao.items():
+        print(f"{clima}: {len(pecas)} faixas")
+    print(f"Proposta em {MUSICAS / 'proposta.md'}")
+    return 0
+
+
 def principal(argv: list[str] | None = None) -> int:
     sys.stdout.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser(prog="esteira")
@@ -149,6 +159,10 @@ def principal(argv: list[str] | None = None) -> int:
     c.add_argument("--data", required=True)
     c.add_argument("--saida", required=True)
     c.set_defaults(funcao=_cartao)
+
+    c = comandos.add_parser("musicas")
+    c.add_argument("acao", choices=["propor"])
+    c.set_defaults(funcao=_musicas)
 
     args = parser.parse_args(argv)
     try:

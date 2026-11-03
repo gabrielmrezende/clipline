@@ -5,6 +5,7 @@ RAIZ = AUTOMACAO.parent
 CONTEXTO = RAIZ / "Contexto"
 CORTES = RAIZ / "Cortes"
 BIN = AUTOMACAO / "bin"
+MUSICAS = AUTOMACAO / "musicas"
 FONTES = AUTOMACAO / "assets" / "fonts"
 ENCERRAMENTOS = [
     RAIZ / f"Final Corte ({nome}).mp4"
