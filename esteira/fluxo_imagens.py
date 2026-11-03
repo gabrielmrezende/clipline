@@ -1,3 +1,4 @@
+import copy
 import json
 import tempfile
 from collections.abc import Callable
@@ -112,9 +113,11 @@ def buscar_episodio(
                 titulo = f"Corte {corte.numero:02d} · momento {posicao} · {m.nome}"
                 montar_folha(titulo, lista, miniaturas, destino / "candidatas" / f"{corte.numero:02d}-{posicao}.jpg")
                 m.candidatas = [asdict(c) for c in lista]
-                m.escolha = None
+                m.escolha, m.numero, m.url, m.bytes, m.motivo = None, None, "", None, ""
                 if not lista:
                     alertas.append(f"momento {posicao} sem candidata")
+        for m in momentos:
+            m.numero = None  # o corte precisa de nova lista
         gravar_pedidos(destino, momentos)
         resultados[corte.numero] = _resultado(alertas)
     return resultados
@@ -144,12 +147,23 @@ def _gravar_texto(caminho: Path, texto: str) -> None:
     caminho.write_text(texto, "utf-8", newline="\n")
 
 
+def _ajustados(momentos: list[Momento], duracao: float, excluidos: set[int]) -> tuple[list[Momento], list[str]]:
+    copia = copy.deepcopy(momentos)
+    for i in excluidos:
+        copia[i].descartar = True
+    avisos = ajustar_tempos(copia, duracao)
+    return copia, avisos
+
+
 def _listar_um(destino: Path, momentos: list[Momento], duracao: float, medir, consultar) -> str:
     for posicao, m in enumerate(momentos, 1):
         if m.tipo == "foto" and not m.descartar and not (m.escolha and 1 <= m.escolha <= len(m.candidatas)):
             return f"erro: momento {posicao} sem escolha"
-    alertas = ajustar_tempos(momentos, duracao)
-    for posicao, m in enumerate(momentos, 1):
+    for m in momentos:
+        m.numero, m.url, m.bytes, m.motivo = None, "", None, ""
+    alertas: list[str] = []
+    sem_link: set[int] = set()
+    for i, m in enumerate(momentos):
         if m.descartar or m.tipo != "foto":
             continue
         try:
@@ -157,17 +171,22 @@ def _listar_um(destino: Path, momentos: list[Momento], duracao: float, medir, co
         except (OSError, ValueError) as erro:
             return f"erro: Wikimedia indisponível: {erro}"
         if url is None:
-            m.descartar, m.motivo = True, "sem link de download"
-            alertas.append(f"momento {posicao} ({m.nome}) descartado: sem link de download")
+            sem_link.add(i)
+            m.motivo = "sem link de download"
+            alertas.append(f"momento {i + 1} ({m.nome}) descartado: sem link de download")
             continue
         m.url, m.bytes = url, medir(url)
-    for m in momentos:
-        m.numero = None
-    ativos = sorted((m for m in momentos if not m.descartar), key=lambda m: m.inicio)
-    for numero, m in enumerate(ativos, 1):
-        m.numero = numero
+    copia, avisos = _ajustados(momentos, duracao, sem_link)
+    alertas += avisos
+    ativos = sorted((c for c in copia if not c.descartar), key=lambda c: c.inicio)
+    for numero, c in enumerate(ativos, 1):
+        c.numero = numero
+    for original, c in zip(momentos, copia):
+        original.numero = c.numero
+        if c.descartar and not original.descartar and not original.motivo:
+            original.motivo = c.motivo
     gravar_pedidos(destino, momentos)
-    texto = "\n\n".join(_bloco_imagem(m) for m in ativos)
+    texto = "\n\n".join(_bloco_imagem(c) for c in ativos)
     _gravar_texto(destino / "imagens.md", texto + "\n" if texto else "")
     return _resultado(alertas)
 
@@ -205,6 +224,7 @@ def _gravar_episodio(pasta: Path, nome: str, cortes: list[tuple[Corte, Path, lis
     resumo = f"Total: {fotos} fotos, {round(total / 1_048_576)} MB; {len(ias)} imagens de IA a gerar."
     _gravar_texto(pasta / "lista-imagens.md", f"# Imagens para aprovar: {nome}\n\n" + "\n\n".join(secoes) + f"\n\n{resumo}\n")
     if not ias:
+        _gravar_texto(pasta / "prompts-chatgpt.md", f"# Prompts para o ChatGPT: {nome}\n\nNenhuma imagem de IA neste episódio.\n")
         return
     (pasta / "ia-entrada").mkdir(exist_ok=True)
     quantidade = len(ias)
@@ -244,9 +264,15 @@ def listar_episodio(
     for corte, destino in _cortes_com_pedidos(pasta, None):
         if resultados.get(corte.numero, "ok").startswith("erro"):
             continue
-        momentos = ler_pedidos(destino)
-        if any(m.numero is not None for m in momentos):
-            listados.append((corte, destino, momentos))
-    if listados:
-        _gravar_episodio(pasta, _nome_do_episodio(pasta), listados)
+        try:
+            momentos = ler_pedidos(destino)
+            duracao = duracao_principal(ler_receita(destino))
+        except (OSError, ValueError, KeyError, TypeError):
+            continue
+        if not any(m.numero is not None for m in momentos):
+            continue
+        excluidos = {i for i, m in enumerate(momentos) if m.numero is None and not m.descartar}
+        copia, _ = _ajustados(momentos, duracao, excluidos)
+        listados.append((corte, destino, copia))
+    _gravar_episodio(pasta, _nome_do_episodio(pasta), listados)
     return resultados

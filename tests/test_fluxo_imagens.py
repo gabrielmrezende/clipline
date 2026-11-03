@@ -137,13 +137,62 @@ def test_listar_lista_e_prompts(tmp_path):
     assert ler_pedidos(corte)[0].bytes == 2048
 
 
-def test_listar_sem_link_descarta(tmp_path):
+def test_listar_sem_link_nao_descarta_para_sempre(tmp_path):
     ep, corte = _completo(tmp_path)
     resultado = listar_episodio(ep, None, [], sem_thumb, lambda u: 1)[1]
     assert "sem link de download" in resultado
     momentos = ler_pedidos(corte)
-    assert momentos[0].descartar and momentos[0].motivo == "sem link de download"
+    assert not momentos[0].descartar and momentos[0].motivo == "sem link de download"
     assert [m.numero for m in momentos] == [None, 1, 2]
+    assert listar_episodio(ep, None, [], falso, lambda u: 1) == {1: "ok"}
+    assert [m.numero for m in ler_pedidos(corte)] == [1, 2, 3]
+    assert ler_pedidos(corte)[0].motivo == ""
+
+
+def test_listar_nao_cabe_nao_grava_descarte_nem_tempos(tmp_path):
+    ep, corte = _episodio(tmp_path, [
+        _foto(0.0, 1.0, escolha=1, candidatas=[{"titulo": "File:A1.jpg", "pagina": "p", "miniatura": "m",
+                                                "largura": 1, "altura": 1, "autor": "F", "licenca": "CC0"}]),
+        Momento(1.0, 4.0, "f", "ia", "Uno", prompt="Um Uno"),
+    ])
+    resultado = listar_episodio(ep, None, [], falso, lambda u: 1)[1]
+    assert resultado.startswith("ok com alertas") and "não cabe" in resultado
+    momentos = ler_pedidos(corte)
+    assert not momentos[0].descartar and (momentos[0].inicio, momentos[0].fim) == (0.0, 1.0)
+    assert "não cabe" in momentos[0].motivo and [m.numero for m in momentos] == [None, 1]
+
+
+def test_listar_duas_vezes_troca_ia_por_foto(tmp_path):
+    ep, corte = _completo(tmp_path)
+    listar_episodio(ep, None, [], falso, lambda u: 1)
+    momentos = ler_pedidos(corte)
+    momentos[1] = Momento(20.0, 23.0, "fala dois", "foto", "Uno", busca="uno", escolha=1, candidatas=momentos[0].candidatas)
+    gravar_pedidos(corte, momentos)
+    listar_episodio(ep, None, [], falso, lambda u: 1)
+    prompts = (ep / "prompts-chatgpt.md").read_text("utf-8")
+    assert "Um Uno com escada" not in prompts and "Nenhuma imagem de IA" in prompts
+
+
+def test_listar_nao_mostra_foto_antiga_de_corte_refeito(tmp_path):
+    ep, corte1 = _completo(tmp_path)
+    (ep / "aprovados.json").write_text(json.dumps({"cortes": [CORTE, {**CORTE, "numero": 2, "titulo": "Outro"}]}), "utf-8")
+    corte2 = ep / "02-outro"
+    corte2.mkdir()
+    gravar_receita(corte2, Receita([(0.0, 60.0)], [Plano(0.0, 60.0)], []))
+    gravar_pedidos(corte2, [Momento(20.0, 23.0, "f", "ia", "Outra", prompt="Outra cena")])
+    listar_episodio(ep, None, [], falso, lambda u: 1)
+    buscar_episodio(ep, {1}, [], falso, baixar)
+    listar_episodio(ep, {2}, [], falso, lambda u: 1)
+    lista = (ep / "lista-imagens.md").read_text("utf-8")
+    assert "Gripen" not in lista and "Outra" in lista
+
+
+def test_listar_sem_nenhum_corte_listado_regrava_lista(tmp_path):
+    ep, _ = _completo(tmp_path)
+    listar_episodio(ep, None, [], falso, lambda u: 1)
+    buscar_episodio(ep, {1}, [], falso, baixar)
+    listar_episodio(ep, {1}, [], falso, lambda u: 1)
+    assert "Gripen" not in (ep / "lista-imagens.md").read_text("utf-8")
 
 
 def test_nome_arquivo():
