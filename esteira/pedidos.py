@@ -48,7 +48,7 @@ def pessoas_do_glossario(caminho: Path) -> list[str]:
     for linha in Path(caminho).read_text("utf-8").splitlines():
         if linha.startswith("## "):
             em_secao_de_pessoas = any(p in linha for p in SECOES_DE_PESSOAS)
-        elif em_secao_de_pessoas:
+        elif em_secao_de_pessoas and not linha.rstrip().endswith("."):
             for nome in re.split(r"[,;]", linha.lstrip("-* ")):
                 if nome.strip():
                     pessoas.append(nome.strip())
@@ -63,7 +63,8 @@ def _normalizar(texto: str) -> str:
 def _pessoa_citada(prompt: str, pessoas: list[str]) -> str | None:
     texto = _normalizar(prompt)
     for pessoa in pessoas:
-        if re.search(rf"\b{re.escape(_normalizar(pessoa))}\b", texto):
+        nome = _normalizar(pessoa)
+        if nome and re.search(rf"\b{re.escape(nome)}\b", texto):
             return pessoa
     return None
 
@@ -101,8 +102,7 @@ def ajustar_tempos(momentos: list[Momento], duracao: float) -> list[str]:
     for posicao, i in enumerate(ordem):
         m = momentos[i]
         proximo_inicio = momentos[ordem[posicao + 1]].inicio if posicao + 1 < len(ordem) else duracao
-        if m.fim - m.inicio > receita.IMAGEM_MAXIMA:
-            m.fim = m.inicio + receita.IMAGEM_MAXIMA
+        m.fim = min(m.fim, m.inicio + receita.IMAGEM_MAXIMA, proximo_inicio)
         if m.fim - m.inicio < receita.IMAGEM_MINIMA:
             m.fim = max(m.fim, min(m.inicio + receita.IMAGEM_MINIMA, proximo_inicio, duracao))
         if m.fim - m.inicio < receita.IMAGEM_MINIMA:

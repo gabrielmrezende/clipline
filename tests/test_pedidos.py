@@ -67,3 +67,19 @@ def test_fim_do_corte():
 def test_ida_e_volta_json(tmp_path):
     m = [Momento(1, 3, "f", "foto", "A", busca="x", candidatas=[{"titulo": "File:A.jpg"}], escolha=1)]
     gravar_pedidos(tmp_path, m); assert ler_pedidos(tmp_path) == m
+
+
+def test_sobreposicao_limita_ao_proximo():
+    m = [Momento(10, 15, "f", "foto", "A"), Momento(12, 16, "f", "foto", "B")]
+    assert ajustar_tempos(m, 60) == [] and [(x.inicio, x.fim) for x in m] == [(10, 12), (12, 16)]
+
+
+def test_sobreposicao_sem_espaco_descarta():
+    m = [Momento(0, 5, "f", "foto", "A"), Momento(1, 6, "f", "foto", "B")]
+    assert ajustar_tempos(m, 60) == ["momento 1 (A) descartado: não cabe em 2 s"]
+    assert m[0].descartar and not m[1].descartar
+
+
+def test_nome_vazio_apos_normalizar_e_ignorado():
+    m = [Momento(1, 3, "f", "ia", "A", prompt="paisagem")]
+    assert validar_pedidos(m, 60, ["李"]) == []
