@@ -3,7 +3,7 @@ from pathlib import Path
 
 from esteira.cortar import ler_aprovados, pasta_do_corte
 from esteira.modelos import Corte, Palavra
-from esteira.receita import NOME_ARQUIVO, ler_receita
+from esteira.receita import NOME_ARQUIVO, Receita, ler_receita
 from esteira.transcrever import ler_palavras
 
 
@@ -13,13 +13,18 @@ def contexto_do_trecho(palavras: list[Palavra], inicio: float, fim: float, n: in
     return " ".join(antes[-n:]), " ".join(depois[:n])
 
 
-def _alertas(destino: Path, registro: dict) -> list[str]:
+def _alertas(registro: dict, receita: Receita | None) -> list[str]:
     alertas = list(registro.get("alertas", []))
-    if (destino / NOME_ARQUIVO).exists():
-        for n, imagem in enumerate(ler_receita(destino).imagens, 1):
+    if receita:
+        for n, imagem in enumerate(receita.imagens, 1):
             if not imagem.licenca:
                 alertas.append(f"imagem {n} sem licença registrada")
     return alertas
+
+
+def _linha_musica(receita: Receita | None) -> str:
+    musica = receita.musica if receita else None
+    return f"Música: {musica.titulo or Path(musica.arquivo).name}" if musica else "Música: nenhuma"
 
 
 def _bloco(pasta: Path, corte: Corte, palavras: list[Palavra]) -> list[str]:
@@ -39,13 +44,15 @@ def _bloco(pasta: Path, corte: Corte, palavras: list[Palavra]) -> list[str]:
     antes, depois = contexto_do_trecho(palavras, corte.inicio, corte.fim)
     redes = "YouTube, TikTok e Instagram" if corte.instagram else "YouTube e TikTok"
     try:
-        alertas = _alertas(destino, registro)
+        receita = ler_receita(destino) if (destino / NOME_ARQUIVO).exists() else None
+        alertas = _alertas(registro, receita)
     except (OSError, ValueError, KeyError, TypeError):
         return linhas + ["Erro: montagem ilegível", ""]
     return linhas + [
         f"Vídeo: [final.mp4]({destino.name}/final.mp4)",
         f"Redes: {redes}",
         f"Publicação sugerida: {corte.data or 'sem data'}",
+        _linha_musica(receita),
         f'Antes: "{"... " if antes else ""}{antes}"',
         f'Depois: "{depois}{" ..." if depois else ""}"',
         f"Alertas: {'; '.join(alertas) if alertas else 'nenhum'}",

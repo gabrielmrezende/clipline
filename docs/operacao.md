@@ -7,7 +7,7 @@ Antes de sugerir qualquer coisa, ler todos os arquivos de `Contexto/`.
 Nunca alterar pastas de episódios.
 
 O dono do canal diz "faça os cortes do episódio X". O Claude Code segue as
-etapas 1 a 9 sem pausa. A única aprovação humana é a da etapa 9, com o corte
+etapas 1 a 10 sem pausa. A única aprovação humana é a da etapa 10, com o corte
 pronto. Nada é publicado.
 
 ## 1. Transcrever
@@ -25,7 +25,9 @@ permitir. Conferir em `transcricao/palavras.json` os tempos exatos. Ler o que
 vem antes e depois de cada trecho para não mudar o sentido da fala.
 
 Gravar `aprovados.json` com os cortes escolhidos pela esteira. Marcar
-`"instagram": true` nos 4 mais fortes. Os demais vão só para TikTok e Shorts.
+`"instagram": true` nos 4 mais fortes. O `clima` é um de quatro: `leve`,
+`tenso`, `inspirador` ou `reflexivo`. A etapa 3 acusa qualquer outro valor.
+Os demais cortes vão só para TikTok e Shorts.
 
 ```json
 {"cortes": [{"numero": 1, "titulo": "...", "inicio": 724.12, "fim": 801.40, "clima": "leve", "instagram": true}]}
@@ -75,11 +77,25 @@ Cria `montagem.json`, `legenda.srt` e `registro.json` em cada corte. Use
 Se o enquadramento mudar depois do `preparar`, rodar `preparar --numero N
 --forcar` (perde os destaques) ou editar `planos` no `montagem.json`.
 
-## 5. Destaques
+## 5. Música
+
+A música é escolhida pelo clima do corte. O `preparar` já faz isso e grava a
+faixa no `montagem.json`. Para trocar só a música de uma receita que já
+existe, sem refazer o resto:
+
+```bash
+.venv\Scripts\python.exe -m esteira musica "<pasta do episódio>" --numero N
+```
+
+O comando mostra a faixa de cada corte, ou `sem música para o clima <clima>`.
+Sem faixa para o clima, o corte sai sem música e a revisão avisa. Se a
+biblioteca ainda não existir, ver "Biblioteca de música" no fim deste roteiro.
+
+## 6. Destaques
 
 Não marcar destaques. A legenda é toda branca.
 
-## 6. Imagens
+## 7. Imagens
 
 Até a Parte 3 (busca automática), as imagens são manuais. Ler `legenda.srt` e
 escrever `imagens.md` com 4 a 8 sugestões, usando os tempos do corte final.
@@ -120,7 +136,7 @@ prompts numerados, e criar a pasta `ia-entrada/`. O dono do canal gera as
 imagens no ChatGPT e baixa na ordem. O enquadramento de cada imagem é
 automático: vertical em tela cheia, horizontal inteira sobre fundo desfocado.
 
-## 7. Montar
+## 8. Montar
 
 ```bash
 .venv\Scripts\python.exe -m esteira montar "<pasta do episódio>"
@@ -131,18 +147,15 @@ encerramento. Um corte com erro não impede os outros: ver `registro.json`.
 Se `final.mp4` já existir, a esteira não sobrescreve sem `--forcar`. Antes de
 usar `--forcar`, perguntar ao dono do canal.
 
-## 8. Textos e calendário
+## 9. Textos e calendário
 
 Escrever `post.md` com título e descrição do YouTube, textos de Instagram e
 TikTok, aviso de IA quando houver imagem de IA e a seção "Publicação sugerida".
 
-A seção "Música" traz:
-- clima sugerido;
-- termos de busca, com filtro de uso comercial;
-- gênero e humor para a biblioteca de áudio do YouTube;
-- alerta para músicas protegidas ligadas ao tema;
-- campos para registrar nome, artista, origem e licença da música usada.
-Prefira música sem letra. Não sugira música comercial famosa.
+A seção "Música" traz a faixa usada e o crédito exato da receita
+(`credito` no `montagem.json`). O mesmo crédito entra na descrição do YouTube
+e nos textos de Instagram e TikTok. Não buscar música no CapCut. Corte sem
+música não leva crédito.
 
 Sempre gerar `calendario.md` na pasta do episódio, sem esperar pedido:
 - TikTok e Shorts: todos os cortes, 1 a 2 por dia.
@@ -156,14 +169,14 @@ Sempre gerar `calendario.md` na pasta do episódio, sem esperar pedido:
 
 Gravar a data de cada corte no campo `data` de `aprovados.json`.
 
-## 9. Revisão e aprovação
+## 10. Revisão e aprovação
 
 ```bash
 .venv\Scripts\python.exe -m esteira revisao "<pasta do episódio>"
 ```
 
 Gera `revisao.md` na pasta do episódio, com um bloco por corte: link do
-`final.mp4`, título, redes, data, frase anterior e posterior ao trecho e
+`final.mp4`, título, redes, data, música, frase anterior e posterior ao trecho e
 alertas. No fim, os descartados e o motivo.
 
 O comando `revisao` regrava o arquivo; por isso, rodá-lo antes de acrescentar
@@ -197,3 +210,24 @@ Depois, gerar `revisao` de novo e mostrar o corte ao dono do canal.
 
 Correção que vale para os próximos cortes vira regra em `Contexto/`, com
 aprovação. Nomes errados da transcrição vão para `Contexto/glossario.md`.
+
+## Biblioteca de música
+
+As faixas ficam em `Automacao/musicas/`, por clima, com `catalogo.json`.
+Só entra música aprovada pelo dono do canal.
+
+1. Gerar a proposta (não baixa músicas):
+
+```bash
+.venv\Scripts\python.exe -m esteira musicas propor
+```
+
+2. Mostrar `musicas/proposta.md` ao dono do canal e esperar a aprovação.
+3. Depois da aprovação, informar nome, origem e tamanho e baixar:
+
+```bash
+.venv\Scripts\python.exe -m esteira musicas baixar
+```
+
+Faixa que falhar fica fora do catálogo e o comando informa. Faixa já baixada
+não é baixada de novo.
