@@ -1,3 +1,4 @@
+import html
 import json
 import re
 import urllib.parse
@@ -30,7 +31,11 @@ class Candidata:
 def consultar(params: dict) -> dict:
     consulta = urllib.parse.urlencode({**params, "format": "json", "formatversion": 2})
     with abrir(f"{API_URL}?{consulta}") as resposta:
-        return json.loads(resposta.read().decode("utf-8"))
+        dados = json.loads(resposta.read().decode("utf-8"))
+    if isinstance(dados, dict) and "error" in dados:
+        erro = dados["error"] if isinstance(dados["error"], dict) else {}
+        raise ValueError(f"Wikimedia: {erro.get('code', 'desconhecido')}: {erro.get('info', dados['error'])}")
+    return dados
 
 
 def licenca_aceita(nome: str) -> bool:
@@ -40,8 +45,8 @@ def licenca_aceita(nome: str) -> bool:
     return texto.startswith(("cc0", "public domain", "pd")) or bool(re.match(r"cc by( sa)? \d", texto))
 
 
-def _texto(html: str) -> str:
-    return " ".join(re.sub(r"<[^>]*>", "", html).split())
+def _texto(texto: str) -> str:
+    return " ".join(html.unescape(re.sub(r"<[^>]*>", "", texto)).split())
 
 
 def _candidata(pagina: dict) -> Candidata | None:

@@ -128,3 +128,18 @@ def test_tamanho_le_content_length_e_trata_erro(monkeypatch):
 
     monkeypatch.setattr(wikimedia, "abrir", falha)
     assert tamanho("https://u/a.jpg") is None
+
+
+def test_autor_desescapa_entidades_html():
+    paginas = [_pagina("File:A.jpg", 1, artista="Tom &amp; Jerry&#160;Silva")]
+    assert buscar_candidatas("x", lambda p: _resposta(paginas))[0].autor == "Tom & Jerry Silva"
+
+
+def test_consultar_levanta_valueerror_com_chave_error(monkeypatch):
+    class Erro(_Resposta):
+        def read(self):
+            return b'{"error": {"code": "ratelimited", "info": "devagar"}}'
+
+    monkeypatch.setattr(wikimedia, "abrir", lambda url, metodo="GET": Erro())
+    with pytest.raises(ValueError, match="Wikimedia: ratelimited: devagar"):
+        wikimedia.consultar({"action": "query"})

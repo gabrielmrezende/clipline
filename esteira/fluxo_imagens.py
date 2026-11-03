@@ -167,7 +167,9 @@ def _listar_um(destino: Path, momentos: list[Momento], duracao: float, medir, co
         if m.tipo == "foto" and not m.descartar and not (m.escolha and 1 <= m.escolha <= len(m.candidatas)):
             return f"erro: momento {posicao} sem escolha"
     for m in momentos:
-        m.numero, m.url, m.bytes, m.motivo = None, "", None, ""
+        m.numero, m.url, m.bytes = None, "", None
+        if not m.descartar:
+            m.motivo = ""
     alertas: list[str] = []
     sem_link: set[int] = set()
     for i, m in enumerate(momentos):

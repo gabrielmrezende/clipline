@@ -416,3 +416,13 @@ def test_baixar_cartao_que_falha_vira_alerta(tmp_path, monkeypatch):
 
     monkeypatch.setattr("esteira.fluxo_imagens.gerar_cartao", quebra_cartao)
     assert baixar_episodio(ep, None, baixar)[1] == "ok com alertas: imagem 3: cartão falhou"
+
+
+def test_listar_apaga_motivo_so_quando_nao_e_descarte_manual(tmp_path):
+    ep, corte = _completo(tmp_path)
+    momentos = ler_pedidos(corte)
+    momentos[0].descartar, momentos[0].motivo = True, "foto ruim"
+    gravar_pedidos(corte, momentos)
+    listar_episodio(ep, None, [], falso, lambda u: 1)
+    primeiro = ler_pedidos(corte)[0]
+    assert primeiro.descartar and primeiro.motivo == "foto ruim"
