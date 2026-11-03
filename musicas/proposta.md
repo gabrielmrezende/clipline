@@ -1,0 +1,175 @@
+# Proposta de músicas
+
+## leve
+
+- **Stealth Groover** (00:03:20)
+  - Instrumentos: Piano, Bass, Guitar, Drum Kit, Synth
+  - Ouvir: https://incompetech.com/music/royalty-free/mp3-royaltyfree/Stealth%20Groover.mp3
+  - The constancy of the bass melts into your consciousness, as the syncopation of the high-pitched piano and electric guitar keep the groove flowing. Subtle synthesizer arrangements change the flow of the song and keep it interesting, while the rhythm section is playful and experimental. This is perfect for a scene where the spy learns a new skill or performs an act of guile, or as the background to a low-key, tech-oriented game.
+- **Clear Air** (00:03:04)
+  - Instrumentos: Guitar, Piano
+  - Ouvir: https://incompetech.com/music/royalty-free/mp3-royaltyfree/Clear%20Air.mp3
+  - Very easy-going piece for acoustic steel string guitar and classical guitar. Second A section includes deep and soft piano.
+- **Sunshine** (00:03:22)
+  - Instrumentos: Guitar, Bass, Drum Kit, Piano
+  - Ouvir: https://incompetech.com/music/royalty-free/mp3-royaltyfree/Sunshine%20A.mp3
+  - A bright piece with piano and rhythm guitar throughout.  Kit and Bass in the background.  Main melody carried by Piano.
+- **Wallpaper** (00:03:40)
+  - Instrumentos: Synths, Drum Kit, Guitar
+  - Ouvir: https://incompetech.com/music/royalty-free/mp3-royaltyfree/Wallpaper.mp3
+  - Very very clean mix that is non-offensive on almost all fronts. Good spectral distribution - nice lows and highs. 2 catchy synth lines sort of fight for attention, leaving you to ignore them both after a while.
+- **Airport Lounge** (00:05:08)
+  - Instrumentos: Bass, Drum Kit, Electric Piano, Vibraphone
+  - Ouvir: https://incompetech.com/music/royalty-free/mp3-royaltyfree/Airport%20Lounge.mp3
+  - Light and airy, this piece is guaranteed not to steal focus.
+- **Awesome Call** (00:02:32)
+  - Instrumentos: Drum Kit, Bass, Piano, Electric Piano
+  - Ouvir: https://incompetech.com/music/royalty-free/mp3-royaltyfree/Awesome%20Call.mp3
+  - Light and bouncy.
+- **Backbay Lounge** (00:04:27)
+  - Instrumentos: Piano, Guitar, Drums, Bass
+  - Ouvir: https://incompetech.com/music/royalty-free/mp3-royaltyfree/Backbay%20Lounge.mp3
+  - This is cool. You can walk into a dinner party, grab a glass of prosecco, kiss the host, then casually defuse a large bomb one second before the timer runs out. That level of cool. Maybe you're not that cool, but if you adopt this as your personal theme tune, people will THINK you're that cool.
+- **BossaBossa** (00:02:47)
+  - Instrumentos: Piano, Bass, Drums, Guitar
+  - Ouvir: https://incompetech.com/music/royalty-free/mp3-royaltyfree/BossaBossa.mp3
+  - What makes a Bossa Nova a Bossa Nova? Whatever it is, this has it double! Or maybe it is just compensating for its relatively simple chord progression. Enjoy your Bossa! Probably. Probably a Bossa Nova.
+- **Overcast** (00:03:48)
+  - Instrumentos: Bass, Drum Kit, Synth, Guitar, Piano, Percussion
+  - Ouvir: https://incompetech.com/music/royalty-free/mp3-royaltyfree/Overcast.mp3
+  - A dreamy, watery disco beat with a kick and snare that are slightly outside of classic disco. It seems like this might clear the dance floor at 3am.
+- **Modern Jazz Samba** (00:04:09)
+  - Instrumentos: Drum Kit, Bass, Acoustic Guitar, Piano, Flute
+  - Ouvir: https://incompetech.com/music/royalty-free/mp3-royaltyfree/Modern%20Jazz%20Samba.mp3
+  - A nice little 85 BMP piece with guitar, piano, bass, and flute. Kind of jazzy and slightly blues-y with a more rocking beat. The bass in this piece is actually a sample from an 18th century double bass. Most latin players aren't likely to be on one of these... but it was the only one I had at the time.
+
+## tenso
+
+- **I Can Feel it Coming** (00:03:35)
+  - Instrumentos: Guitar, Percussion, Synth
+  - Ouvir: https://incompetech.com/music/royalty-free/mp3-royaltyfree/I%20Can%20Feel%20it%20Coming.mp3
+  - Just your average, run-of-the-mill tension filler music... Or IS it!? Yeah, it pretty much is. This does feature a poorly played guitar synth, though... so it is a stand-out in that way. If you were here for tension-building music, you already have this piece... Move along.
+- **Pyro Flow** (00:03:54)
+  - Instrumentos: Drums, Piano, Bass, Synth
+  - Ouvir: https://incompetech.com/music/royalty-free/mp3-royaltyfree/Pyro%20Flow.mp3
+  - You got flow? You want this. Borderline chill and aggressive, this piece is your man! It does stand alone, but if you got words... it is amazing! Try it! What style is this? I'm not sure. It borrows from a lot - but I don't think it fits anything out there. Rickenbacker bass, gnarled piano, and a distorted drum kit all fit together beautifully. Percussion breakdown at 2:17.
+- **Jerry Five** (00:02:40)
+  - Instrumentos: Synths, Percussion
+  - Ouvir: https://incompetech.com/music/royalty-free/mp3-royaltyfree/Jerry%20Five.mp3
+  - Sort of a cooler, driving piece. Lots of space in this piece to make it your own. I don't mean "make it your own" in that sort of way you do where you mark all the pancakes on your plate with your signature so you can tell if someone switched out your pancakes while you weren't looking. Honestly that's pretty weird.Who could possibly want to switch out your pancakes? I mean - who thinks like that? Sure, everyone NOW wants to screw with your pancakes, but before you started all of this - it wouldn't have crossed one person's mind! NOT ONE!
+- **Rising Tide** (00:04:37)
+  - Instrumentos: Synths, Percussion
+  - Ouvir: https://incompetech.com/music/royalty-free/mp3-royaltyfree/Rising%20Tide.mp3
+  - Let's be fair, if your interview segment was already energetic, you  don't need something like this to fix it. Most people suck at interviews. It isn't their fault. Talking in an entertaining way is really, really,  really hard. That's why this piece exists. Rising Tide is designed to make anyone look good! This piece comes in 2 speeds.
+- **Exit the Premises** (00:03:30)
+  - Instrumentos: Synths, Percussion
+  - Ouvir: https://incompetech.com/music/royalty-free/mp3-royaltyfree/Exit%20the%20Premises.mp3
+  - Big drums start with piece to reveal that they were not establishing the downbeat. Tight synth percussion and 8-bit inspired synths make this piece downright danceable! And who doesn't like a giant 80s synth? Or a 90s chip tunes synth? Or a modern synth? We gots them all!
+- **Ice Flow** (00:02:22)
+  - Instrumentos: Synths, Percussion
+  - Ouvir: https://incompetech.com/music/royalty-free/mp3-royaltyfree/Ice%20Flow.mp3
+  - This is another piece where the Feel descriptors don't work all that well. This is a sort of urban chill mix.
+- **Scissors** (00:03:28)
+  - Instrumentos: Percussion, Synths, Misc
+  - Ouvir: https://incompetech.com/music/royalty-free/mp3-royaltyfree/Scissors.mp3
+  - Subtle atmospheric sounds and rain-like cymbal elements blend together, creating an aura of intensity and intrigue, suitable for a mysterious or suspenseful production. The sounds build in force just before the end.
+- **Nonstop** (00:03:11)
+  - Instrumentos: Guitar, Percussion, Synths
+  - Ouvir: https://incompetech.com/music/royalty-free/mp3-royaltyfree/Nonstop.mp3
+  - From what I can tell, this piece has no genre... it is an odd mix of a few things, but not enough of any one of them to be considered a member of that group. So, when you find a new critter which is certainly a new species... likely a new genus... probably a new family... and seriously might be a order. It has an exoskeleton, gives birth to live young (asexually somehow?), has a beak... We recognize all those parts, but it doesn't fit anything. Might be a new phylum.
+- **Twisting** (00:05:18)
+  - Instrumentos: Guitar, Bass, Drums, Synth
+  - Ouvir: https://incompetech.com/music/royalty-free/mp3-royaltyfree/Twisting.mp3
+  - Let's talk about why so much film music sounds like this. The construction allows any part to be muted and otherwise sculpted around the dialog without the loss of a theme or motive energy. There isn't really a theme to lose. You can't hum this one easily. There is a lot of variation, but it is all in a very well defined range, and doesn't get too crazy.
+- **Brain Dance** (00:03:35)
+  - Instrumentos: Synths, Percussion
+  - Ouvir: https://incompetech.com/music/royalty-free/mp3-royaltyfree/Brain%20Dance.mp3
+  - Immerse yourself in the pulsating beats of "Brain Dance," a sonic experience that plunges you deep into the heart of the Sixth World. Conjured amidst the neon glow and astral currents of a dystopian Seattle, this track is the essence of a Decker's paradise.
+
+Synthwave textures weave an intricate matrix around you, leaving you entangled in its cybernetic allure. Deck in, chummer, and let the futuristic soundscape rewrite your reality. Wait... what universe is this set in?
+
+## inspirador
+
+- **Rains Will Fall** (00:03:42)
+  - Instrumentos: Piano, Drum Kit, Strings
+  - Ouvir: https://incompetech.com/music/royalty-free/mp3-royaltyfree/Rains%20Will%20Fall.mp3
+  - Slow Waltz. English Waltz. Foxtrot. Slow Fox. The piano plays a mournful, waltzing melody, while strings enter gently. Halfway into the second minute, the tone is more hopeful, but then returns to the sadness of the introduction.  Just before the third minute ends the hope returns, but melts again into sadness with the final high note of the piano. This is music for a rainy day, or when the hero to a story has lost his way.
+- **Danse Morialta** (00:03:56)
+  - Instrumentos: Piano
+  - Ouvir: https://incompetech.com/music/royalty-free/mp3-royaltyfree/Danse%20Morialta.mp3
+  - Simple, simple, effective piano piece. This one is hard to pin down emotionally, so I marked it at both somber and uplifting. It is really quite good... though not quite Satie.
+- **Promises to Keep** (00:05:04)
+  - Instrumentos: Piano
+  - Ouvir: https://incompetech.com/music/royalty-free/mp3-royaltyfree/Promises%20to%20Keep.mp3
+  - Slow impromptu for solo piano. A little hopeful, a little sorrowful... I'm sure there is a word for this feeling, but I don't know it.
+- **Reawakening** (00:03:34)
+  - Instrumentos: Piano, Cello
+  - Ouvir: https://incompetech.com/music/royalty-free/mp3-royaltyfree/Reawakening.mp3
+  - Easy love theme; Useful for quiet talks.
+- **Rumination** (00:02:52)
+  - Instrumentos: Piano, Orchestra
+  - Ouvir: https://incompetech.com/music/royalty-free/mp3-royaltyfree/Rumination.mp3
+  - After everything is said and done and you have time to look back, this piece unfolds like one's mind coming to terms with situations of gravity.
+- **Simple Duet** (00:03:19)
+  - Instrumentos: Piano, Violin
+  - Ouvir: https://incompetech.com/music/royalty-free/mp3-royaltyfree/Simple%20Duet.mp3
+  - Slower, optimistic and simple duet.
+- **Stoic Morning** (00:02:36)
+  - Instrumentos: Piano
+  - Ouvir: https://incompetech.com/music/royalty-free/mp3-royaltyfree/Stoic%20Morning.mp3
+  - Impromptu. Bright and cheery, but never bubbly. It does change up into minor for a bit.
+- **Dream Culture** (00:03:34)
+  - Instrumentos: Piano, Percussion
+  - Ouvir: https://incompetech.com/music/royalty-free/mp3-royaltyfree/Dream%20Culture.mp3
+  - Dreamy watery piano bits over a tight percussion with some reverse effects to add to the dreamlike state of things.
+- **Americana** (00:03:22)
+  - Instrumentos: Cellos, Bass Clarinet, Alto Flute, English Horn, Clarinet, French Horns, Trombones, Tubas, Percussion, Celesta, Violins, Basses
+  - Ouvir: https://incompetech.com/music/royalty-free/mp3-royaltyfree/Americana.mp3
+  - Starts out simply on the plains with cellos and winds, becomes disrupted bit a bit and piles on the grandiose with a lot of brass!
+- **Pride** (00:05:49)
+  - Instrumentos: Piano, Flute, Bass
+  - Ouvir: https://incompetech.com/music/royalty-free/mp3-royaltyfree/Pride.mp3
+  - 
+
+## reflexivo
+
+- **One Sly Move** (00:02:42)
+  - Instrumentos: Electric Piano, Drum Kit, Synths, Guitar
+  - Ouvir: https://incompetech.com/music/royalty-free/mp3-royaltyfree/One%20Sly%20Move.mp3
+  - A slow, relaxed, electronic piece.  This piece heavily uses EP and Synths.  From 1:01 to 1:20 all goes silent except the EP.  Mainly a synth and EP piece, guitar and kit in the background.
+- **Chill Wave** (00:04:00)
+  - Instrumentos: Synths, Bass, Drum, Guitar
+  - Ouvir: https://incompetech.com/music/royalty-free/mp3-royaltyfree/Chill%20Wave.mp3
+  - I was looking for a subject to analogize the depth of my knowledge for the Chill Wave genre of music. Wikipedia was there for me with entire things that I didn't even know were things; Randle Cotgrave! Yeon Namgeon!  Digital Mammographic Imaging! Rebelj, Serbia! In brief... I know nothing about Chill Wave. Hope you enjoy the fruits of ignorance!
+- **Eternity** (00:03:18)
+  - Instrumentos: Guitar, Bass, Drums, Electric Piano, Synths
+  - Ouvir: https://incompetech.com/music/royalty-free/mp3-royaltyfree/Eternity.mp3
+  - This is like... the ultimate in high-class non-offensive music. You can have this going at the hippest highest-class hotel in the world, and it'll feel at home. You can also put in less-classy places to make them feel classier! Like the opium den you built in your garage, or that tiny closet at your office where lunch-room recyclables go to get sticky and smell bad. I mean seriously... I don't think they ALL started out sticky.
+- **Immersed** (00:04:09)
+  - Instrumentos: Piano, Strings
+  - Ouvir: https://incompetech.com/music/royalty-free/mp3-royaltyfree/Immersed.mp3
+  - Minimal and somewhat droney in parts, this has a beautiful calmness about it. You can use it to sell anti-depressants or high performance automobile parts. Also useful for time-lapse photography of the night sky... or maybe a rocket launch.
+- **Pepper's Theme** (00:04:00)
+  - Instrumentos: Piano, Guitar, Bass, Flutes
+  - Ouvir: https://incompetech.com/music/royalty-free/mp3-royaltyfree/Peppers%20Theme.mp3
+  - Beautiful interplay between the piano and guitar, ending very upbeat. This was composed for the film "Duel" (2014).
+- **Summer Day** (00:03:18)
+  - Instrumentos: Guitar, Electric Piano, Bass, Drum Kit
+  - Ouvir: https://incompetech.com/music/royalty-free/mp3-royaltyfree/Summer%20Day.mp3
+  - Soothing piece with an interesting harmonic left-turn. You got a savage beast? This is just the ticket.
+- **Windswept** (00:03:28)
+  - Instrumentos: Guitar, Strings
+  - Ouvir: https://incompetech.com/music/royalty-free/mp3-royaltyfree/Windswept.mp3
+  - A relaxed guitar and strings piece for the denouement of a story or exposition of the scenic outdoors. The guitar is peaceful as the strings gently build in prominence. The tempo is regular overall, but slows down in key moments to build a sense of tranquility.
+- **Clean Soul** (00:05:07)
+  - Instrumentos: Electric Piano, Bass
+  - Ouvir: https://incompetech.com/music/royalty-free/mp3-royaltyfree/Clean%20Soul.mp3
+  - Very clean soft piece with a lot of space in it.
+- **Calmant** (00:03:24)
+  - Instrumentos: Piano
+  - Ouvir: https://incompetech.com/music/royalty-free/mp3-royaltyfree/Calmant.mp3
+  - Slow moving, semi-arpeggio theme.
+- **Friday Morning** (00:03:30)
+  - Instrumentos: Piano
+  - Ouvir: https://incompetech.com/music/royalty-free/mp3-royaltyfree/Friday%20Morning.mp3
+  - Simple, calm, open piano impromptu.

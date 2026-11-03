@@ -1,0 +1,282 @@
+[
+  {
+    "titulo": "Stealth Groover",
+    "clima": "leve",
+    "duracao": 200.1,
+    "arquivo": "leve/Stealth Groover.mp3",
+    "credito": "Música: Stealth Groover — Kevin MacLeod (incompetech.com), licença CC BY 4.0"
+  },
+  {
+    "titulo": "Clear Air",
+    "clima": "leve",
+    "duracao": 183.8,
+    "arquivo": "leve/Clear Air.mp3",
+    "credito": "Música: Clear Air — Kevin MacLeod (incompetech.com), licença CC BY 4.0"
+  },
+  {
+    "titulo": "Sunshine",
+    "clima": "leve",
+    "duracao": 201.9,
+    "arquivo": "leve/Sunshine A.mp3",
+    "credito": "Música: Sunshine — Kevin MacLeod (incompetech.com), licença CC BY 4.0"
+  },
+  {
+    "titulo": "Wallpaper",
+    "clima": "leve",
+    "duracao": 220.1,
+    "arquivo": "leve/Wallpaper.mp3",
+    "credito": "Música: Wallpaper — Kevin MacLeod (incompetech.com), licença CC BY 4.0"
+  },
+  {
+    "titulo": "Airport Lounge",
+    "clima": "leve",
+    "duracao": 307.7,
+    "arquivo": "leve/Airport Lounge.mp3",
+    "credito": "Música: Airport Lounge — Kevin MacLeod (incompetech.com), licença CC BY 4.0"
+  },
+  {
+    "titulo": "Awesome Call",
+    "clima": "leve",
+    "duracao": 152.1,
+    "arquivo": "leve/Awesome Call.mp3",
+    "credito": "Música: Awesome Call — Kevin MacLeod (incompetech.com), licença CC BY 4.0"
+  },
+  {
+    "titulo": "Backbay Lounge",
+    "clima": "leve",
+    "duracao": 266.6,
+    "arquivo": "leve/Backbay Lounge.mp3",
+    "credito": "Música: Backbay Lounge — Kevin MacLeod (incompetech.com), licença CC BY 4.0"
+  },
+  {
+    "titulo": "BossaBossa",
+    "clima": "leve",
+    "duracao": 167.3,
+    "arquivo": "leve/BossaBossa.mp3",
+    "credito": "Música: BossaBossa — Kevin MacLeod (incompetech.com), licença CC BY 4.0"
+  },
+  {
+    "titulo": "Overcast",
+    "clima": "leve",
+    "duracao": 228.1,
+    "arquivo": "leve/Overcast.mp3",
+    "credito": "Música: Overcast — Kevin MacLeod (incompetech.com), licença CC BY 4.0"
+  },
+  {
+    "titulo": "Modern Jazz Samba",
+    "clima": "leve",
+    "duracao": 248.5,
+    "arquivo": "leve/Modern Jazz Samba.mp3",
+    "credito": "Música: Modern Jazz Samba — Kevin MacLeod (incompetech.com), licença CC BY 4.0"
+  },
+  {
+    "titulo": "I Can Feel it Coming",
+    "clima": "tenso",
+    "duracao": 215.2,
+    "arquivo": "tenso/I Can Feel it Coming.mp3",
+    "credito": "Música: I Can Feel it Coming — Kevin MacLeod (incompetech.com), licença CC BY 4.0"
+  },
+  {
+    "titulo": "Pyro Flow",
+    "clima": "tenso",
+    "duracao": 234.3,
+    "arquivo": "tenso/Pyro Flow.mp3",
+    "credito": "Música: Pyro Flow — Kevin MacLeod (incompetech.com), licença CC BY 4.0"
+  },
+  {
+    "titulo": "Jerry Five",
+    "clima": "tenso",
+    "duracao": 160.1,
+    "arquivo": "tenso/Jerry Five.mp3",
+    "credito": "Música: Jerry Five — Kevin MacLeod (incompetech.com), licença CC BY 4.0"
+  },
+  {
+    "titulo": "Rising Tide",
+    "clima": "tenso",
+    "duracao": 277.4,
+    "arquivo": "tenso/Rising Tide.mp3",
+    "credito": "Música: Rising Tide — Kevin MacLeod (incompetech.com), licença CC BY 4.0"
+  },
+  {
+    "titulo": "Exit the Premises",
+    "clima": "tenso",
+    "duracao": 210.1,
+    "arquivo": "tenso/Exit the Premises.mp3",
+    "credito": "Música: Exit the Premises — Kevin MacLeod (incompetech.com), licença CC BY 4.0"
+  },
+  {
+    "titulo": "Ice Flow",
+    "clima": "tenso",
+    "duracao": 142.3,
+    "arquivo": "tenso/Ice Flow.mp3",
+    "credito": "Música: Ice Flow — Kevin MacLeod (incompetech.com), licença CC BY 4.0"
+  },
+  {
+    "titulo": "Scissors",
+    "clima": "tenso",
+    "duracao": 207.8,
+    "arquivo": "tenso/Scissors.mp3",
+    "credito": "Música: Scissors — Kevin MacLeod (incompetech.com), licença CC BY 4.0"
+  },
+  {
+    "titulo": "Nonstop",
+    "clima": "tenso",
+    "duracao": 191.3,
+    "arquivo": "tenso/Nonstop.mp3",
+    "credito": "Música: Nonstop — Kevin MacLeod (incompetech.com), licença CC BY 4.0"
+  },
+  {
+    "titulo": "Twisting",
+    "clima": "tenso",
+    "duracao": 317.8,
+    "arquivo": "tenso/Twisting.mp3",
+    "credito": "Música: Twisting — Kevin MacLeod (incompetech.com), licença CC BY 4.0"
+  },
+  {
+    "titulo": "Brain Dance",
+    "clima": "tenso",
+    "duracao": 214.9,
+    "arquivo": "tenso/Brain Dance.mp3",
+    "credito": "Música: Brain Dance — Kevin MacLeod (incompetech.com), licença CC BY 4.0"
+  },
+  {
+    "titulo": "Rains Will Fall",
+    "clima": "inspirador",
+    "duracao": 222.4,
+    "arquivo": "inspirador/Rains Will Fall.mp3",
+    "credito": "Música: Rains Will Fall — Kevin MacLeod (incompetech.com), licença CC BY 4.0"
+  },
+  {
+    "titulo": "Danse Morialta",
+    "clima": "inspirador",
+    "duracao": 236.3,
+    "arquivo": "inspirador/Danse Morialta.mp3",
+    "credito": "Música: Danse Morialta — Kevin MacLeod (incompetech.com), licença CC BY 4.0"
+  },
+  {
+    "titulo": "Promises to Keep",
+    "clima": "inspirador",
+    "duracao": 304.1,
+    "arquivo": "inspirador/Promises to Keep.mp3",
+    "credito": "Música: Promises to Keep — Kevin MacLeod (incompetech.com), licença CC BY 4.0"
+  },
+  {
+    "titulo": "Reawakening",
+    "clima": "inspirador",
+    "duracao": 214.1,
+    "arquivo": "inspirador/Reawakening.mp3",
+    "credito": "Música: Reawakening — Kevin MacLeod (incompetech.com), licença CC BY 4.0"
+  },
+  {
+    "titulo": "Rumination",
+    "clima": "inspirador",
+    "duracao": 172.2,
+    "arquivo": "inspirador/Rumination.mp3",
+    "credito": "Música: Rumination — Kevin MacLeod (incompetech.com), licença CC BY 4.0"
+  },
+  {
+    "titulo": "Simple Duet",
+    "clima": "inspirador",
+    "duracao": 199.3,
+    "arquivo": "inspirador/Simple Duet.mp3",
+    "credito": "Música: Simple Duet — Kevin MacLeod (incompetech.com), licença CC BY 4.0"
+  },
+  {
+    "titulo": "Stoic Morning",
+    "clima": "inspirador",
+    "duracao": 155.5,
+    "arquivo": "inspirador/Stoic Morning.mp3",
+    "credito": "Música: Stoic Morning — Kevin MacLeod (incompetech.com), licença CC BY 4.0"
+  },
+  {
+    "titulo": "Dream Culture",
+    "clima": "inspirador",
+    "duracao": 214.4,
+    "arquivo": "inspirador/Dream Culture.mp3",
+    "credito": "Música: Dream Culture — Kevin MacLeod (incompetech.com), licença CC BY 4.0"
+  },
+  {
+    "titulo": "Americana",
+    "clima": "inspirador",
+    "duracao": 202.2,
+    "arquivo": "inspirador/Americana.mp3",
+    "credito": "Música: Americana — Kevin MacLeod (incompetech.com), licença CC BY 4.0"
+  },
+  {
+    "titulo": "Pride",
+    "clima": "inspirador",
+    "duracao": 349.1,
+    "arquivo": "inspirador/Pride.mp3",
+    "credito": "Música: Pride — Kevin MacLeod (incompetech.com), licença CC BY 4.0"
+  },
+  {
+    "titulo": "One Sly Move",
+    "clima": "reflexivo",
+    "duracao": 161.8,
+    "arquivo": "reflexivo/One Sly Move.mp3",
+    "credito": "Música: One Sly Move — Kevin MacLeod (incompetech.com), licença CC BY 4.0"
+  },
+  {
+    "titulo": "Chill Wave",
+    "clima": "reflexivo",
+    "duracao": 240.1,
+    "arquivo": "reflexivo/Chill Wave.mp3",
+    "credito": "Música: Chill Wave — Kevin MacLeod (incompetech.com), licença CC BY 4.0"
+  },
+  {
+    "titulo": "Eternity",
+    "clima": "reflexivo",
+    "duracao": 198.1,
+    "arquivo": "reflexivo/Eternity.mp3",
+    "credito": "Música: Eternity — Kevin MacLeod (incompetech.com), licença CC BY 4.0"
+  },
+  {
+    "titulo": "Immersed",
+    "clima": "reflexivo",
+    "duracao": 249.0,
+    "arquivo": "reflexivo/Immersed.mp3",
+    "credito": "Música: Immersed — Kevin MacLeod (incompetech.com), licença CC BY 4.0"
+  },
+  {
+    "titulo": "Pepper's Theme",
+    "clima": "reflexivo",
+    "duracao": 239.5,
+    "arquivo": "reflexivo/Peppers Theme.mp3",
+    "credito": "Música: Pepper's Theme — Kevin MacLeod (incompetech.com), licença CC BY 4.0"
+  },
+  {
+    "titulo": "Summer Day",
+    "clima": "reflexivo",
+    "duracao": 198.1,
+    "arquivo": "reflexivo/Summer Day.mp3",
+    "credito": "Música: Summer Day — Kevin MacLeod (incompetech.com), licença CC BY 4.0"
+  },
+  {
+    "titulo": "Windswept",
+    "clima": "reflexivo",
+    "duracao": 208.3,
+    "arquivo": "reflexivo/Windswept.mp3",
+    "credito": "Música: Windswept — Kevin MacLeod (incompetech.com), licença CC BY 4.0"
+  },
+  {
+    "titulo": "Clean Soul",
+    "clima": "reflexivo",
+    "duracao": 306.7,
+    "arquivo": "reflexivo/Clean Soul.mp3",
+    "credito": "Música: Clean Soul — Kevin MacLeod (incompetech.com), licença CC BY 4.0"
+  },
+  {
+    "titulo": "Calmant",
+    "clima": "reflexivo",
+    "duracao": 204.1,
+    "arquivo": "reflexivo/Calmant.mp3",
+    "credito": "Música: Calmant — Kevin MacLeod (incompetech.com), licença CC BY 4.0"
+  },
+  {
+    "titulo": "Friday Morning",
+    "clima": "reflexivo",
+    "duracao": 210.3,
+    "arquivo": "reflexivo/Friday Morning.mp3",
+    "credito": "Música: Friday Morning — Kevin MacLeod (incompetech.com), licença CC BY 4.0"
+  }
+]
