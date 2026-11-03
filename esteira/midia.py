@@ -51,6 +51,19 @@ def versao_ffmpeg() -> str:
     return _rodar([str(BIN / "ffmpeg.exe"), "-version"], None).stdout.split("\n")[0]
 
 
+def duracao_audio(arquivo: Path) -> float:
+    resultado = _rodar(
+        [
+            str(BIN / "ffprobe.exe"), "-v", "error", "-show_entries", "format=duration",
+            "-of", "default=noprint_wrappers=1:nokey=1", str(arquivo),
+        ],
+        None,
+    )
+    if resultado.returncode != 0 or not resultado.stdout.strip():
+        raise ErroMidia(f"Não consegui medir a duração de {arquivo}: {resultado.stderr[-400:]}")
+    return float(resultado.stdout.strip())
+
+
 def sondar(video: Path) -> Midia:
     resultado = _rodar(
         [

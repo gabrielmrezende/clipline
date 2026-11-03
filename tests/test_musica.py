@@ -1,7 +1,10 @@
 import json
 
 from esteira import cli
-from esteira.musica import CLIMAS_VALIDOS, clima_da_faixa, escrever_proposta, propor
+from esteira.midia import executar_ffmpeg, pico_de_audio
+from esteira.musica import (
+    CLIMAS_VALIDOS, baixar_musicas, clima_da_faixa, credito, escrever_proposta, ler_catalogo, propor,
+)
 
 PECAS = [
     {"title": "Alegre", "filename": "Alegre.mp3", "length": "00:02:30", "feel": "Bright, Bouncy", "instruments": "Piano, Guitar", "description": "x"},
@@ -72,3 +75,93 @@ def test_cli_musicas_propor(tmp_path, monkeypatch):
     assert cli.principal(["musicas", "propor"]) == 0
     assert (tmp_path / "proposta.md").exists()
     assert json.loads((tmp_path / "aprovadas.json").read_text("utf-8"))["leve"] == ["Alegre.mp3"]
+
+
+def _tom(destino, db=-12.0, segundos=5):
+    executar_ffmpeg([
+        "-y", "-f", "lavfi", "-i", f"sine=frequency=440:duration={segundos}",
+        "-af", f"volume={db}dB", "-c:a", "libmp3lame", "-f", "mp3", str(destino),
+    ])
+
+
+def _baixar_falso(urls=None, db=-12.0, falhar=()):
+    def baixar(url, destino):
+        if urls is not None:
+            urls.append(url)
+        if any(nome in url for nome in falhar):
+            raise OSError("sem rede")
+        _tom(destino, db)
+
+    return baixar
+
+
+def _aprovar(pasta, aprovadas):
+    base = {clima: [] for clima in CLIMAS_VALIDOS}
+    (pasta / "aprovadas.json").write_text(json.dumps({**base, **aprovadas}), "utf-8")
+
+
+def test_credito_exato():
+    assert credito("Carefree") == "Música: Carefree — Kevin MacLeod (incompetech.com), licença CC BY 4.0"
+
+
+def test_baixar_normaliza_e_cataloga(tmp_path):
+    _aprovar(tmp_path, {"leve": ["Alegre.mp3"]})
+    erros = baixar_musicas(tmp_path, PECAS, _baixar_falso())
+    assert erros == []
+    catalogo = ler_catalogo(tmp_path)
+    assert len(catalogo) == 1
+    faixa = catalogo[0]
+    assert (faixa.titulo, faixa.clima, faixa.arquivo, faixa.credito) == ("Alegre", "leve", "leve/Alegre.mp3", credito("Alegre"))
+    assert abs(faixa.duracao - 5.0) < 0.5
+    assert (tmp_path / "leve" / "Alegre.mp3").exists()
+    assert not list(tmp_path.rglob("*.tmp"))
+
+
+def test_url_com_espaco(tmp_path):
+    _aprovar(tmp_path, {"inspirador": ["Clean Soul.mp3"]})
+    pecas = [{**_peca("Clean Soul", "Piano", feel="Uplifting"), "filename": "Clean Soul.mp3"}]
+    urls = []
+    assert baixar_musicas(tmp_path, pecas, _baixar_falso(urls)) == []
+    assert urls == ["https://incompetech.com/music/royalty-free/mp3-royaltyfree/Clean%20Soul.mp3"]
+    assert (tmp_path / "inspirador" / "Clean Soul.mp3").exists()
+
+
+def test_falha_em_uma_faixa_nao_para_as_outras(tmp_path):
+    _aprovar(tmp_path, {"leve": ["Alegre.mp3"], "reflexivo": ["Calma.mp3"]})
+    erros = baixar_musicas(tmp_path, PECAS, _baixar_falso(falhar=("Alegre",)))
+    assert len(erros) == 1 and erros[0].startswith("falha em Alegre.mp3: ")
+    assert [f.arquivo for f in ler_catalogo(tmp_path)] == ["reflexivo/Calma.mp3"]
+    assert not (tmp_path / "leve" / "Alegre.mp3").exists()
+    assert not list(tmp_path.rglob("*.tmp"))
+
+
+def test_faixa_ja_catalogada_nao_baixa_de_novo(tmp_path):
+    _aprovar(tmp_path, {"leve": ["Alegre.mp3"]})
+    baixar_musicas(tmp_path, PECAS, _baixar_falso())
+    urls = []
+    assert baixar_musicas(tmp_path, PECAS, _baixar_falso(urls)) == []
+    assert urls == []
+    assert len(ler_catalogo(tmp_path)) == 1
+
+
+def test_catalogo_ausente_e_ordem(tmp_path):
+    assert ler_catalogo(tmp_path) == []
+    _aprovar(tmp_path, {"leve": ["Alegre.mp3"], "reflexivo": ["Calma.mp3"]})
+    baixar_musicas(tmp_path, PECAS, _baixar_falso())
+    assert [f.clima for f in ler_catalogo(tmp_path)] == ["leve", "reflexivo"]
+
+
+def test_volume_normalizado(tmp_path):
+    _aprovar(tmp_path, {"leve": ["Alegre.mp3"], "reflexivo": ["Calma.mp3"]})
+    baixar_musicas(tmp_path, PECAS, lambda url, destino: _tom(destino, -30.0 if "Alegre" in url else -6.0))
+    picos = [pico_de_audio(tmp_path / f.arquivo) for f in ler_catalogo(tmp_path)]
+    assert abs(picos[0] - picos[1]) < 3
+
+
+def test_cli_musicas_baixar(tmp_path, monkeypatch, capsys):
+    _aprovar(tmp_path, {"leve": ["Alegre.mp3"]})
+    monkeypatch.setattr(cli, "MUSICAS", tmp_path)
+    monkeypatch.setattr(cli, "baixar_catalogo", lambda: PECAS)
+    monkeypatch.setattr(cli, "baixar_url", _baixar_falso())
+    assert cli.principal(["musicas", "baixar"]) == 0
+    assert "1 faixas no catálogo" in capsys.readouterr().out

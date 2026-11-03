@@ -1,7 +1,11 @@
 import json
 import urllib.parse
 import urllib.request
+from collections.abc import Callable
+from dataclasses import asdict, dataclass
 from pathlib import Path
+
+from esteira.midia import duracao_audio, executar_ffmpeg
 
 CATALOGO_URL = "https://incompetech.com/music/royalty-free/pieces.json"
 ARQUIVOS_URL = "https://incompetech.com/music/royalty-free/mp3-royaltyfree/"
@@ -23,10 +27,19 @@ TERMOS_LEVES = ("piano", "strings", "guitar", "synth", "pad")
 TERMOS_PESADOS = ("drums", "brass", "percussion")
 
 
+def _abrir(url: str):
+    pedido = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+    return urllib.request.urlopen(pedido, timeout=60)
+
+
 def baixar_catalogo() -> list[dict]:
-    pedido = urllib.request.Request(CATALOGO_URL, headers={"User-Agent": USER_AGENT})
-    with urllib.request.urlopen(pedido, timeout=60) as resposta:
+    with _abrir(CATALOGO_URL) as resposta:
         return json.loads(resposta.read().decode("utf-8"))
+
+
+def baixar_url(url: str, destino: Path) -> None:
+    with _abrir(url) as resposta:
+        destino.write_bytes(resposta.read())
 
 
 def _segundos(duracao: str) -> int:
@@ -86,3 +99,75 @@ def escrever_proposta(selecao: dict[str, list[dict]], pasta: Path) -> None:
     (pasta / "aprovadas.json").write_text(
         json.dumps(aprovadas, ensure_ascii=False, indent=2) + "\n", "utf-8", newline="\n"
     )
+
+
+@dataclass
+class Faixa:
+    titulo: str
+    clima: str
+    duracao: float
+    arquivo: str
+    credito: str
+
+
+def credito(titulo: str) -> str:
+    return f"Música: {titulo} — Kevin MacLeod (incompetech.com), licença CC BY 4.0"
+
+
+def ler_catalogo(pasta: Path) -> list[Faixa]:
+    arquivo = pasta / "catalogo.json"
+    if not arquivo.exists():
+        return []
+    return [Faixa(**item) for item in json.loads(arquivo.read_text("utf-8"))]
+
+
+def gravar_catalogo(pasta: Path, faixas: list[Faixa]) -> None:
+    pasta.mkdir(parents=True, exist_ok=True)
+    texto = json.dumps([asdict(f) for f in faixas], ensure_ascii=False, indent=2) + "\n"
+    (pasta / "catalogo.json").write_text(texto, "utf-8", newline="\n")
+
+
+def _processar(pasta: Path, clima: str, peca: dict, baixar: Callable[[str, Path], None]) -> Faixa:
+    nome = peca["filename"]
+    destino = pasta / clima / nome
+    destino.parent.mkdir(parents=True, exist_ok=True)
+    bruto = destino.with_name(nome + ".tmp")
+    normalizado = destino.with_name(nome + ".norm.tmp")
+    try:
+        baixar(ARQUIVOS_URL + urllib.parse.quote(nome), bruto)
+        executar_ffmpeg([
+            "-y", "-i", str(bruto), "-vn", "-af", "loudnorm=I=-16:TP=-1.5:LRA=11",
+            "-c:a", "libmp3lame", "-b:a", "192k", "-f", "mp3", str(normalizado),
+        ])
+        duracao = round(duracao_audio(normalizado), 1)
+        normalizado.replace(destino)
+    finally:
+        bruto.unlink(missing_ok=True)
+        normalizado.unlink(missing_ok=True)
+    return Faixa(peca["title"], clima, duracao, f"{clima}/{nome}", credito(peca["title"]))
+
+
+def baixar_musicas(
+    pasta: Path, pecas: list[dict], baixar: Callable[[str, Path], None] = baixar_url
+) -> list[str]:
+    aprovadas = json.loads((pasta / "aprovadas.json").read_text("utf-8"))
+    por_arquivo = {p["filename"]: p for p in pecas}
+    catalogo = {f.arquivo: f for f in ler_catalogo(pasta)}
+    erros = []
+    for clima in CLIMAS_VALIDOS:
+        for nome in aprovadas.get(clima, []):
+            if f"{clima}/{nome}" in catalogo:
+                continue
+            try:
+                if nome not in por_arquivo:
+                    raise KeyError("não está no catálogo do Incompetech")
+                faixa = _processar(pasta, clima, por_arquivo[nome], baixar)
+            except Exception as erro:
+                erros.append(f"falha em {nome}: {erro}")
+                continue
+            catalogo[faixa.arquivo] = faixa
+    ordem = [f"{clima}/{nome}" for clima in CLIMAS_VALIDOS for nome in aprovadas.get(clima, [])]
+    ordenadas = [catalogo[a] for a in ordem if a in catalogo]
+    ordenadas += [f for a, f in catalogo.items() if a not in ordem]
+    gravar_catalogo(pasta, ordenadas)
+    return erros

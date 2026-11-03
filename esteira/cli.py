@@ -9,7 +9,9 @@ from esteira.cortar import atualizar_imagens, ler_aprovados, pasta_do_corte, pre
 from esteira.episodio import criar_episodio
 from esteira.midia import ErroMidia
 from esteira.montar import montar_episodio
-from esteira.musica import baixar_catalogo, escrever_proposta, propor
+from esteira.musica import (
+    baixar_catalogo, baixar_musicas, baixar_url, escrever_proposta, ler_catalogo, propor,
+)
 from esteira.planos import gerar_folha, gravar_planos, ler_planos, planos_iniciais
 from esteira.revisao import escrever_revisao
 from esteira.transcrever import carregar_glossario, ler_palavras, transcrever
@@ -101,6 +103,12 @@ def _cartao(args) -> int:
 
 
 def _musicas(args) -> int:
+    if args.acao == "baixar":
+        erros = baixar_musicas(MUSICAS, baixar_catalogo(), baixar_url)
+        print(f"{len(ler_catalogo(MUSICAS))} faixas no catálogo")
+        for erro in erros:
+            print(erro)
+        return 0
     selecao = propor(baixar_catalogo())
     escrever_proposta(selecao, MUSICAS)
     for clima, pecas in selecao.items():
@@ -161,7 +169,7 @@ def principal(argv: list[str] | None = None) -> int:
     c.set_defaults(funcao=_cartao)
 
     c = comandos.add_parser("musicas")
-    c.add_argument("acao", choices=["propor"])
+    c.add_argument("acao", choices=["propor", "baixar"])
     c.set_defaults(funcao=_musicas)
 
     args = parser.parse_args(argv)
