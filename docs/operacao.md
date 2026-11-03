@@ -80,16 +80,22 @@ Se o enquadramento mudar depois do `preparar`, rodar `preparar --numero N
 ## 5. Música
 
 A música é escolhida pelo clima do corte. O `preparar` já faz isso e grava a
-faixa no `montagem.json`. Para trocar só a música de uma receita que já
-existe, sem refazer o resto:
+faixa no `montagem.json`. O comando `musica` preenche ou recalcula a música de
+receitas já preparadas (por exemplo, depois de mudar o clima do corte), sem
+refazer o resto:
 
 ```bash
 .venv\Scripts\python.exe -m esteira musica "<pasta do episódio>" --numero N
 ```
 
 O comando mostra a faixa de cada corte, ou `sem música para o clima <clima>`.
-Sem faixa para o clima, o corte sai sem música e a revisão avisa. Se a
-biblioteca ainda não existir, ver "Biblioteca de música" no fim deste roteiro.
+Sem faixa para o clima, o corte sai sem música e a revisão mostra
+`Música: nenhuma (sem música para o clima <clima>)`. Se a biblioteca ainda não
+existir, ver "Biblioteca de música" no fim deste roteiro.
+
+O comando `musica` não serve para escolher outra faixa. Para trocar a faixa de
+um corte, editar `arquivo`, `titulo` e `credito` da `musica` no `montagem.json`
+(usando uma faixa do `musicas/catalogo.json`) e remontar o corte.
 
 ## 6. Destaques
 
