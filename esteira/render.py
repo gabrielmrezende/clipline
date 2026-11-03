@@ -180,14 +180,17 @@ def renderizar_final(
             entradas.append(["-loop", "1", "-framerate", "30", "-i", str(Path(sobreposicao).resolve())])
             indice_logo = len(entradas) - 1
         partes += _filtro_cartao(indice_cartao, indice_logo, fim.tem_audio, fim.duracao)
-        inicio = esperado - TRANSICAO_ENCERRAMENTO
-        partes.append("[vleg]fps=30,settb=1/30[vleg30];[vfim]fps=30,settb=1/30[vfim30]")
         partes.append(
-            f"[vleg30][vfim30]xfade=transition=fade:duration={TRANSICAO_ENCERRAMENTO}:offset={inicio:.3f}[vsaida]"
+            f"[vleg]fps=30,settb=1/30,tpad=stop_mode=clone:stop_duration={TRANSICAO_ENCERRAMENTO}[vleg30];"
+            "[vfim]fps=30,settb=1/30[vfim30]"
         )
-        partes.append(f"[{rotulo_audio}][afim]acrossfade=d={TRANSICAO_ENCERRAMENTO}[asaida]")
+        partes.append(
+            f"[vleg30][vfim30]xfade=transition=fade:duration={TRANSICAO_ENCERRAMENTO}:offset={esperado:.3f}[vsaida]"
+        )
+        partes.append(f"[{rotulo_audio}]apad=pad_dur={TRANSICAO_ENCERRAMENTO}[apausa]")
+        partes.append(f"[apausa][afim]acrossfade=d={TRANSICAO_ENCERRAMENTO}[asaida]")
         rotulo_video, rotulo_audio = "vsaida", "asaida"
-        esperado += fim.duracao - TRANSICAO_ENCERRAMENTO
+        esperado += fim.duracao
     else:
         rotulo_video = "vleg"
 
