@@ -24,7 +24,14 @@ Data: 2026-11-03. Parte 3 (imagens automáticas).
 - Buscas vagas ("Madrid", "children karting") trazem resultados fora do
   assunto. Funciona melhor com o nome exato do lugar ou do objeto.
 
+- Remontagem dos 10 cortes: 10 min, todos ok; quadros conferidos no
+  segundo da fala.
+- Os `post.md` não acompanharam a troca de imagens: 3 cortes ganharam IA
+  sem o aviso e 1 ficou com aviso sem IA. Corrigido à mão. O `revisao`
+  regravou os alertas manuais; os que ainda valiam foram recolocados.
+
 ## Pendente
+- Ao trocar imagens, conferir o aviso de IA de cada `post.md`.
 - `baixar` não baixa nenhuma foto enquanto faltar imagem de IA em
   `ia-entrada/`, mesmo nos cortes sem IA.
 - O `lista` é lento (resolve o link e mede o tamanho de cada foto).
