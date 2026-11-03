@@ -235,7 +235,9 @@ def test_baixar_foto_cartao_e_ia(tmp_path):
     assert baixar_episodio(ep, None, baixar) == {1: "ok: 3 imagens"}
     assert len(ler_receita(corte).imagens) == 3
     assert sorted(p.name for p in (corte / "imagens").iterdir()) == [
-        "01-gripen.jpg", "02-uno-com-escada.png", "03-manchete.png"]
+        ".origens.json", "01-gripen.jpg", "02-uno-com-escada.png", "03-manchete.png"]
+    origens = json.loads((corte / "imagens" / ".origens.json").read_text("utf-8"))
+    assert origens == {"01-gripen.jpg": "https://u/1920px-A1.jpg", "03-manchete.png": "cartao|Titulo|Folha|2026-01-02"}
 
 
 def test_baixar_falha_isolada(tmp_path):
@@ -470,3 +472,75 @@ def test_baixar_falhas_inesperadas_viram_alerta(tmp_path):
     assert baixar_episodio(ep, None, truncado)[1] == "ok com alertas: imagem 1: download falhou"
     assert not list((corte / "imagens").glob("*.parcial"))
     assert not (corte / "imagens" / "01-gripen.jpg").exists()
+
+
+def _duas_candidatas():
+    base = {"pagina": "p", "miniatura": "m", "largura": 2000, "altura": 1000, "autor": "F", "licenca": "CC0"}
+    return [{**base, "titulo": "File:A1.jpg"}, {**base, "titulo": "File:A2.jpg"}]
+
+
+def _cor_pela_url(url, destino):
+    Image.new("RGB", (64, 40), (200, 0, 0) if "A1" in url else (0, 0, 200)).save(destino, "JPEG")
+
+
+def test_baixar_troca_de_escolha_substitui_o_arquivo(tmp_path):
+    ep, corte = _episodio(tmp_path, [_foto(escolha=1, candidatas=_duas_candidatas())])
+    listar_episodio(ep, None, [], falso, lambda u: 1)
+    baixar_episodio(ep, None, _cor_pela_url)
+    arquivo = corte / "imagens" / "01-gripen.jpg"
+    assert Image.open(arquivo).getpixel((0, 0))[0] > 150
+    momentos = ler_pedidos(corte)
+    momentos[0].escolha = 2
+    gravar_pedidos(corte, momentos)
+    listar_episodio(ep, None, [], falso, lambda u: 1)
+    chamadas = []
+
+    def registra(url, destino):
+        chamadas.append(url)
+        _cor_pela_url(url, destino)
+
+    assert baixar_episodio(ep, None, registra) == {1: "ok: 1 imagens"}
+    assert chamadas == ["https://u/1920px-A2.jpg"]
+    assert Image.open(arquivo).getpixel((0, 0))[2] > 150
+    assert not list((corte / "imagens").glob("*.parcial*"))
+    chamadas.clear()
+    baixar_episodio(ep, None, registra)
+    assert chamadas == []
+
+
+def test_baixar_troca_falha_mantem_arquivo_antigo(tmp_path):
+    ep, corte = _episodio(tmp_path, [_foto(escolha=1, candidatas=_duas_candidatas())])
+    listar_episodio(ep, None, [], falso, lambda u: 1)
+    baixar_episodio(ep, None, _cor_pela_url)
+    momentos = ler_pedidos(corte)
+    momentos[0].escolha = 2
+    gravar_pedidos(corte, momentos)
+    listar_episodio(ep, None, [], falso, lambda u: 1)
+    assert baixar_episodio(ep, None, baixar_html)[1] == "ok com alertas: imagem 1: download falhou"
+    assert Image.open(corte / "imagens" / "01-gripen.jpg").getpixel((0, 0))[0] > 150
+
+
+def test_baixar_cartao_com_dados_novos_e_regerado(tmp_path):
+    ep, corte = _episodio(tmp_path, [Momento(30.0, 33.0, "f", "noticia", "Manchete", titulo="Titulo", veiculo="Folha", data="2026-01-02")])
+    listar_episodio(ep, None, [], falso, lambda u: 1)
+    baixar_episodio(ep, None, baixar)
+    arquivo = corte / "imagens" / "01-manchete.png"
+    antes = arquivo.read_bytes()
+    momentos = ler_pedidos(corte)
+    momentos[0].titulo = "Outro titulo bem diferente"
+    gravar_pedidos(corte, momentos)
+    listar_episodio(ep, None, [], falso, lambda u: 1)
+    baixar_episodio(ep, None, baixar)
+    assert arquivo.read_bytes() != antes
+    assert not list((corte / "imagens").glob("*parcial*"))
+
+
+def test_baixar_arquivo_feito_a_mao_e_mantido_com_alerta(tmp_path):
+    ep, corte = _episodio(tmp_path, [_foto(escolha=1, candidatas=_duas_candidatas())])
+    listar_episodio(ep, None, [], falso, lambda u: 1)
+    (corte / "imagens").mkdir()
+    Image.new("RGB", (64, 40), (0, 200, 0)).save(corte / "imagens" / "01-gripen.jpg")
+    chamadas = []
+    resultado = baixar_episodio(ep, None, _contador(chamadas))
+    assert resultado == {1: "ok com alertas: imagem 1: arquivo existente sem origem registrada, mantido"}
+    assert chamadas == [] and Image.open(corte / "imagens" / "01-gripen.jpg").getpixel((0, 0))[1] > 150

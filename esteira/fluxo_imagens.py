@@ -324,24 +324,62 @@ def _baixar_foto(m: Momento, caminho: Path, baixar: Callable[[str, Path], None])
         return False
 
 
+ORIGENS = ".origens.json"
+
+
+def _origem(m: Momento) -> str:
+    return m.url if m.tipo == "foto" else f"cartao|{m.titulo}|{m.veiculo}|{m.data}"
+
+
+def _ler_origens(pasta: Path) -> dict[str, str]:
+    try:
+        dados = json.loads((pasta / ORIGENS).read_text("utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return dados if isinstance(dados, dict) else {}
+
+
+def _gerar_cartao_seguro(m: Momento, caminho: Path) -> bool:
+    parcial = caminho.with_name(f"{caminho.stem}.parcial{caminho.suffix}")
+    try:
+        gerar_cartao(m.titulo, m.veiculo, m.data, parcial)
+        parcial.replace(caminho)
+        return True
+    except Exception:  # fronteira de isolamento de um item
+        return False
+    finally:
+        parcial.unlink(missing_ok=True)
+
+
 def _baixar_um(destino: Path, momentos: list[Momento], baixar: Callable[[str, Path], None]) -> str:
     alertas: list[str] = []
+    pasta_imagens = destino / "imagens"
+    origens = _ler_origens(pasta_imagens)
+    anteriores = dict(origens)
     for m in _numerados(momentos):
         if m.tipo == "ia":
             continue
         caminho = destino / nome_arquivo(m, _extensao(m))
+        origem = _origem(m)
         if caminho.exists():
-            continue
+            if caminho.name not in origens:
+                alertas.append(f"imagem {m.numero}: arquivo existente sem origem registrada, mantido")
+                continue
+            if origens[caminho.name] == origem:
+                continue
         caminho.parent.mkdir(exist_ok=True)
         if m.tipo == "foto":
-            if not _baixar_foto(m, caminho, baixar):
-                alertas.append(f"imagem {m.numero}: download falhou")
+            ok = _baixar_foto(m, caminho, baixar)
+            falha = "download falhou"
         else:
-            try:
-                gerar_cartao(m.titulo, m.veiculo, m.data, caminho)
-            except Exception:
-                caminho.unlink(missing_ok=True)
-                alertas.append(f"imagem {m.numero}: cartão falhou")
+            ok = _gerar_cartao_seguro(m, caminho)
+            falha = "cartão falhou"
+        if ok:
+            origens[caminho.name] = origem
+        else:
+            alertas.append(f"imagem {m.numero}: {falha}")
+    if origens != anteriores:
+        _gravar_texto(pasta_imagens / ORIGENS, json.dumps(origens, ensure_ascii=False, indent=2) + chr(10))
     try:
         quantidade = atualizar_imagens(destino)
     except FileNotFoundError:
