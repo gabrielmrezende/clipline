@@ -118,3 +118,16 @@ def test_revisao_mostra_musica(tmp_path):
 
     assert "Publicação sugerida: 2026-11-04 18:00\nMúsica: Carefree\n" in blocos[1]
     assert "Publicação sugerida: sem data\nMúsica: nenhuma (sem música para o clima tenso)\n" in blocos[2]
+
+
+def test_alerta_imagem_sem_arquivo(tmp_path):
+    corte = Corte(1, "Com Imagens", 10, 20, "tenso")
+    pasta = _episodio(tmp_path, [corte])
+    _montado(pasta, corte, imagens=[Imagem(0, 2, "imagens/01-a.png", "CC")])
+    destino = pasta_do_corte(pasta, corte)
+    (destino / "imagens").mkdir()
+    (destino / "imagens" / "01-a.png").write_bytes(b"x")
+    (destino / "imagens.md").write_text(
+        "## 1. 00:00:00 a 00:00:02 — A\n\n## 2. 00:00:03 a 00:00:05 — B\n", "utf-8")
+    texto = escrever_revisao(pasta).read_text("utf-8")
+    assert "imagem 2 sem arquivo" in texto and "imagem 1 sem arquivo" not in texto

@@ -198,3 +198,128 @@ def test_listar_sem_nenhum_corte_listado_regrava_lista(tmp_path):
 def test_nome_arquivo():
     m = Momento(0, 1, "f", "foto", "Uno, o rápido", numero=4)
     assert nome_arquivo(m, ".jpg") == "imagens/04-uno-o-rapido.jpg"
+
+
+# --- baixar_episodio ---
+from esteira.fluxo_imagens import baixar_episodio  # noqa: E402
+from esteira.receita import ler_receita  # noqa: E402
+
+
+def _listado(tmp_path, ia=True):
+    ep, corte = _completo(tmp_path)
+    if not ia:
+        momentos = [m for m in ler_pedidos(corte) if m.tipo != "ia"]
+        gravar_pedidos(corte, momentos)
+    listar_episodio(ep, None, [], falso, lambda u: 2048)
+    return ep, corte
+
+
+def _ia(ep, nome="gerada.png"):
+    Image.new("RGB", (32, 56), (10, 10, 200)).save(ep / "ia-entrada" / nome)
+
+
+def _contador(chamadas):
+    def baixar_imagem(url, destino):
+        chamadas.append(url)
+        baixar(url, destino)
+    return baixar_imagem
+
+
+def baixar_html(url, destino):
+    destino.write_text("<html>", "utf-8")
+
+
+def test_baixar_foto_cartao_e_ia(tmp_path):
+    ep, corte = _listado(tmp_path)
+    _ia(ep)
+    assert baixar_episodio(ep, None, baixar) == {1: "ok: 3 imagens"}
+    assert len(ler_receita(corte).imagens) == 3
+    assert sorted(p.name for p in (corte / "imagens").iterdir()) == [
+        "01-gripen.jpg", "02-uno-com-escada.png", "03-manchete.png"]
+
+
+def test_baixar_falha_isolada(tmp_path):
+    ep, corte = _listado(tmp_path)
+    _ia(ep)
+    assert baixar_episodio(ep, None, baixar_html)[1] == "ok com alertas: imagem 1: download falhou"
+    assert not list((corte / "imagens").glob("*.parcial"))
+    assert not (corte / "imagens" / "01-gripen.jpg").exists()
+
+
+def test_baixar_erro_de_rede_e_alerta(tmp_path):
+    ep, corte = _listado(tmp_path)
+    _ia(ep)
+
+    def cai(url, destino):
+        destino.write_bytes(b"meio")
+        raise OSError("caiu")
+
+    assert baixar_episodio(ep, None, cai)[1] == "ok com alertas: imagem 1: download falhou"
+    assert not list((corte / "imagens").glob("*.parcial"))
+
+
+def test_baixar_nao_repete_download(tmp_path):
+    ep, corte = _listado(tmp_path)
+    _ia(ep)
+    chamadas = []
+    baixar_episodio(ep, None, _contador(chamadas))
+    assert len(chamadas) == 1
+    chamadas.clear()
+    assert baixar_episodio(ep, None, _contador(chamadas)) == {1: "ok: 3 imagens"}
+    assert chamadas == []
+
+
+def test_baixar_contagem_ia_errada(tmp_path):
+    ep, corte = _listado(tmp_path)
+    assert baixar_episodio(ep, None, baixar) == {1: "erro: ia-entrada/: esperadas 1 imagens, encontradas 0"}
+    assert not (corte / "imagens").exists()
+
+
+def test_baixar_episodio_sem_ia(tmp_path):
+    ep, corte = _listado(tmp_path, ia=False)
+    assert baixar_episodio(ep, None, baixar) == {1: "ok: 2 imagens"}
+    assert not (ep / "ia-entrada" / ".mapa.tsv").exists()
+
+
+def test_baixar_arquivo_antigo_com_mesmo_numero(tmp_path):
+    ep, corte = _listado(tmp_path)
+    _ia(ep)
+    (corte / "imagens").mkdir()
+    (corte / "imagens" / "01-outro-nome.jpg").write_bytes(b"x")
+    (corte / "imagens" / "descartadas").mkdir()
+    (corte / "imagens" / "descartadas" / "02-velho.png").write_bytes(b"x")
+    (corte / "imagens" / "02-uno-com-escada.png.parcial").write_bytes(b"x")
+    resultado = baixar_episodio(ep, None, baixar)
+    assert resultado == {1: "erro: imagens/ tem arquivo antigo com o mesmo número: 01-outro-nome.jpg"}
+    assert sorted(p.name for p in (corte / "imagens").iterdir()) == [
+        "01-outro-nome.jpg", "02-uno-com-escada.png.parcial", "descartadas"]
+
+
+def test_baixar_ignora_subpasta_e_parcial_sem_conflito(tmp_path):
+    ep, corte = _listado(tmp_path)
+    _ia(ep)
+    (corte / "imagens" / "descartadas").mkdir(parents=True)
+    (corte / "imagens" / "descartadas" / "01-velho.jpg").write_bytes(b"x")
+    (corte / "imagens" / "01-gripen.jpg.parcial").write_bytes(b"x")
+    assert baixar_episodio(ep, None, baixar) == {1: "ok: 3 imagens"}
+
+
+def test_baixar_sem_montagem(tmp_path):
+    ep, corte = _listado(tmp_path)
+    _ia(ep)
+    (corte / "montagem.json").unlink()
+    assert baixar_episodio(ep, None, baixar) == {1: "erro: montagem.json não encontrado, rode preparar"}
+
+
+def test_baixar_corte_sem_pedidos_nao_aparece(tmp_path):
+    ep, corte = _listado(tmp_path)
+    _ia(ep)
+    (corte / "pedidos.json").unlink()
+    assert baixar_episodio(ep, None, baixar) == {}
+
+
+def test_baixar_filtro_de_cortes_mantem_ia_de_todos(tmp_path):
+    ep, corte = _listado(tmp_path)
+    _ia(ep)
+    assert baixar_episodio(ep, {2}, baixar) == {}
+    assert not (corte / "imagens").exists()

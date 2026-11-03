@@ -5,10 +5,15 @@ from collections.abc import Callable
 from dataclasses import asdict
 from pathlib import Path
 
+from PIL import Image
+
 from esteira import rede, wikimedia
-from esteira.cortar import ler_aprovados, pasta_do_corte
+from esteira.cartao import gerar_cartao
+from esteira.cortar import atualizar_imagens, ler_aprovados, pasta_do_corte
 from esteira.episodio import slug
 from esteira.folhas import montar_folha
+from esteira.imagens import EXTENSOES
+from esteira.ingestao import encaixar_ia
 from esteira.modelos import Corte
 from esteira.pedidos import ARQUIVO, Momento, ajustar_tempos, gravar_pedidos, ler_pedidos, validar_pedidos
 from esteira.receita import NOME_ARQUIVO, duracao_principal, ler_receita
@@ -202,6 +207,10 @@ def _linha_lista(m: Momento) -> str:
     return cabecalho + f"{arquivo} — {tamanho}"
 
 
+def _numerados(momentos: list[Momento]) -> list[Momento]:
+    return sorted((m for m in momentos if m.numero is not None), key=lambda m: m.numero)
+
+
 def _nome_do_episodio(pasta: Path) -> str:
     try:
         dados = json.loads((pasta / "episodio.json").read_text("utf-8"))
@@ -213,7 +222,7 @@ def _nome_do_episodio(pasta: Path) -> str:
 def _gravar_episodio(pasta: Path, nome: str, cortes: list[tuple[Corte, Path, list[Momento]]]) -> None:
     secoes, ias, fotos, total = [], [], 0, 0
     for corte, destino, momentos in cortes:
-        ativos = sorted((m for m in momentos if m.numero is not None), key=lambda m: m.numero)
+        ativos = _numerados(momentos)
         secoes.append(f"## {destino.name}\n" + "\n".join(_linha_lista(m) for m in ativos))
         for m in ativos:
             if m.tipo == "ia":
@@ -275,4 +284,101 @@ def listar_episodio(
         copia, _ = _ajustados(momentos, duracao, excluidos)
         listados.append((corte, destino, copia))
     _gravar_episodio(pasta, _nome_do_episodio(pasta), listados)
+    return resultados
+
+
+def _conflitos(destino: Path, esperados: dict[str, str]) -> list[str]:
+    """Arquivos de rodadas anteriores com o mesmo número NN- e outro nome."""
+    pasta = destino / "imagens"
+    if not pasta.is_dir():
+        return []
+    return sorted(
+        p.name for p in pasta.iterdir()
+        if p.is_file() and p.suffix.lower() in EXTENSOES and p.name[:3] in esperados and p.stem != esperados[p.name[:3]]
+    )
+
+
+def _baixar_foto(m: Momento, caminho: Path, baixar: Callable[[str, Path], None]) -> bool:
+    parcial = caminho.with_name(caminho.name + ".parcial")
+    try:
+        baixar(m.url, parcial)
+        with Image.open(parcial) as imagem:
+            imagem.verify()
+        parcial.replace(caminho)
+        return True
+    except Exception:
+        parcial.unlink(missing_ok=True)
+        return False
+
+
+def _baixar_um(destino: Path, momentos: list[Momento], baixar: Callable[[str, Path], None]) -> str:
+    alertas: list[str] = []
+    for m in _numerados(momentos):
+        if m.tipo == "ia":
+            continue
+        caminho = destino / nome_arquivo(m, _extensao(m))
+        if caminho.exists():
+            continue
+        caminho.parent.mkdir(exist_ok=True)
+        if m.tipo == "foto":
+            if not _baixar_foto(m, caminho, baixar):
+                alertas.append(f"imagem {m.numero}: download falhou")
+        else:
+            gerar_cartao(m.titulo, m.veiculo, m.data, caminho)
+    try:
+        quantidade = atualizar_imagens(destino)
+    except FileNotFoundError:
+        return ERRO_SEM_MONTAGEM
+    return f"ok com alertas: {'; '.join(alertas)}" if alertas else f"ok: {quantidade} imagens"
+
+
+def _texto_linha(texto: str) -> str:
+    return " ".join(texto.split())
+
+
+def baixar_episodio(
+    pasta: Path,
+    numeros: set[int] | None,
+    baixar: Callable[[str, Path], None] = rede.baixar_url,
+) -> dict[int, str]:
+    pasta = Path(pasta)
+    selecionados = _cortes_com_pedidos(pasta, numeros)
+    if not selecionados:
+        return {}
+    lidos: dict[Path, list[Momento]] = {}
+    erros: dict[int, str] = {}
+    pular: set[Path] = set()
+    destinos: list[tuple[Path, str, str]] = []
+    for corte, destino in _cortes_com_pedidos(pasta, None):
+        try:
+            momentos = ler_pedidos(destino)
+        except (OSError, ValueError, KeyError, TypeError) as erro:
+            erros[corte.numero] = f"erro: {erro}"
+            pular.add(destino)
+            continue
+        lidos[destino] = momentos
+        numerados = _numerados(momentos)
+        ias = [m for m in numerados if m.tipo == "ia"]
+        esperados = {f"{m.numero:02d}-": f"{m.numero:02d}-{slug(m.nome)}" for m in numerados}
+        if not (destino / NOME_ARQUIVO).exists():
+            erros.setdefault(corte.numero, ERRO_SEM_MONTAGEM)
+            pular.add(destino)
+        elif conflitos := _conflitos(destino, esperados):
+            erros.setdefault(corte.numero, f"erro: imagens/ tem arquivo antigo com o mesmo número: {', '.join(conflitos)}")
+            pular.add(destino)
+        for m in ias:
+            rotulo = f"{corte.numero:02d}	{m.numero}	{_texto_linha(m.nome)}	{_texto_linha(m.prompt)}"
+            destinos.append((destino, nome_arquivo(m, "").removeprefix("imagens/"), rotulo))
+
+    try:
+        encaixar_ia(pasta, destinos, pular)
+    except ValueError as erro:
+        return {corte.numero: f"erro: {erro}" for corte, _ in selecionados}
+
+    resultados: dict[int, str] = {}
+    for corte, destino in selecionados:
+        if corte.numero in erros:
+            resultados[corte.numero] = erros[corte.numero]
+        else:
+            resultados[corte.numero] = _baixar_um(destino, lidos[destino], baixar)
     return resultados

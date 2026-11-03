@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 
 from esteira.cortar import ler_aprovados, pasta_do_corte
+from esteira.imagens import secoes_sem_arquivo
 from esteira.modelos import Corte, Palavra
 from esteira.receita import NOME_ARQUIVO, Receita, ler_receita
 from esteira.transcrever import ler_palavras
@@ -13,12 +14,13 @@ def contexto_do_trecho(palavras: list[Palavra], inicio: float, fim: float, n: in
     return " ".join(antes[-n:]), " ".join(depois[:n])
 
 
-def _alertas(registro: dict, receita: Receita | None) -> list[str]:
+def _alertas(registro: dict, receita: Receita | None, destino: Path) -> list[str]:
     alertas = list(registro.get("alertas", []))
     if receita:
         for n, imagem in enumerate(receita.imagens, 1):
             if not imagem.licenca:
                 alertas.append(f"imagem {n} sem licença registrada")
+        alertas += [f"imagem {n} sem arquivo" for n in secoes_sem_arquivo(destino)]
     return alertas
 
 
@@ -47,7 +49,7 @@ def _bloco(pasta: Path, corte: Corte, palavras: list[Palavra]) -> list[str]:
     redes = "YouTube, TikTok e Instagram" if corte.instagram else "YouTube e TikTok"
     try:
         receita = ler_receita(destino) if (destino / NOME_ARQUIVO).exists() else None
-        alertas = _alertas(registro, receita)
+        alertas = _alertas(registro, receita, destino)
     except (OSError, ValueError, KeyError, TypeError):
         return linhas + ["Erro: montagem ilegível", ""]
     return linhas + [

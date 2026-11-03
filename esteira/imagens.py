@@ -21,9 +21,18 @@ def _arquivo(pasta: Path, numero: int) -> str | None:
     candidatos = sorted(
         c.name
         for c in (pasta / "imagens").glob("*")
-        if c.name.startswith(prefixo) and c.suffix.lower() in EXTENSOES
+        if c.is_file() and c.name.startswith(prefixo) and c.suffix.lower() in EXTENSOES
     )
     return f"imagens/{candidatos[0]}" if candidatos else None
+
+
+def secoes_sem_arquivo(pasta: Path) -> list[int]:
+    pasta = Path(pasta)
+    caminho = pasta / "imagens.md"
+    if not caminho.exists():
+        return []
+    numeros = sorted(int(t.group(1)) for t in _TITULO.finditer(caminho.read_text("utf-8")))
+    return [n for n in numeros if _arquivo(pasta, n) is None]
 
 
 def ler_imagens(pasta: Path) -> list[Imagem]:

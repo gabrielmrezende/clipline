@@ -57,3 +57,14 @@ def test_ordem_do_numero_da_sugestao(tmp_path):
 def test_numero_nao_casa_prefixo_parcial(tmp_path):
     _pasta(tmp_path, "## 1. 00:00:01 a 00:00:03 — A\n", "10-a.jpg", "1-a.jpg")
     assert ler_imagens(tmp_path) == []
+
+
+def test_secoes_sem_arquivo(tmp_path):
+    from esteira.imagens import secoes_sem_arquivo
+    _pasta(tmp_path, MD, "01-gripen.jpg")
+    assert secoes_sem_arquivo(tmp_path) == [2]
+
+
+def test_secoes_sem_arquivo_sem_imagens_md(tmp_path):
+    from esteira.imagens import secoes_sem_arquivo
+    assert secoes_sem_arquivo(tmp_path) == []
