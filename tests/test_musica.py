@@ -227,3 +227,14 @@ def test_uso_ida_e_volta(tmp_path):
     uso = _uso("leve/Á b.mp3")
     gravar_uso(tmp_path / "musicas", uso)
     assert ler_uso(tmp_path / "musicas") == uso
+
+
+def test_rodizio_com_datas_iguais():
+    catalogo = [_faixa(t) for t in "ABCDE"]
+    uso: dict[str, dict] = {}
+    escolhidas = []
+    for n in range(8):
+        faixa = escolher_musica("leve", catalogo, uso, 90.0, f"ep/{n:02d}")
+        uso[f"ep/{n:02d}"] = {"arquivo": faixa.arquivo, "data": "2026-11-02T10:00:00"}
+        escolhidas.append(faixa.titulo)
+    assert escolhidas == ["A", "B", "C", "D", "E", "A", "B", "C"]

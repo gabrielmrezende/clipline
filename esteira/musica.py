@@ -193,11 +193,12 @@ def escolher_musica(
     clima: str, catalogo: list[Faixa], uso: dict[str, dict], duracao: float, chave: str
 ) -> Faixa | None:
     candidatas = [f for f in catalogo if f.clima == clima]
-    outros = sorted((u for c, u in uso.items() if c != chave), key=lambda u: u["data"], reverse=True)
-    recentes = {u["arquivo"] for u in outros[:RECENTES]}
+    outros = [u for c, u in uso.items() if c != chave]
+    ordem = [u for _, u in sorted(enumerate(outros), key=lambda par: (par[1]["data"], par[0]))]
+    recentes = {u["arquivo"] for u in ordem[-RECENTES:]}
     livres = [f for f in candidatas if f.arquivo not in recentes] or candidatas
-    ultimo_uso = {u["arquivo"]: u["data"] for u in reversed(outros)}
-    return min(livres, key=lambda f: (f.duracao < duracao, ultimo_uso.get(f.arquivo, "")), default=None)
+    ultimo_uso = {u["arquivo"]: posicao for posicao, u in enumerate(ordem)}
+    return min(livres, key=lambda f: (f.duracao < duracao, ultimo_uso.get(f.arquivo, -1)), default=None)
 
 
 def atualizar_musica(pasta_corte: Path, corte: Corte, chave: str, pasta_musicas: Path = MUSICAS) -> str | None:
@@ -207,6 +208,7 @@ def atualizar_musica(pasta_corte: Path, corte: Corte, chave: str, pasta_musicas:
     receita.musica = Musica(str(pasta_musicas / faixa.arquivo), -20.0, faixa.titulo, faixa.credito) if faixa else None
     gravar_receita(pasta_corte, receita)
     if faixa:
+        uso.pop(chave, None)
         uso[chave] = {"arquivo": faixa.arquivo, "data": datetime.now().isoformat(timespec="seconds")}
     elif uso.pop(chave, None) is None:
         return None
