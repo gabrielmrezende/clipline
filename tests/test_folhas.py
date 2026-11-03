@@ -2,17 +2,19 @@ from pathlib import Path
 
 from PIL import Image
 
-from esteira.folhas import ALTURA_FOLHA, LARGURA_FOLHA, montar_folha
+import pytest
+
+from esteira.folhas import ALTURA_FOLHA, LARGURA_FOLHA, _legenda, montar_folha
 from esteira.wikimedia import Candidata
 
 
-def cand(i: int, autor: str = "Fulano de Tal", licenca: str = "CC BY-SA 4.0") -> Candidata:
+def cand(i: int, autor: str = "Fulano de Tal", licenca: str = "CC BY-SA 4.0", largura: int = 2000, altura: int = 1000) -> Candidata:
     return Candidata(
         titulo=f"File:Foto {i}.jpg",
         pagina=f"https://commons.wikimedia.org/wiki/File:Foto_{i}.jpg",
         miniatura=f"https://upload.wikimedia.org/foto{i}.jpg",
-        largura=2000,
-        altura=1000,
+        largura=largura,
+        altura=altura,
         autor=autor,
         licenca=licenca,
     )
@@ -48,3 +50,15 @@ def test_autor_longo_nao_quebra(tmp_path):
     saida = montar_folha("x", [longa], [mini(tmp_path, 0)], tmp_path / "f.jpg")
     with Image.open(saida) as img:
         assert img.size == (LARGURA_FOLHA, ALTURA_FOLHA)
+
+
+def test_legenda_autor_longo_mantem_licenca_inteira():
+    orientacao, autor, licenca = _legenda(3, cand(0, autor="A" * 200, licenca="CC BY-SA 4.0"))
+    assert orientacao.startswith("3 · ")
+    assert len(autor) <= 45
+    assert licenca == "CC BY-SA 4.0"
+
+
+@pytest.mark.parametrize(("largura", "altura", "esperado"), [(1000, 1500, "vertical"), (1000, 2000, "vertical"), (1000, 1499, "horizontal"), (2000, 1000, "horizontal")])
+def test_legenda_orientacao(largura, altura, esperado):
+    assert _legenda(1, cand(0, largura=largura, altura=altura))[0] == f"1 · {esperado}"

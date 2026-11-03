@@ -9,11 +9,12 @@ from esteira.wikimedia import Candidata
 COLUNAS = 3
 LINHAS = 2
 CELULA = 400
-LEGENDA = 70
+LEGENDA = 100
+MARGEM = 8
 ALTURA_CABECALHO = 80
 LARGURA_FOLHA = COLUNAS * CELULA
 ALTURA_FOLHA = ALTURA_CABECALHO + LINHAS * (CELULA + LEGENDA)
-MAXIMO_LEGENDA = 45
+MAXIMO_AUTOR = 45
 QUALIDADE_JPEG = 85
 FUNDO = (24, 24, 24)
 CINZA = (90, 90, 90)
@@ -45,7 +46,7 @@ def _abrir_miniatura(caminho: Path | None) -> Image.Image | None:
             miniatura = original.convert("RGB")
     except (OSError, ValueError):
         return None
-    miniatura.thumbnail((CELULA, CELULA))
+    miniatura.thumbnail((CELULA - 2 * MARGEM, CELULA - 2 * MARGEM))
     return miniatura
 
 
@@ -54,12 +55,20 @@ def _orientacao(candidata: Candidata) -> str:
     return "vertical" if vertical else "horizontal"
 
 
+def _legenda(numero: int, candidata: Candidata) -> list[str]:
+    return [
+        f"{numero} · {_orientacao(candidata)}",
+        _truncar(candidata.autor, MAXIMO_AUTOR),
+        candidata.licenca,
+    ]
+
+
 def _desenhar_celula(folha: Image.Image, desenho: ImageDraw.ImageDraw, indice: int, candidata: Candidata, caminho: Path | None) -> None:
     x = (indice % COLUNAS) * CELULA
     y = ALTURA_CABECALHO + (indice // COLUNAS) * (CELULA + LEGENDA)
     miniatura = _abrir_miniatura(caminho)
     if miniatura is None:
-        desenho.rectangle((x + 4, y + 4, x + CELULA - 5, y + CELULA - 5), fill=CINZA)
+        desenho.rectangle((x + MARGEM, y + MARGEM, x + CELULA - MARGEM - 1, y + CELULA - MARGEM - 1), fill=CINZA)
         fonte = _fonte(26)
         texto = "sem miniatura"
         desenho.text((x + CELULA / 2, y + CELULA / 2), texto, font=fonte, fill=BRANCO, anchor="mm")
@@ -67,10 +76,11 @@ def _desenhar_celula(folha: Image.Image, desenho: ImageDraw.ImageDraw, indice: i
         folha.paste(miniatura, (x + (CELULA - miniatura.width) // 2, y + (CELULA - miniatura.height) // 2))
     desenho.rectangle((x + 8, y + 8, x + 78, y + 78), fill=DESTAQUE)
     desenho.text((x + 43, y + 43), str(indice + 1), font=_fonte(52), fill=BRANCO, anchor="mm")
-    desenho.text((x + 10, y + CELULA + 6), f"{indice + 1} · {_orientacao(candidata)}", font=_fonte(24), fill=BRANCO)
-    credito = _truncar(f"{candidata.autor} · {candidata.licenca}", MAXIMO_LEGENDA)
-    fonte_credito = _texto_ajustado(desenho, credito, 20, CELULA - 20)
-    desenho.text((x + 10, y + CELULA + 38), credito, font=fonte_credito, fill=(200, 200, 200))
+    orientacao, autor, licenca = _legenda(indice + 1, candidata)
+    desenho.text((x + 10, y + CELULA + 4), orientacao, font=_fonte(24), fill=BRANCO)
+    for linha, texto in enumerate((autor, licenca)):
+        fonte = _texto_ajustado(desenho, texto, 20, CELULA - 20)
+        desenho.text((x + 10, y + CELULA + 38 + linha * 28), texto, font=fonte, fill=(200, 200, 200))
 
 
 def montar_folha(titulo: str, candidatas: list[Candidata], miniaturas: list[Path | None], saida: Path) -> Path:
