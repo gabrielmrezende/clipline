@@ -266,6 +266,11 @@ def _gravar_episodio(pasta: Path, nome: str, cortes: list[tuple[Corte, Path, lis
     ))
 
 
+def _cortes_da_lista_anterior(pasta: Path) -> set[str]:
+    lista = _ler_lista(pasta)
+    return set(lista[0]) if lista else set()
+
+
 def listar_episodio(
     pasta: Path,
     numeros: set[int] | None,
@@ -282,10 +287,13 @@ def listar_episodio(
             continue
         resultados[corte.numero] = _listar_um(destino, carregado[0], carregado[1], medir, consultar)
 
+    anteriores = _cortes_da_lista_anterior(pasta)
     listados = []
     for corte, destino in _cortes_com_pedidos(pasta, None):
         if resultados.get(corte.numero, "ok").startswith("erro"):
             continue
+        if corte.numero not in resultados and destino.name not in anteriores:
+            continue  # não reprocessado agora e fora da última lista
         try:
             momentos = ler_pedidos(destino)
             duracao = duracao_principal(ler_receita(destino))
@@ -300,14 +308,28 @@ def listar_episodio(
     return resultados
 
 
-def _conflitos(destino: Path, esperados: dict[str, str]) -> list[str]:
-    """Arquivos de rodadas anteriores com o mesmo número NN- e outro nome."""
-    pasta = destino / "imagens"
+def _irmaos(pasta: Path, caminho: Path) -> list[Path]:
+    """Imagens com o mesmo nome-base e outra extensão."""
     if not pasta.is_dir():
         return []
     return sorted(
+        p for p in pasta.iterdir()
+        if p.is_file() and p.suffix.lower() in EXTENSOES and p.stem == caminho.stem and p.name != caminho.name
+    )
+
+
+def _conflitos(destino: Path, esperados: dict[str, str], finais: dict[str, str]) -> list[str]:
+    """Arquivos de rodadas anteriores com o mesmo número NN- e outro nome, ou outra extensão sem origem registrada."""
+    pasta = destino / "imagens"
+    if not pasta.is_dir():
+        return []
+    origens = _ler_origens(pasta)
+    return sorted(
         p.name for p in pasta.iterdir()
-        if p.is_file() and p.suffix.lower() in EXTENSOES and p.name[:3] in esperados and p.stem != esperados[p.name[:3]]
+        if p.is_file() and p.suffix.lower() in EXTENSOES and p.name[:3] in esperados and (
+            p.stem != esperados[p.name[:3]]
+            or (p.name[:3] in finais and p.name != finais[p.name[:3]] and p.name not in origens)
+        )
     )
 
 
@@ -340,7 +362,7 @@ def _ler_origens(pasta: Path) -> dict[str, str]:
 
 
 def _gerar_cartao_seguro(m: Momento, caminho: Path) -> bool:
-    parcial = caminho.with_name(f"{caminho.stem}.parcial{caminho.suffix}")
+    parcial = caminho.with_name(caminho.name + ".parcial")
     try:
         gerar_cartao(m.titulo, m.veiculo, m.data, parcial)
         parcial.replace(caminho)
@@ -376,6 +398,10 @@ def _baixar_um(destino: Path, momentos: list[Momento], baixar: Callable[[str, Pa
             falha = "cartão falhou"
         if ok:
             origens[caminho.name] = origem
+            for irmao in _irmaos(pasta_imagens, caminho):
+                if irmao.name in origens:  # criado pela própria esteira
+                    irmao.unlink(missing_ok=True)
+                    del origens[irmao.name]
         else:
             alertas.append(f"imagem {m.numero}: {falha}")
     if origens != anteriores:
@@ -451,10 +477,13 @@ def baixar_episodio(
             continue
         lidos[destino] = momentos
         esperados = {f"{m.numero:02d}-": f"{m.numero:02d}-{slug(m.nome)}" for m in _numerados(momentos)}
+        finais = {
+            f"{m.numero:02d}-": Path(nome_arquivo(m, _extensao(m))).name for m in _numerados(momentos) if m.tipo != "ia"
+        }
         if not (destino / NOME_ARQUIVO).exists():
             erros.setdefault(corte.numero, ERRO_SEM_MONTAGEM)
             pular.add(destino)
-        elif conflitos := _conflitos(destino, esperados):
+        elif conflitos := _conflitos(destino, esperados, finais):
             erros.setdefault(corte.numero, f"erro: imagens/ tem arquivo antigo com o mesmo número: {', '.join(conflitos)}")
             pular.add(destino)
 

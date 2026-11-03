@@ -80,5 +80,5 @@ def gerar_cartao(manchete: str, veiculo: str, data: str, saida: Path) -> Path:
         y += int(fonte.size * 1.25)
     menor = ImageFont.truetype(str(ARQUIVO_FONTE), 36)
     desenho.text((MARGEM, y + 40), linha_fonte(veiculo, data), font=menor, fill="#B8C4D6")
-    imagem.save(saida)
+    imagem.save(saida, format="PNG")
     return Path(saida)

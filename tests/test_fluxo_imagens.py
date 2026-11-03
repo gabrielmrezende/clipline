@@ -544,3 +544,68 @@ def test_baixar_arquivo_feito_a_mao_e_mantido_com_alerta(tmp_path):
     resultado = baixar_episodio(ep, None, _contador(chamadas))
     assert resultado == {1: "ok com alertas: imagem 1: arquivo existente sem origem registrada, mantido"}
     assert chamadas == [] and Image.open(corte / "imagens" / "01-gripen.jpg").getpixel((0, 0))[1] > 150
+
+
+def test_baixar_troca_de_extensao_apaga_irmao_registrado(tmp_path):
+    ep, corte = _episodio(tmp_path, [_foto(escolha=1, candidatas=_duas_candidatas())])
+    listar_episodio(ep, None, [], falso, lambda u: 1)
+    baixar_episodio(ep, None, _cor_pela_url)
+    momentos = ler_pedidos(corte)
+    momentos[0].escolha = 2
+    momentos[0].candidatas[1]["titulo"] = "File:A2.png"
+    gravar_pedidos(corte, momentos)
+    listar_episodio(ep, None, [], falso, lambda u: 1)
+
+    def falha(url, destino):
+        raise OSError("caiu")
+
+    assert baixar_episodio(ep, None, falha)[1] == "ok com alertas: imagem 1: download falhou"
+    assert (corte / "imagens" / "01-gripen.jpg").exists()
+
+    def png(url, destino):
+        Image.new("RGB", (64, 40), (0, 0, 200)).save(destino, "PNG")
+
+    assert baixar_episodio(ep, None, png) == {1: "ok: 1 imagens"}
+    assert sorted(p.name for p in (corte / "imagens").iterdir()) == [".origens.json", "01-gripen.png"]
+    assert json.loads((corte / "imagens" / ".origens.json").read_text("utf-8")) == {"01-gripen.png": "https://u/1920px-A2.png"}
+
+
+def test_baixar_irmao_com_outra_extensao_sem_registro_e_conflito(tmp_path):
+    ep, corte = _episodio(tmp_path, [_foto(escolha=1, candidatas=_duas_candidatas())])
+    listar_episodio(ep, None, [], falso, lambda u: 1)
+    momentos = ler_pedidos(corte)
+    momentos[0].candidatas[0]["titulo"] = "File:A1.png"
+    gravar_pedidos(corte, momentos)
+    listar_episodio(ep, None, [], falso, lambda u: 1)
+    (corte / "imagens").mkdir()
+    (corte / "imagens" / "01-gripen.jpg").write_bytes(b"x")
+    assert baixar_episodio(ep, None, baixar) == {1: "erro: imagens/ tem arquivo antigo com o mesmo número: 01-gripen.jpg"}
+    assert (corte / "imagens" / "01-gripen.jpg").exists()
+
+
+def test_lista_numero_nao_ressuscita_corte_com_erro(tmp_path):
+    ep, corte1, corte2 = _dois_cortes(tmp_path)
+    assert listar_episodio(ep, None, ["Chuva Forte"], falso, lambda u: 2048)[2].startswith("erro:")
+    assert listar_episodio(ep, {1}, ["Chuva Forte"], falso, lambda u: 2048) == {1: "ok"}
+    lista = json.loads((ep / "lista-imagens.json").read_text("utf-8"))
+    assert lista["cortes"] == ["01-bom-corte"] and [i["pasta"] for i in lista["ia"]] == ["01-bom-corte"]
+    assert "Chuva forte" not in (ep / "prompts-chatgpt.md").read_text("utf-8")
+    Image.new("RGB", (32, 56)).save(ep / "ia-entrada" / "a.png")
+    assert baixar_episodio(ep, None, baixar)[2] == "erro: corte fora da última lista, rode imagens lista"
+
+
+def test_cartao_parcial_nao_tem_extensao_de_imagem_e_nao_conflita(tmp_path, monkeypatch):
+    ep, corte = _listado(tmp_path)
+    _ia(ep)
+    nomes = []
+    original = gerar_cartao_real = __import__("esteira.fluxo_imagens", fromlist=["gerar_cartao"]).gerar_cartao
+
+    def espia(titulo, veiculo, data, saida):
+        nomes.append(saida.name)
+        return original(titulo, veiculo, data, saida)
+
+    monkeypatch.setattr("esteira.fluxo_imagens.gerar_cartao", espia)
+    assert baixar_episodio(ep, None, baixar) == {1: "ok: 3 imagens"}
+    assert nomes == ["03-manchete.png.parcial"]
+    (corte / "imagens" / "03-manchete.png.parcial").write_bytes(b"x")
+    assert baixar_episodio(ep, None, baixar) == {1: "ok: 3 imagens"}
