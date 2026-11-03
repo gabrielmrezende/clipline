@@ -1,4 +1,5 @@
 from esteira import cli
+from esteira.fluxo_imagens import ErroBusca
 from esteira.musica import Faixa, credito, gravar_catalogo
 from tests.auxiliares import preparar_episodio_teste, preparar_teste
 
@@ -22,6 +23,44 @@ def test_imagens_sem_erros_retorna_zero(tmp_path, monkeypatch, capsys):
     pasta, _ = preparar_episodio_teste(tmp_path, [BOM])
     preparar_teste(pasta)
     assert cli.principal(["imagens", str(pasta)]) == 0
+
+
+def test_imagens_buscar_chama_fluxo(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(cli, "garantir_escrita", lambda caminho: caminho)
+    chamadas = []
+
+    def falso(pasta, numeros, pessoas):
+        chamadas.append((pasta, numeros, pessoas))
+        return {1: "ok"}
+
+    monkeypatch.setattr(cli, "buscar_episodio", falso)
+    assert cli.principal(["imagens", "buscar", str(tmp_path), "--numero", "1"]) == 0
+    assert chamadas[0][1] == {1}
+    assert isinstance(chamadas[0][2], list)
+    assert "01: ok" in capsys.readouterr().out
+
+
+def test_imagens_lista_chama_fluxo(tmp_path, monkeypatch):
+    monkeypatch.setattr(cli, "garantir_escrita", lambda caminho: caminho)
+    monkeypatch.setattr(cli, "listar_episodio", lambda p, n, pessoas: {1: "ok"})
+    assert cli.principal(["imagens", "lista", str(tmp_path)]) == 0
+
+
+def test_imagens_buscar_api_fora(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(cli, "garantir_escrita", lambda caminho: caminho)
+
+    def quebra(*a):
+        raise ErroBusca("Wikimedia indisponível: x")
+
+    monkeypatch.setattr(cli, "buscar_episodio", quebra)
+    assert cli.principal(["imagens", "buscar", str(tmp_path)]) == 1
+    assert "Wikimedia indisponível" in capsys.readouterr().err
+
+
+def test_imagens_baixar_erro_retorna_1(tmp_path, monkeypatch):
+    monkeypatch.setattr(cli, "garantir_escrita", lambda caminho: caminho)
+    monkeypatch.setattr(cli, "baixar_episodio", lambda p, n: {1: "erro: x"})
+    assert cli.principal(["imagens", "baixar", str(tmp_path)]) == 1
 
 
 def test_cli_musica(tmp_path, monkeypatch, capsys):
