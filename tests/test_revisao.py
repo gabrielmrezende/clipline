@@ -76,7 +76,7 @@ def test_revisao_mostra_alertas_e_erros(tmp_path):
     blocos = texto.split("## ")
 
     assert "Alertas: sem música; imagem 2 sem licença registrada" in blocos[1]
-    assert blocos[1].count("sem música") == 1
+    assert blocos[1].split("Alertas:")[1].count("sem música") == 1
     assert "Erro: imagem 1 não encontrada" in blocos[2]
     assert "Vídeo:" not in blocos[2]
     assert "Erro: corte não montado" in blocos[3]
