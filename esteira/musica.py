@@ -1,6 +1,5 @@
 import json
 import urllib.parse
-import urllib.request
 from collections.abc import Callable
 from dataclasses import asdict, dataclass
 from datetime import datetime
@@ -9,11 +8,11 @@ from pathlib import Path
 from esteira.caminhos import MUSICAS
 from esteira.midia import duracao_audio, executar_ffmpeg
 from esteira.modelos import Corte
+from esteira.rede import abrir, baixar_url
 from esteira.receita import Musica, duracao_principal, gravar_receita, ler_receita
 
 CATALOGO_URL = "https://incompetech.com/music/royalty-free/pieces.json"
 ARQUIVOS_URL = "https://incompetech.com/music/royalty-free/mp3-royaltyfree/"
-USER_AGENT = "TudoEPoliticaEsteira/1.0"
 
 CLIMAS = {
     "leve": {"bright", "bouncy", "humorous"},
@@ -32,19 +31,9 @@ TERMOS_LEVES = ("piano", "strings", "guitar", "synth", "pad")
 TERMOS_PESADOS = ("drums", "brass", "percussion")
 
 
-def _abrir(url: str):
-    pedido = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
-    return urllib.request.urlopen(pedido, timeout=60)
-
-
 def baixar_catalogo() -> list[dict]:
-    with _abrir(CATALOGO_URL) as resposta:
+    with abrir(CATALOGO_URL) as resposta:
         return json.loads(resposta.read().decode("utf-8"))
-
-
-def baixar_url(url: str, destino: Path) -> None:
-    with _abrir(url) as resposta:
-        destino.write_bytes(resposta.read())
 
 
 def _segundos(duracao: str) -> int:
