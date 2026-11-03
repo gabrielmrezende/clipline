@@ -103,44 +103,44 @@ Não marcar destaques. A legenda é toda branca.
 
 ## 7. Imagens
 
-Até a Parte 3 (busca automática), as imagens são manuais. Ler `legenda.srt` e
-escrever `imagens.md` com 4 a 8 sugestões, usando os tempos do corte final.
+Ler `legenda.srt` de cada corte e gravar `pedidos.json` na pasta do corte, com
+4 a 6 momentos. Os tempos ficam em segundos, na linha do tempo da legenda.
+Todo momento tem `nome`, um rótulo curto.
 
-```markdown
-## 2. 00:00:18 a 00:00:21 — Gripen
-Tipo: foto livre | vídeo | notícia | ilustração de IA
-Fala: "..."
-Origem: link
-Autor e licença: ...
+```json
+{"momentos": [
+  {"inicio": 12.4, "fim": 15.8, "fala": "...", "tipo": "foto", "nome": "Yas Marina", "busca": "Yas Marina Circuit"},
+  {"inicio": 40.0, "fim": 43.0, "fala": "...", "tipo": "noticia", "nome": "Manchete", "titulo": "...", "veiculo": "...", "data": "..."},
+  {"inicio": 61.2, "fim": 64.0, "fala": "...", "tipo": "ia", "nome": "Chuva", "prompt": "..."}
+]}
 ```
 
 Regras:
 - Pessoa real: foto livre ou oficial, depois o próprio vídeo. Agência só por decisão do canal.
-- Nunca gerar imagem de IA de pessoa real.
-- Nunca gerar página imitando veículo real.
-- Notícia: conferir a fonte original e gerar cartão:
+- Nunca gerar imagem de IA de pessoa real. A esteira recusa prompt com nome de pessoa do glossário.
+- Nunca gerar página imitando veículo real. Notícia: conferir a fonte original; a esteira gera o cartão do canal.
 
-```bash
-.venv\Scripts\python.exe -m esteira cartao --manchete "..." --veiculo "..." --data "..." --saida "<pasta do corte>\imagens\noticia-1.png"
-```
+1. Buscar: `.venv\Scripts\python.exe -m esteira imagens buscar "<pasta do episódio>"`.
+   Gera `candidatas/NN-M.jpg` em cada corte.
+2. Escolher olhando as folhas. Em cada foto, gravar `"escolha": N` no
+   `pedidos.json`, ou trocar para `"tipo": "ia"` com `prompt`, ou marcar
+   `"descartar": true`.
+3. Listar: `... imagens lista "<pasta do episódio>"`. Gera o `imagens.md` de
+   cada corte, `lista-imagens.md` (nome, origem, licença e tamanho),
+   `prompts-chatgpt.md` e `ia-entrada/`.
+4. Pausa: o dono do canal aprova `lista-imagens.md` e gera as imagens de IA no
+   ChatGPT. Ele salva as imagens em `ia-entrada/` na ordem dos prompts; a
+   esteira usa a ordem de gravação dos arquivos.
+5. Baixar: `... imagens baixar "<pasta do episódio>"`. Baixa as fotos, gera os
+   cartões, encaixa as imagens de IA e atualiza as receitas.
 
-- Objeto ou cenário: escrever o prompt para geração manual.
-- Baixar arquivos somente depois da aprovação, informando nome, origem e tamanho.
+Para trocar uma imagem: mudar o `pedidos.json` e rodar `lista` e `baixar` de
+novo. Arquivo antigo em `imagens/` com o mesmo número trava o corte; remover
+só com confirmação do dono do canal.
 
-Imagens usadas vão para `imagens/` na pasta do corte, numeradas como em
-`imagens.md` (`01-nome.jpg`). Depois, registrar no `montagem.json`:
-
-```bash
-.venv\Scripts\python.exe -m esteira imagens "<pasta do episódio>"
-```
-
-As imagens entram em corte seco, com zoom lento de cerca de 8%. O motor faz o
-zoom. Durante a imagem, a legenda não aparece.
-
-Para imagens de IA, gerar `prompts-chatgpt.md` na pasta do episódio, com os
-prompts numerados, e criar a pasta `ia-entrada/`. O dono do canal gera as
-imagens no ChatGPT e baixa na ordem. O enquadramento de cada imagem é
-automático: vertical em tela cheia, horizontal inteira sobre fundo desfocado.
+As imagens entram em corte seco, com zoom lento de cerca de 8%. Durante a
+imagem, a legenda não aparece. O enquadramento é automático: vertical em tela
+cheia, horizontal inteira sobre fundo desfocado.
 
 ## 8. Montar
 
