@@ -1,7 +1,14 @@
 import json
 from pathlib import Path
 
-from esteira.cortar import CORTE_MP4, TRABALHO, ler_aprovados, pasta_do_corte
+from esteira.cortar import (
+    CORTE_MP4,
+    IMAGENS_SUGERIDAS,
+    TRABALHO,
+    VIDEO_FINAL,
+    ler_aprovados,
+    pasta_do_corte,
+)
 from esteira.modelos import Corte, Palavra
 from esteira.receita import NOME_ARQUIVO, Receita, ler_receita
 from esteira.transcrever import ler_palavras
@@ -13,9 +20,25 @@ def contexto_do_trecho(palavras: list[Palavra], inicio: float, fim: float, n: in
     return " ".join(antes[-n:]), " ".join(depois[:n])
 
 
-def _alertas(registro: dict, receita: Receita | None, destino: Path) -> list[str]:
-    alertas = list(registro.get("alertas", []))
-    return alertas
+def _alertas(registro: dict) -> list[str]:
+    return list(registro.get("alertas", []))
+
+
+def _linha_guia(destino: Path) -> str:
+    if (destino / IMAGENS_SUGERIDAS / "guia.md").exists():
+        return f"Guia de imagens: [guia.md]({destino.name}/{IMAGENS_SUGERIDAS}/guia.md)"
+    return "Guia de imagens: não gerado"
+
+
+def _linha_video_final(destino: Path) -> str:
+    pasta = destino / VIDEO_FINAL
+    nomes = []
+    if pasta.is_dir():
+        nomes = sorted(
+            (a.name for a in pasta.iterdir() if a.is_file() and a.suffix.lower() in (".mp4", ".mov")),
+            key=str.lower,
+        )
+    return f"Vídeo final: {', '.join(nomes) if nomes else 'vazio'}"
 
 
 def _linha_musica(receita: Receita | None, clima: str) -> str:
@@ -43,16 +66,18 @@ def _bloco(pasta: Path, corte: Corte, palavras: list[Palavra]) -> list[str]:
     redes = "YouTube, TikTok e Instagram" if corte.instagram else "YouTube e TikTok"
     try:
         receita = ler_receita(destino / TRABALHO) if (destino / TRABALHO / NOME_ARQUIVO).exists() else None
-        alertas = _alertas(registro, receita, destino)
+        alertas = _alertas(registro)
     except (OSError, ValueError, KeyError, TypeError):
         return linhas + ["Erro: montagem ilegível", ""]
     return linhas + [
         f"Vídeo: [{CORTE_MP4}]({destino.name}/{CORTE_MP4})",
+        _linha_guia(destino),
         f"Redes: {redes}",
         f"Publicação sugerida: {corte.data or 'sem data'}",
         _linha_musica(receita, corte.clima),
         f'Antes: "{"... " if antes else ""}{antes}"',
         f'Depois: "{depois}{" ..." if depois else ""}"',
+        _linha_video_final(destino),
         f"Alertas: {'; '.join(alertas) if alertas else 'nenhum'}",
         "",
     ]
