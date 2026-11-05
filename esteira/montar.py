@@ -3,7 +3,7 @@ from pathlib import Path
 
 from esteira.caminhos import SOBREPOSICAO
 from esteira.cartao import gerar_sobreposicao
-from esteira.cortar import escolher_encerramento, ler_aprovados, pasta_do_corte, registrar
+from esteira.cortar import TRABALHO, escolher_encerramento, ler_aprovados, pasta_de_trabalho, pasta_do_corte, registrar
 from esteira.midia import ErroMidia
 from esteira.receita import NOME_ARQUIVO, Receita, ler_receita, validar_receita
 from esteira.render import renderizar_final
@@ -35,7 +35,7 @@ def montar_episodio(
         if numeros is not None and corte.numero not in numeros:
             continue
         destino = pasta_do_corte(pasta, corte)
-        if not (destino / NOME_ARQUIVO).exists():
+        if not (destino / TRABALHO / NOME_ARQUIVO).exists():
             resultados[corte.numero] = f"erro: {NOME_ARQUIVO} não encontrado, rode preparar"
             continue
         final = destino / "final.mp4"
@@ -46,7 +46,7 @@ def montar_episodio(
         alertas: list[str] = []
         try:
             final.unlink(missing_ok=True)
-            receita = ler_receita(destino)
+            receita = ler_receita(pasta_de_trabalho(destino))
             faixas = receita.faixas
             alertas = _renderizar(receita, destino, video, corte.numero, cartao)
             resultado = f"ok com alertas: {'; '.join(alertas)}" if alertas else "ok"

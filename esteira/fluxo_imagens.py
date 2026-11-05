@@ -9,7 +9,7 @@ from PIL import Image
 
 from esteira import rede, wikimedia
 from esteira.cartao import gerar_cartao
-from esteira.cortar import atualizar_imagens, ler_aprovados, pasta_do_corte
+from esteira.cortar import TRABALHO, atualizar_imagens, ler_aprovados, pasta_de_trabalho, pasta_do_corte
 from esteira.episodio import slug
 from esteira.folhas import montar_folha
 from esteira.imagens import EXTENSOES
@@ -58,17 +58,18 @@ def _cortes_com_pedidos(pasta: Path, numeros: set[int] | None) -> list[tuple[Cor
         if numeros is not None and corte.numero not in numeros:
             continue
         destino = pasta_do_corte(pasta, corte)
-        if (destino / ARQUIVO).exists():
+        if (destino / TRABALHO / ARQUIVO).exists():
             cortes.append((corte, destino))
     return cortes
 
 
 def _carregar(destino: Path, pessoas: list[str]) -> tuple[list[Momento], float] | str:
-    if not (destino / NOME_ARQUIVO).exists():
+    trabalho = destino / TRABALHO
+    if not (trabalho / NOME_ARQUIVO).exists():
         return ERRO_SEM_MONTAGEM
     try:
-        duracao = duracao_principal(ler_receita(destino))
-        momentos = ler_pedidos(destino)
+        duracao = duracao_principal(ler_receita(trabalho))
+        momentos = ler_pedidos(trabalho)
     except (OSError, ValueError, KeyError, TypeError) as erro:
         return f"erro: {erro}"
     erros = validar_pedidos(momentos, duracao, pessoas)
@@ -120,14 +121,14 @@ def buscar_episodio(
                     except Exception:
                         miniaturas.append(None)
                 titulo = f"Corte {corte.numero:02d} · momento {posicao} · {m.nome}"
-                montar_folha(titulo, lista, miniaturas, destino / "candidatas" / f"{corte.numero:02d}-{posicao}.jpg")
+                montar_folha(titulo, lista, miniaturas, pasta_de_trabalho(destino) / "candidatas" / f"{corte.numero:02d}-{posicao}.jpg")
                 m.candidatas = [asdict(c) for c in lista]
                 m.escolha, m.numero, m.url, m.bytes, m.motivo = None, None, "", None, ""
                 if not lista:
                     alertas.append(f"momento {posicao} sem candidata")
         for m in momentos:
             m.numero = None  # o corte precisa de nova lista
-        gravar_pedidos(destino, momentos)
+        gravar_pedidos(pasta_de_trabalho(destino), momentos)
         resultados[corte.numero] = _resultado(alertas)
     return resultados
 
@@ -196,7 +197,7 @@ def _listar_um(destino: Path, momentos: list[Momento], duracao: float, medir, co
         original.numero = c.numero
         if c.descartar and not original.descartar and not original.motivo:
             original.motivo = c.motivo
-    gravar_pedidos(destino, momentos)
+    gravar_pedidos(pasta_de_trabalho(destino), momentos)
     texto = "\n\n".join(_bloco_imagem(c) for c in ativos)
     _gravar_texto(destino / "imagens.md", texto + "\n" if texto else "")
     return _resultado(alertas)
@@ -295,8 +296,8 @@ def listar_episodio(
         if corte.numero not in resultados and destino.name not in anteriores:
             continue  # não reprocessado agora e fora da última lista
         try:
-            momentos = ler_pedidos(destino)
-            duracao = duracao_principal(ler_receita(destino))
+            momentos = ler_pedidos(destino / TRABALHO)
+            duracao = duracao_principal(ler_receita(destino / TRABALHO))
         except (OSError, ValueError, KeyError, TypeError):
             continue
         if not any(m.numero is not None for m in momentos):
@@ -435,7 +436,7 @@ def _ordem_confere(pasta: Path, ordem: list[dict]) -> bool:
     for item in ordem:
         if item["pasta"] not in pedidos:
             try:
-                pedidos[item["pasta"]] = ler_pedidos(pasta / item["pasta"])
+                pedidos[item["pasta"]] = ler_pedidos(pasta / item["pasta"] / TRABALHO)
             except (OSError, ValueError, KeyError, TypeError):
                 return False
         if not any(
@@ -470,7 +471,7 @@ def baixar_episodio(
             pular.add(destino)
             continue
         try:
-            momentos = ler_pedidos(destino)
+            momentos = ler_pedidos(destino / TRABALHO)
         except (OSError, ValueError, KeyError, TypeError) as erro:
             erros[corte.numero] = f"erro: {erro}"
             pular.add(destino)
@@ -480,7 +481,7 @@ def baixar_episodio(
         finais = {
             f"{m.numero:02d}-": Path(nome_arquivo(m, _extensao(m))).name for m in _numerados(momentos) if m.tipo != "ia"
         }
-        if not (destino / NOME_ARQUIVO).exists():
+        if not (destino / TRABALHO / NOME_ARQUIVO).exists():
             erros.setdefault(corte.numero, ERRO_SEM_MONTAGEM)
             pular.add(destino)
         elif conflitos := _conflitos(destino, esperados, finais):

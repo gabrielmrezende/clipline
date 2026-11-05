@@ -11,7 +11,7 @@ def test_imagens_com_receita_ilegivel_nao_para_os_outros(tmp_path, monkeypatch, 
     monkeypatch.setattr(cli, "garantir_escrita", lambda caminho: caminho)
     pasta, _ = preparar_episodio_teste(tmp_path, [BOM, OUTRO])
     preparar_teste(pasta)
-    (pasta / "01-bom-corte" / "montagem.json").write_text("{quebrado", "utf-8")
+    (pasta / "01-bom-corte" / "trabalho" / "montagem.json").write_text("{quebrado", "utf-8")
     assert cli.principal(["imagens", str(pasta)]) == 1
     saida = capsys.readouterr().out
     assert "01: erro: " in saida
@@ -115,3 +115,17 @@ def test_musicas_baixar_retorna_um_com_erros(tmp_path, monkeypatch, capsys):
     assert "erro: X.mp3" in capsys.readouterr().out
     monkeypatch.setattr(cli, "baixar_musicas", lambda *a: [])
     assert cli.principal(["musicas", "baixar"]) == 0
+
+
+def test_planos_grava_em_trabalho(tmp_path, monkeypatch):
+    from esteira.planos import Plano
+
+    monkeypatch.setattr(cli, "garantir_escrita", lambda caminho: caminho)
+    monkeypatch.setattr(cli, "planos_iniciais", lambda video, inicio, fim: [Plano(inicio, fim)])
+    monkeypatch.setattr(cli, "gerar_folha", lambda video, planos, saida: saida.write_bytes(b"x"))
+    pasta, _ = preparar_episodio_teste(tmp_path, [BOM])
+    assert cli.principal(["planos", str(pasta)]) == 0
+    corte = pasta / "01-bom-corte"
+    assert (corte / "trabalho" / "enquadramento.json").exists()
+    assert (corte / "trabalho" / "planos.jpg").exists()
+    assert not (corte / "enquadramento.json").exists() and not (corte / "planos.jpg").exists()

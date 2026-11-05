@@ -19,12 +19,12 @@ def _episodio(tmp_path: Path, cortes: list[Corte]) -> Path:
 
 def _montado(pasta: Path, corte: Corte, resultado="ok", alertas=None, imagens=None, musica=None) -> None:
     destino = pasta_do_corte(pasta, corte)
-    destino.mkdir()
+    (destino / "trabalho").mkdir(parents=True)
     (destino / "final.mp4").write_bytes(b"")
     receita = Receita([(corte.inicio, corte.fim)], [], [], imagens or [], musica)
-    gravar_receita(destino, receita)
+    gravar_receita(destino / "trabalho", receita)
     registro = {"resultado": resultado, "alertas": alertas or []}
-    (destino / "registro.json").write_text(json.dumps(registro), "utf-8")
+    (destino / "trabalho" / "registro.json").write_text(json.dumps(registro), "utf-8")
 
 
 def test_contexto_do_trecho():
@@ -97,8 +97,8 @@ def test_revisao_com_json_ilegivel_afeta_so_o_proprio_corte(tmp_path):
     pasta = _episodio(tmp_path, [a, b, c])
     for corte in (a, b, c):
         _montado(pasta, corte)
-    (pasta_do_corte(pasta, a) / "registro.json").write_text("{quebrado", "utf-8")
-    (pasta_do_corte(pasta, b) / "montagem.json").write_text("{quebrado", "utf-8")
+    (pasta_do_corte(pasta, a) / "trabalho" / "registro.json").write_text("{quebrado", "utf-8")
+    (pasta_do_corte(pasta, b) / "trabalho" / "montagem.json").write_text("{quebrado", "utf-8")
 
     blocos = escrever_revisao(pasta).read_text("utf-8").split("## ")
 

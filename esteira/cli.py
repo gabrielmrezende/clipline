@@ -5,7 +5,7 @@ from pathlib import Path
 
 from esteira.caminhos import CONTEXTO, MUSICAS, garantir_escrita
 from esteira.cartao import gerar_cartao
-from esteira.cortar import atualizar_imagens, ler_aprovados, pasta_do_corte, preparar_episodio
+from esteira.cortar import TRABALHO, atualizar_imagens, ler_aprovados, pasta_de_trabalho, pasta_do_corte, preparar_episodio
 from esteira.episodio import criar_episodio
 from esteira.fluxo_imagens import ErroBusca, baixar_episodio, buscar_episodio, listar_episodio
 from esteira.midia import ErroMidia
@@ -90,12 +90,12 @@ def _musica(args) -> int:
         if args.numero and corte.numero not in args.numero:
             continue
         destino = pasta_do_corte(pasta, corte)
-        if not (destino / NOME_ARQUIVO).exists():
+        if not (destino / TRABALHO / NOME_ARQUIVO).exists():
             falhas += 1
             print(f"{corte.numero:02d}: erro: {NOME_ARQUIVO} não encontrado, rode preparar")
             continue
         try:
-            titulo = atualizar_musica(destino, corte, f"{pasta.name}/{destino.name}", MUSICAS)
+            titulo = atualizar_musica(pasta_de_trabalho(destino), corte, f"{pasta.name}/{destino.name}", MUSICAS)
         except (OSError, ValueError, KeyError, TypeError) as erro:
             falhas += 1
             print(f"{corte.numero:02d}: erro: {erro}")
@@ -112,11 +112,12 @@ def _planos(args) -> int:
             continue
         destino = pasta_do_corte(pasta, corte)
         destino.mkdir(exist_ok=True)
-        planos = ler_planos(destino)
+        trabalho = pasta_de_trabalho(destino)
+        planos = ler_planos(trabalho)
         if not planos or args.forcar:
             planos = planos_iniciais(video, corte.inicio, corte.fim)
-            gravar_planos(destino, planos)
-        gerar_folha(video, planos, destino / "planos.jpg")
+            gravar_planos(trabalho, planos)
+        gerar_folha(video, planos, trabalho / "planos.jpg")
         print(f"{corte.numero:02d}: {len(planos)} planos")
     return 0
 

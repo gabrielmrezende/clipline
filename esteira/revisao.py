@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from esteira.cortar import ler_aprovados, pasta_do_corte
+from esteira.cortar import TRABALHO, ler_aprovados, pasta_do_corte
 from esteira.imagens import secoes_sem_arquivo
 from esteira.modelos import Corte, Palavra
 from esteira.receita import NOME_ARQUIVO, Receita, ler_receita
@@ -34,7 +34,7 @@ def _linha_musica(receita: Receita | None, clima: str) -> str:
 def _bloco(pasta: Path, corte: Corte, palavras: list[Palavra]) -> list[str]:
     destino = pasta_do_corte(pasta, corte)
     linhas = [f"## {corte.numero}. {corte.titulo}"]
-    arquivo = destino / "registro.json"
+    arquivo = destino / TRABALHO / "registro.json"
     try:
         registro = json.loads(arquivo.read_text("utf-8")) if arquivo.exists() else {}
     except (OSError, ValueError):
@@ -48,7 +48,7 @@ def _bloco(pasta: Path, corte: Corte, palavras: list[Palavra]) -> list[str]:
     antes, depois = contexto_do_trecho(palavras, corte.inicio, corte.fim)
     redes = "YouTube, TikTok e Instagram" if corte.instagram else "YouTube e TikTok"
     try:
-        receita = ler_receita(destino) if (destino / NOME_ARQUIVO).exists() else None
+        receita = ler_receita(destino / TRABALHO) if (destino / TRABALHO / NOME_ARQUIVO).exists() else None
         alertas = _alertas(registro, receita, destino)
     except (OSError, ValueError, KeyError, TypeError):
         return linhas + ["Erro: montagem ilegível", ""]

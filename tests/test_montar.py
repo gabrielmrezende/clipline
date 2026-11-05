@@ -22,7 +22,7 @@ def test_montar_gera_final(tmp_path):
     assert montar_episodio(pasta, cartao=cartao) == {1: "ok com alertas: sem música"}
     corte = pasta / "01-bom-corte"
     assert sondar(corte / "final.mp4").duracao > 62
-    registro = json.loads((corte / "registro.json").read_text("utf-8"))
+    registro = json.loads((corte / "trabalho" / "registro.json").read_text("utf-8"))
     assert registro["resultado"] == "ok com alertas: sem música"
     assert registro["alertas"] == ["sem música"]
     assert registro["faixas"] and registro["corte"]["numero"] == 1
@@ -31,14 +31,14 @@ def test_montar_gera_final(tmp_path):
 def test_receita_invalida_nao_para_os_outros(tmp_path):
     pasta, cartao = _preparado(tmp_path, [BOM, OUTRO])
     corte = pasta / "01-bom-corte"
-    receita = ler_receita(corte)
+    receita = ler_receita(corte / "trabalho")
     receita.imagens = [Imagem(1.0, 3.0, "imagens/nao-existe.jpg")]
-    gravar_receita(corte, receita)
+    gravar_receita(corte / "trabalho", receita)
     r = montar_episodio(pasta, cartao=cartao)
     assert r[1].startswith("erro: ") and "não encontrada" in r[1]
     assert r[2].startswith("ok")
     assert not (corte / "final.mp4").exists()
-    assert json.loads((corte / "registro.json").read_text("utf-8"))["resultado"] == r[1]
+    assert json.loads((corte / "trabalho" / "registro.json").read_text("utf-8"))["resultado"] == r[1]
 
 
 def test_corte_sem_receita(tmp_path):
@@ -100,5 +100,5 @@ def test_final_travado_com_forcar_nao_derruba_os_outros(tmp_path, monkeypatch):
     r = montar_episodio(pasta, forcar=True, cartao=cartao)
     assert r[1].startswith("erro: ") and "em uso" in r[1]
     assert r[2] == "ok"
-    registro = json.loads((pasta / "01-bom-corte" / "registro.json").read_text("utf-8"))
+    registro = json.loads((pasta / "01-bom-corte" / "trabalho" / "registro.json").read_text("utf-8"))
     assert registro["resultado"] == r[1]

@@ -49,9 +49,9 @@ def _episodio(tmp_path, momentos):
     (ep / "episodio.json").write_text(json.dumps({"video": "v.mp4", "quadro": "Entre Assuntos", "numero": 3}), "utf-8")
     (ep / "aprovados.json").write_text(json.dumps({"cortes": [CORTE]}), "utf-8")
     corte = ep / "01-bom-corte"
-    corte.mkdir()
-    gravar_receita(corte, Receita([(0.0, 60.0)], [Plano(0.0, 60.0)], []))
-    gravar_pedidos(corte, momentos)
+    (corte / "trabalho").mkdir(parents=True)
+    gravar_receita(corte / "trabalho", Receita([(0.0, 60.0)], [Plano(0.0, 60.0)], []))
+    gravar_pedidos(corte / "trabalho", momentos)
     return ep, corte
 
 
@@ -71,22 +71,30 @@ def _completo(tmp_path):
 def test_buscar_grava_candidatas_e_folha(tmp_path):
     ep, corte = _episodio(tmp_path, [_foto(escolha=2)])
     assert buscar_episodio(ep, None, [], falso, baixar) == {1: "ok"}
-    momento = ler_pedidos(corte)[0]
+    momento = ler_pedidos(corte / "trabalho")[0]
     assert len(momento.candidatas) == 2 and momento.escolha is None
-    assert (corte / "candidatas" / "01-1.jpg").exists()
+    assert (corte / "trabalho" / "candidatas" / "01-1.jpg").exists()
+
+
+def test_buscar_grava_candidatas_em_trabalho(tmp_path):
+    ep, corte = _episodio(tmp_path, [_foto(escolha=2)])
+    assert buscar_episodio(ep, None, [], falso, baixar) == {1: "ok"}
+    assert (corte / "trabalho" / "candidatas" / "01-1.jpg").exists()
+    assert (corte / "trabalho" / "pedidos.json").exists()
+    assert not (corte / "candidatas").exists() and not (corte / "pedidos.json").exists()
 
 
 def test_buscar_api_fora_nao_grava(tmp_path):
     ep, corte = _episodio(tmp_path, [_foto()])
     with pytest.raises(ErroBusca):
         buscar_episodio(ep, None, [], quebra, baixar)
-    assert ler_pedidos(corte)[0].candidatas == [] and not (corte / "candidatas").exists()
+    assert ler_pedidos(corte / "trabalho")[0].candidatas == [] and not (corte / "trabalho" / "candidatas").exists()
 
 
 def test_buscar_recusa_prompt_com_pessoa(tmp_path):
     ep, corte = _episodio(tmp_path, [_foto(), Momento(20.0, 23.0, "f", "ia", "X", prompt="retrato de Ayrton Senna")])
     assert buscar_episodio(ep, None, ["Ayrton Senna"], falso, baixar)[1].startswith("erro: momento 2: prompt cita pessoa real")
-    assert ler_pedidos(corte)[0].candidatas == []
+    assert ler_pedidos(corte / "trabalho")[0].candidatas == []
 
 
 def test_buscar_sem_candidata_alerta(tmp_path):
@@ -96,9 +104,9 @@ def test_buscar_sem_candidata_alerta(tmp_path):
 
 def test_buscar_sem_montagem_e_sem_pedidos(tmp_path):
     ep, corte = _episodio(tmp_path, [_foto()])
-    (corte / "montagem.json").unlink()
+    (corte / "trabalho" / "montagem.json").unlink()
     assert buscar_episodio(ep, None, [], falso, baixar) == {1: "erro: montagem.json não encontrado, rode preparar"}
-    (corte / "pedidos.json").unlink()
+    (corte / "trabalho" / "pedidos.json").unlink()
     assert buscar_episodio(ep, None, [], falso, baixar) == {}
 
 
@@ -133,20 +141,20 @@ def test_listar_lista_e_prompts(tmp_path):
     assert "# Prompts para o ChatGPT: Entre Assuntos #03" in prompts
     assert "1 → corte 01, imagem 2" in prompts and "1. Um Uno com escada no teto" in prompts
     assert (ep / "ia-entrada").is_dir()
-    assert [m.numero for m in ler_pedidos(corte)] == [1, 2, 3]
-    assert ler_pedidos(corte)[0].bytes == 2048
+    assert [m.numero for m in ler_pedidos(corte / "trabalho")] == [1, 2, 3]
+    assert ler_pedidos(corte / "trabalho")[0].bytes == 2048
 
 
 def test_listar_sem_link_nao_descarta_para_sempre(tmp_path):
     ep, corte = _completo(tmp_path)
     resultado = listar_episodio(ep, None, [], sem_thumb, lambda u: 1)[1]
     assert "sem link de download" in resultado
-    momentos = ler_pedidos(corte)
+    momentos = ler_pedidos(corte / "trabalho")
     assert not momentos[0].descartar and momentos[0].motivo == "sem link de download"
     assert [m.numero for m in momentos] == [None, 1, 2]
     assert listar_episodio(ep, None, [], falso, lambda u: 1) == {1: "ok"}
-    assert [m.numero for m in ler_pedidos(corte)] == [1, 2, 3]
-    assert ler_pedidos(corte)[0].motivo == ""
+    assert [m.numero for m in ler_pedidos(corte / "trabalho")] == [1, 2, 3]
+    assert ler_pedidos(corte / "trabalho")[0].motivo == ""
 
 
 def test_listar_nao_cabe_nao_grava_descarte_nem_tempos(tmp_path):
@@ -157,7 +165,7 @@ def test_listar_nao_cabe_nao_grava_descarte_nem_tempos(tmp_path):
     ])
     resultado = listar_episodio(ep, None, [], falso, lambda u: 1)[1]
     assert resultado.startswith("ok com alertas") and "não cabe" in resultado
-    momentos = ler_pedidos(corte)
+    momentos = ler_pedidos(corte / "trabalho")
     assert not momentos[0].descartar and (momentos[0].inicio, momentos[0].fim) == (0.0, 1.0)
     assert "não cabe" in momentos[0].motivo and [m.numero for m in momentos] == [None, 1]
 
@@ -165,9 +173,9 @@ def test_listar_nao_cabe_nao_grava_descarte_nem_tempos(tmp_path):
 def test_listar_duas_vezes_troca_ia_por_foto(tmp_path):
     ep, corte = _completo(tmp_path)
     listar_episodio(ep, None, [], falso, lambda u: 1)
-    momentos = ler_pedidos(corte)
+    momentos = ler_pedidos(corte / "trabalho")
     momentos[1] = Momento(20.0, 23.0, "fala dois", "foto", "Uno", busca="uno", escolha=1, candidatas=momentos[0].candidatas)
-    gravar_pedidos(corte, momentos)
+    gravar_pedidos(corte / "trabalho", momentos)
     listar_episodio(ep, None, [], falso, lambda u: 1)
     prompts = (ep / "prompts-chatgpt.md").read_text("utf-8")
     assert "Um Uno com escada" not in prompts and "Nenhuma imagem de IA" in prompts
@@ -177,9 +185,9 @@ def test_listar_nao_mostra_foto_antiga_de_corte_refeito(tmp_path):
     ep, corte1 = _completo(tmp_path)
     (ep / "aprovados.json").write_text(json.dumps({"cortes": [CORTE, {**CORTE, "numero": 2, "titulo": "Outro"}]}), "utf-8")
     corte2 = ep / "02-outro"
-    corte2.mkdir()
-    gravar_receita(corte2, Receita([(0.0, 60.0)], [Plano(0.0, 60.0)], []))
-    gravar_pedidos(corte2, [Momento(20.0, 23.0, "f", "ia", "Outra", prompt="Outra cena")])
+    (corte2 / "trabalho").mkdir(parents=True)
+    gravar_receita(corte2 / "trabalho", Receita([(0.0, 60.0)], [Plano(0.0, 60.0)], []))
+    gravar_pedidos(corte2 / "trabalho", [Momento(20.0, 23.0, "f", "ia", "Outra", prompt="Outra cena")])
     listar_episodio(ep, None, [], falso, lambda u: 1)
     buscar_episodio(ep, {1}, [], falso, baixar)
     listar_episodio(ep, {2}, [], falso, lambda u: 1)
@@ -208,8 +216,8 @@ from esteira.receita import ler_receita  # noqa: E402
 def _listado(tmp_path, ia=True):
     ep, corte = _completo(tmp_path)
     if not ia:
-        momentos = [m for m in ler_pedidos(corte) if m.tipo != "ia"]
-        gravar_pedidos(corte, momentos)
+        momentos = [m for m in ler_pedidos(corte / "trabalho") if m.tipo != "ia"]
+        gravar_pedidos(corte / "trabalho", momentos)
     listar_episodio(ep, None, [], falso, lambda u: 2048)
     return ep, corte
 
@@ -233,7 +241,7 @@ def test_baixar_foto_cartao_e_ia(tmp_path):
     ep, corte = _listado(tmp_path)
     _ia(ep)
     assert baixar_episodio(ep, None, baixar) == {1: "ok: 3 imagens"}
-    assert len(ler_receita(corte).imagens) == 3
+    assert len(ler_receita(corte / "trabalho").imagens) == 3
     assert sorted(p.name for p in (corte / "imagens").iterdir()) == [
         ".origens.json", "01-gripen.jpg", "02-uno-com-escada.png", "03-manchete.png"]
     origens = json.loads((corte / "imagens" / ".origens.json").read_text("utf-8"))
@@ -309,14 +317,14 @@ def test_baixar_ignora_subpasta_e_parcial_sem_conflito(tmp_path):
 def test_baixar_sem_montagem(tmp_path):
     ep, corte = _listado(tmp_path)
     _ia(ep)
-    (corte / "montagem.json").unlink()
+    (corte / "trabalho" / "montagem.json").unlink()
     assert baixar_episodio(ep, None, baixar) == {1: "erro: montagem.json não encontrado, rode preparar"}
 
 
 def test_baixar_corte_sem_pedidos_nao_aparece(tmp_path):
     ep, corte = _listado(tmp_path)
     _ia(ep)
-    (corte / "pedidos.json").unlink()
+    (corte / "trabalho" / "pedidos.json").unlink()
     assert baixar_episodio(ep, None, baixar) == {}
 
 
@@ -328,9 +336,9 @@ def _dois_cortes(tmp_path):
         Momento(20.0, 23.0, "f", "ia", "Uno com escada", prompt="Um Uno com escada"),
     ])
     corte2 = ep / "02-segundo-corte"
-    corte2.mkdir()
-    gravar_receita(corte2, Receita([(0.0, 60.0)], [Plano(0.0, 60.0)], []))
-    gravar_pedidos(corte2, [
+    (corte2 / "trabalho").mkdir(parents=True)
+    gravar_receita(corte2 / "trabalho", Receita([(0.0, 60.0)], [Plano(0.0, 60.0)], []))
+    gravar_pedidos(corte2 / "trabalho", [
         Momento(10.0, 13.0, "f", "ia", "Chuva forte", prompt="Chuva forte na avenida"),
         Momento(30.0, 33.0, "f", "noticia", "Manchete", titulo="Titulo", veiculo="Folha", data="2026-01-02"),
     ])
@@ -353,15 +361,15 @@ def test_baixar_filtro_de_cortes_mantem_ia_de_todos(tmp_path):
     assert Image.open(corte1 / "imagens" / "02-uno-com-escada.png").getpixel((0, 0)) == (1, 1, 1)
     assert Image.open(corte2 / "imagens" / "01-chuva-forte.png").getpixel((0, 0)) == (2, 2, 2)
     assert not (corte1 / "imagens" / "01-gripen.jpg").exists()
-    assert ler_receita(corte1).imagens == [] and len(ler_receita(corte2).imagens) == 2
+    assert ler_receita(corte1 / "trabalho").imagens == [] and len(ler_receita(corte2 / "trabalho").imagens) == 2
 
 
 def test_baixar_ordem_ia_ignora_corte_com_erro_no_listar(tmp_path):
     ep, corte1, corte2 = _dois_cortes(tmp_path)
-    momentos = ler_pedidos(corte2)
+    momentos = ler_pedidos(corte2 / "trabalho")
     assert momentos[0].numero == 1  # número antigo continua no pedidos.json
     assert listar_episodio(ep, None, ["Chuva Forte"], falso, lambda u: 2048)[2].startswith("erro: momento 1: prompt cita pessoa")
-    assert ler_pedidos(corte2)[0].numero == 1
+    assert ler_pedidos(corte2 / "trabalho")[0].numero == 1
     assert "Chuva forte" not in (ep / "prompts-chatgpt.md").read_text("utf-8")
     lista = json.loads((ep / "lista-imagens.json").read_text("utf-8"))
     assert [i["pasta"] for i in lista["ia"]] == ["01-bom-corte"] and lista["cortes"] == ["01-bom-corte"]
@@ -374,9 +382,9 @@ def test_baixar_ordem_mudou(tmp_path):
     ep, corte1, corte2 = _dois_cortes(tmp_path)
     for nome in ("a.png", "b.png"):
         Image.new("RGB", (32, 56)).save(ep / "ia-entrada" / nome)
-    momentos = ler_pedidos(corte2)
+    momentos = ler_pedidos(corte2 / "trabalho")
     momentos[0].nome = "Outro nome"
-    gravar_pedidos(corte2, momentos)
+    gravar_pedidos(corte2 / "trabalho", momentos)
     esperado = "erro: ordem das imagens de IA mudou, rode imagens lista de novo"
     assert baixar_episodio(ep, None, baixar) == {1: esperado, 2: esperado}
     assert not (corte1 / "imagens").exists() and not (ep / "ia-entrada" / ".mapa.tsv").exists()
@@ -434,11 +442,11 @@ def test_baixar_cartao_que_falha_vira_alerta(tmp_path, monkeypatch):
 
 def test_listar_apaga_motivo_so_quando_nao_e_descarte_manual(tmp_path):
     ep, corte = _completo(tmp_path)
-    momentos = ler_pedidos(corte)
+    momentos = ler_pedidos(corte / "trabalho")
     momentos[0].descartar, momentos[0].motivo = True, "foto ruim"
-    gravar_pedidos(corte, momentos)
+    gravar_pedidos(corte / "trabalho", momentos)
     listar_episodio(ep, None, [], falso, lambda u: 1)
-    primeiro = ler_pedidos(corte)[0]
+    primeiro = ler_pedidos(corte / "trabalho")[0]
     assert primeiro.descartar and primeiro.motivo == "foto ruim"
 
 
@@ -489,9 +497,9 @@ def test_baixar_troca_de_escolha_substitui_o_arquivo(tmp_path):
     baixar_episodio(ep, None, _cor_pela_url)
     arquivo = corte / "imagens" / "01-gripen.jpg"
     assert Image.open(arquivo).getpixel((0, 0))[0] > 150
-    momentos = ler_pedidos(corte)
+    momentos = ler_pedidos(corte / "trabalho")
     momentos[0].escolha = 2
-    gravar_pedidos(corte, momentos)
+    gravar_pedidos(corte / "trabalho", momentos)
     listar_episodio(ep, None, [], falso, lambda u: 1)
     chamadas = []
 
@@ -512,9 +520,9 @@ def test_baixar_troca_falha_mantem_arquivo_antigo(tmp_path):
     ep, corte = _episodio(tmp_path, [_foto(escolha=1, candidatas=_duas_candidatas())])
     listar_episodio(ep, None, [], falso, lambda u: 1)
     baixar_episodio(ep, None, _cor_pela_url)
-    momentos = ler_pedidos(corte)
+    momentos = ler_pedidos(corte / "trabalho")
     momentos[0].escolha = 2
-    gravar_pedidos(corte, momentos)
+    gravar_pedidos(corte / "trabalho", momentos)
     listar_episodio(ep, None, [], falso, lambda u: 1)
     assert baixar_episodio(ep, None, baixar_html)[1] == "ok com alertas: imagem 1: download falhou"
     assert Image.open(corte / "imagens" / "01-gripen.jpg").getpixel((0, 0))[0] > 150
@@ -526,9 +534,9 @@ def test_baixar_cartao_com_dados_novos_e_regerado(tmp_path):
     baixar_episodio(ep, None, baixar)
     arquivo = corte / "imagens" / "01-manchete.png"
     antes = arquivo.read_bytes()
-    momentos = ler_pedidos(corte)
+    momentos = ler_pedidos(corte / "trabalho")
     momentos[0].titulo = "Outro titulo bem diferente"
-    gravar_pedidos(corte, momentos)
+    gravar_pedidos(corte / "trabalho", momentos)
     listar_episodio(ep, None, [], falso, lambda u: 1)
     baixar_episodio(ep, None, baixar)
     assert arquivo.read_bytes() != antes
@@ -550,10 +558,10 @@ def test_baixar_troca_de_extensao_apaga_irmao_registrado(tmp_path):
     ep, corte = _episodio(tmp_path, [_foto(escolha=1, candidatas=_duas_candidatas())])
     listar_episodio(ep, None, [], falso, lambda u: 1)
     baixar_episodio(ep, None, _cor_pela_url)
-    momentos = ler_pedidos(corte)
+    momentos = ler_pedidos(corte / "trabalho")
     momentos[0].escolha = 2
     momentos[0].candidatas[1]["titulo"] = "File:A2.png"
-    gravar_pedidos(corte, momentos)
+    gravar_pedidos(corte / "trabalho", momentos)
     listar_episodio(ep, None, [], falso, lambda u: 1)
 
     def falha(url, destino):
@@ -573,9 +581,9 @@ def test_baixar_troca_de_extensao_apaga_irmao_registrado(tmp_path):
 def test_baixar_irmao_com_outra_extensao_sem_registro_e_conflito(tmp_path):
     ep, corte = _episodio(tmp_path, [_foto(escolha=1, candidatas=_duas_candidatas())])
     listar_episodio(ep, None, [], falso, lambda u: 1)
-    momentos = ler_pedidos(corte)
+    momentos = ler_pedidos(corte / "trabalho")
     momentos[0].candidatas[0]["titulo"] = "File:A1.png"
-    gravar_pedidos(corte, momentos)
+    gravar_pedidos(corte / "trabalho", momentos)
     listar_episodio(ep, None, [], falso, lambda u: 1)
     (corte / "imagens").mkdir()
     (corte / "imagens" / "01-gripen.jpg").write_bytes(b"x")

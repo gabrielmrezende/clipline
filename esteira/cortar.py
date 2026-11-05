@@ -17,6 +17,18 @@ from esteira.transcrever import carregar_glossario, ler_palavras
 from esteira.validar import validar_trecho
 
 
+TRABALHO = "trabalho"
+IMAGENS_SUGERIDAS = "imagens-sugeridas"
+VIDEO_FINAL = "video-final"
+CORTE_MP4 = "corte.mp4"
+
+
+def pasta_de_trabalho(destino: Path) -> Path:
+    pasta = Path(destino) / TRABALHO
+    pasta.mkdir(parents=True, exist_ok=True)
+    return pasta
+
+
 def ler_aprovados(pasta: Path) -> list[Corte]:
     dados = json.loads((Path(pasta) / "aprovados.json").read_text("utf-8"))
     return [Corte(**c) for c in dados["cortes"]]
@@ -41,7 +53,7 @@ def _escrever_edicoes(edicoes: list[Edicao], caminho: Path) -> None:
 def registrar(
     destino: Path, video: Path, corte: Corte, faixas: list, resultado: str, alertas: list[str] | None = None
 ) -> None:
-    (destino / "registro.json").write_text(
+    (pasta_de_trabalho(destino) / "registro.json").write_text(
         json.dumps(
             {
                 "video": str(video),
@@ -63,17 +75,18 @@ def _preparar_um(destino: Path, corte: Corte, palavras: list[Palavra], nomes: li
     faixas, edicoes = planejar_limpeza(palavras, corte.inicio, corte.fim)
     trecho = [p for p in palavras if p.fim > corte.inicio and p.inicio < corte.fim]
     cues = montar_cues(corrigir_palavras(trecho, nomes), faixas, nomes)
-    (destino / "imagens").mkdir(exist_ok=True)
-    escrever_srt(cues, destino / "legenda.srt")
-    _escrever_edicoes(edicoes, destino / "edicoes.md")
-    gravar_receita(destino, Receita(faixas, ler_planos(destino), cues, ler_imagens(destino)))
+    trabalho = pasta_de_trabalho(destino)
+    escrever_srt(cues, trabalho / "legenda.srt")
+    _escrever_edicoes(edicoes, trabalho / "edicoes.md")
+    gravar_receita(trabalho, Receita(faixas, ler_planos(trabalho), cues, ler_imagens(destino)))
     return faixas
 
 
 def atualizar_imagens(pasta_corte: Path) -> int:
-    receita = ler_receita(pasta_corte)
+    trabalho = Path(pasta_corte) / TRABALHO
+    receita = ler_receita(trabalho)
     receita.imagens = ler_imagens(pasta_corte)
-    gravar_receita(pasta_corte, receita)
+    gravar_receita(trabalho, receita)
     return len(receita.imagens)
 
 
@@ -96,7 +109,7 @@ def preparar_episodio(
         if numeros is not None and corte.numero not in numeros:
             continue
         destino = pasta_do_corte(pasta, corte)
-        if (destino / NOME_ARQUIVO).exists() and not forcar:
+        if (destino / TRABALHO / NOME_ARQUIVO).exists() and not forcar:
             resultados[corte.numero] = f"erro: {NOME_ARQUIVO} já existe, use --forcar"
             continue
         destino.mkdir(exist_ok=True)
@@ -108,7 +121,7 @@ def preparar_episodio(
                 raise ErroMidia("; ".join(problemas))
             faixas = _preparar_um(destino, corte, palavras, nomes)
             try:
-                if atualizar_musica(destino, corte, f"{pasta.name}/{destino.name}", pasta_musicas) is None:
+                if atualizar_musica(pasta_de_trabalho(destino), corte, f"{pasta.name}/{destino.name}", pasta_musicas) is None:
                     alertas.append(f"sem música para o clima {corte.clima}")
             except (OSError, ValueError, KeyError, TypeError) as erro:
                 alertas.append(f"música: erro {erro}")
@@ -116,7 +129,7 @@ def preparar_episodio(
         except (ErroMidia, OSError, ValueError) as erro:
             resultado = f"erro: {erro}"
         if resultado.startswith("erro") and forcar:
-            (destino / NOME_ARQUIVO).unlink(missing_ok=True)
+            (destino / TRABALHO / NOME_ARQUIVO).unlink(missing_ok=True)
         registrar(destino, video, corte, faixas, resultado, alertas)
         resultados[corte.numero] = resultado
     return resultados
