@@ -12,6 +12,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest"]
+vozes = ["torch", "pyannote.audio>=3.1,<4"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]

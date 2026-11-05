@@ -19,6 +19,7 @@ from esteira.receita import NOME_ARQUIVO
 from esteira.revisao import escrever_revisao
 from esteira.transcrever import carregar_glossario, ler_palavras, transcrever
 from esteira.validar import validar_trecho
+from esteira import vozes as modulo_vozes
 
 
 def _transcrever(args) -> int:
@@ -26,6 +27,19 @@ def _transcrever(args) -> int:
     nomes = carregar_glossario(CONTEXTO / "glossario.md")
     palavras = transcrever(Path(args.video), pasta, nomes, forcar=args.forcar)
     print(f"{len(palavras)} palavras em {pasta / 'transcricao'}")
+    return 0
+
+
+def _vozes(args) -> int:
+    pasta = garantir_escrita(Path(args.pasta))
+    try:
+        trechos = modulo_vozes.separar_vozes(
+            Path(args.video), pasta, args.pessoas, criar=modulo_vozes.criar_pipeline, forcar=args.forcar
+        )
+    except modulo_vozes.ErroVozes as erro:
+        print(erro, file=sys.stderr)
+        return 1
+    print(f"{len({t.voz for t in trechos})} vozes, {len(trechos)} trechos")
     return 0
 
 
@@ -147,6 +161,13 @@ def principal(argv: list[str] | None = None) -> int:
     c.add_argument("--convidado", required=True)
     c.add_argument("--forcar", action="store_true")
     c.set_defaults(funcao=_transcrever)
+
+    c = comandos.add_parser("vozes")
+    c.add_argument("video")
+    c.add_argument("pasta")
+    c.add_argument("--pessoas", type=int, required=True)
+    c.add_argument("--forcar", action="store_true")
+    c.set_defaults(funcao=_vozes)
 
     c = comandos.add_parser("validar")
     c.add_argument("pasta")
