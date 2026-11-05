@@ -91,6 +91,24 @@ def test_folha_mostra_um_quadro_por_plano(tmp_path):
     assert Image.open(saida).width > 0
 
 
+def test_folha_com_rotulos(tmp_path):
+    video = video_com_corte(tmp_path)
+    saida = gerar_folha(
+        video, [Plano(0, 2), Plano(2, 4, x=0.7, zoom=1.35)], tmp_path / "folha.jpg",
+        rotulos=["1 Arthur · bom dia a todos", "2 P2 · obrigado pelo convite"],
+        caixas=[None, (0.7, 0.4, 0.1, 0.2)],
+    )
+    with Image.open(saida) as imagem:
+        assert imagem.format == "JPEG" and imagem.width > 0
+
+
+def test_limites_de_cena_cobrem_o_trecho(monkeypatch):
+    from esteira import planos
+
+    monkeypatch.setattr(planos, "detectar_cortes", lambda video, inicio, fim: [0.6, 2.0, 3.4])
+    assert planos.limites_de_cena("v.mp4", 0.5, 3.5) == [0.5, 2.0, 3.5]
+
+
 def test_filtro_usa_recorte_e_faixa():
     f = filtro_9x16("in", "out", (562, 540, 100, 50))
     assert "crop=562:540:100:50" in f

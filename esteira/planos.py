@@ -67,12 +67,18 @@ def detectar_cortes(video: Path, inicio: float, fim: float) -> list[float]:
     return [inicio + float(t) for t in re.findall(r"pts_time:([\d.]+)", log)]
 
 
-def planos_iniciais(video: Path, inicio: float, fim: float) -> list[Plano]:
+def limites_de_cena(video: Path, inicio: float, fim: float) -> list[float]:
+    """[inicio, cortes de câmera..., fim], sem cenas menores que PLANO_MINIMO."""
     limites = [inicio]
     for corte in detectar_cortes(video, inicio, fim):
         if corte - limites[-1] >= PLANO_MINIMO and fim - corte >= PLANO_MINIMO:
             limites.append(corte)
     limites.append(fim)
+    return limites
+
+
+def planos_iniciais(video: Path, inicio: float, fim: float) -> list[Plano]:
+    limites = limites_de_cena(video, inicio, fim)
     return [Plano(a, b) for a, b in zip(limites, limites[1:])]
 
 
@@ -88,12 +94,21 @@ def ler_planos(pasta: Path) -> list[Plano]:
     return [Plano(**p) for p in json.loads(arquivo.read_text("utf-8"))["planos"]]
 
 
-def gerar_folha(video: Path, planos: list[Plano], saida: Path) -> Path:
+def gerar_folha(
+    video: Path,
+    planos: list[Plano],
+    saida: Path,
+    rotulos: list[str] | None = None,
+    caixas: list[tuple[float, float, float, float] | None] | None = None,
+) -> Path:
+    """Um quadro por plano. `rotulos[i]` substitui o número do plano; `caixas[i]` é o
+    rosto escolhido (centro x, y, largura, altura, de 0 a 1), desenhado como caixa."""
     altura = LARGURA_MINIATURA * 9 // 16
     linhas = (len(planos) + COLUNAS - 1) // COLUNAS
     folha = Image.new("RGB", (COLUNAS * LARGURA_MINIATURA, linhas * altura), "#000000")
     desenho = ImageDraw.Draw(folha)
     fonte = ImageFont.truetype(str(FONTES / "Montserrat-Bold.ttf"), 22)
+    pequena = ImageFont.truetype(str(FONTES / "Montserrat-Bold.ttf"), 16)
     with tempfile.TemporaryDirectory() as pasta:
         for i, plano in enumerate(planos):
             quadro = Path(pasta) / f"{i}.jpg"
@@ -105,8 +120,23 @@ def gerar_folha(video: Path, planos: list[Plano], saida: Path) -> Path:
             x, y = i % COLUNAS * LARGURA_MINIATURA, i // COLUNAS * altura
             with Image.open(quadro) as imagem:
                 folha.paste(imagem, (x, y))
+                largura_q, altura_q = imagem.size
+            caixa = caixas[i] if caixas and i < len(caixas) else None
+            if caixa is not None:
+                cx, cy, w, h = caixa
+                desenho.rectangle(
+                    (x + (cx - w / 2) * largura_q, y + (cy - h / 2) * altura_q,
+                     x + (cx + w / 2) * largura_q, y + (cy + h / 2) * altura_q),
+                    outline="#FFEE00", width=3,
+                )
             duracao = plano.fim - plano.inicio
             desenho.text((x + 8, y + 6), f"{i + 1} ({duracao:.1f}s)", font=fonte, fill="#FFEE00",
                          stroke_width=2, stroke_fill="#000000")
+            if rotulos and i < len(rotulos):
+                texto = rotulos[i]
+                while len(texto) > 1 and desenho.textlength(texto, font=pequena) > LARGURA_MINIATURA - 16:
+                    texto = texto[:-2].rstrip() + "…"
+                desenho.text((x + 8, y + altura - 28), texto, font=pequena, fill="#FFFFFF",
+                             stroke_width=2, stroke_fill="#000000")
     folha.save(saida, quality=85)
     return Path(saida)

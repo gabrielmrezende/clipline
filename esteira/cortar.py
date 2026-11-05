@@ -81,6 +81,13 @@ def _preparar_um(destino: Path, corte: Corte, palavras: list[Palavra], nomes: li
     return faixas
 
 
+def _alertas_de_planos(destino: Path) -> list[str]:
+    arquivo = Path(destino) / TRABALHO / "alertas-planos.json"
+    if not arquivo.exists():
+        return []
+    return list(json.loads(arquivo.read_text("utf-8")))
+
+
 def preparar_episodio(
     pasta: Path,
     numeros: set[int] | None = None,
@@ -106,7 +113,7 @@ def preparar_episodio(
         destino.mkdir(exist_ok=True)
         problemas = validar_trecho(palavras, corte, episodio["duracao"])
         faixas: list = []
-        alertas: list[str] = []
+        alertas = _alertas_de_planos(destino)
         try:
             if problemas:
                 raise ErroMidia("; ".join(problemas))

@@ -99,15 +99,29 @@ def test_musicas_baixar_retorna_um_com_erros(tmp_path, monkeypatch, capsys):
     assert cli.principal(["musicas", "baixar"]) == 0
 
 
-def test_planos_grava_em_trabalho(tmp_path, monkeypatch):
-    from esteira.planos import Plano
-
+def test_planos_chama_fluxo(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(cli, "garantir_escrita", lambda caminho: caminho)
-    monkeypatch.setattr(cli, "planos_iniciais", lambda video, inicio, fim: [Plano(inicio, fim)])
-    monkeypatch.setattr(cli, "gerar_folha", lambda video, planos, saida: saida.write_bytes(b"x"))
-    pasta, _ = preparar_episodio_teste(tmp_path, [BOM])
-    assert cli.principal(["planos", str(pasta)]) == 0
-    corte = pasta / "01-bom-corte"
-    assert (corte / "trabalho" / "enquadramento.json").exists()
-    assert (corte / "trabalho" / "planos.jpg").exists()
-    assert not (corte / "enquadramento.json").exists() and not (corte / "planos.jpg").exists()
+    chamadas = []
+
+    def falso(pasta, numeros, forcar):
+        chamadas.append((pasta, numeros, forcar))
+        return {1: "ok", 2: "mantido (já existe)", 3: "ok com alertas: 00:10 sem rosto"}
+
+    monkeypatch.setattr(cli, "planejar_episodio", falso)
+    assert cli.principal(["planos", str(tmp_path), "--numero", "1", "--forcar"]) == 0
+    assert chamadas == [(tmp_path, {1}, True)]
+    saida = capsys.readouterr().out
+    assert "02: mantido (já existe)" in saida and "03: ok com alertas: 00:10 sem rosto" in saida
+
+
+def test_planos_sem_vozes_retorna_1(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(cli, "garantir_escrita", lambda caminho: caminho)
+    monkeypatch.setattr(cli, "planejar_episodio", lambda p, n, f: {0: "erro: vozes.json não encontrado"})
+    assert cli.principal(["planos", str(tmp_path)]) == 1
+    assert "vozes.json não encontrado" in capsys.readouterr().out
+
+
+def test_planos_erro_em_um_corte_retorna_1(tmp_path, monkeypatch):
+    monkeypatch.setattr(cli, "garantir_escrita", lambda caminho: caminho)
+    monkeypatch.setattr(cli, "planejar_episodio", lambda p, n, f: {1: "ok", 2: "erro: x"})
+    assert cli.principal(["planos", str(tmp_path)]) == 1

@@ -8,13 +8,13 @@ from esteira.cartao import gerar_cartao
 from esteira.cortar import TRABALHO, ler_aprovados, pasta_de_trabalho, pasta_do_corte, preparar_episodio
 from esteira.episodio import criar_episodio
 from esteira.fluxo_imagens import ErroBusca, baixar_episodio, buscar_episodio, listar_episodio
+from esteira.fluxo_planos import planejar_episodio
 from esteira.midia import ErroMidia
 from esteira.montar import montar_episodio
 from esteira.musica import (
     atualizar_musica, baixar_catalogo, baixar_musicas, baixar_url, escrever_proposta, ler_catalogo, propor,
 )
 from esteira.pedidos import pessoas_do_glossario
-from esteira.planos import gerar_folha, gravar_planos, ler_planos, planos_iniciais
 from esteira.receita import NOME_ARQUIVO
 from esteira.revisao import escrever_revisao
 from esteira.transcrever import carregar_glossario, ler_palavras, transcrever
@@ -106,20 +106,11 @@ def _musica(args) -> int:
 
 def _planos(args) -> int:
     pasta = garantir_escrita(Path(args.pasta))
-    video = Path(json.loads((pasta / "episodio.json").read_text("utf-8"))["video"])
-    for corte in ler_aprovados(pasta):
-        if args.numero and corte.numero not in args.numero:
-            continue
-        destino = pasta_do_corte(pasta, corte)
-        destino.mkdir(exist_ok=True)
-        trabalho = pasta_de_trabalho(destino)
-        planos = ler_planos(trabalho)
-        if not planos or args.forcar:
-            planos = planos_iniciais(video, corte.inicio, corte.fim)
-            gravar_planos(trabalho, planos)
-        gerar_folha(video, planos, trabalho / "planos.jpg")
-        print(f"{corte.numero:02d}: {len(planos)} planos")
-    return 0
+    numeros = set(args.numero) if args.numero else None
+    resultados = planejar_episodio(pasta, numeros, args.forcar)
+    for numero, resultado in resultados.items():
+        print(f"{numero:02d}: {resultado}")
+    return 1 if any(r.startswith("erro") for r in resultados.values()) else 0
 
 
 def _revisao(args) -> int:
