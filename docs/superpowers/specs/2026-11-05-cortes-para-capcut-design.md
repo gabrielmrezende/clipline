@@ -97,7 +97,9 @@ cada plano de câmera, divide onde a voz troca:
 - Nenhum trecho fica com menos de 2 s; o trecho curto se junta ao vizinho.
 - Quem fala aparece no plano: enquadra o rosto dele.
 - Quem fala não aparece e há um rosto: enquadra esse rosto.
-- Quem fala não aparece e há vários rostos: zoom 1,0, centro do grupo.
+- Quem fala não aparece e há vários rostos: enquadra o convidado (pessoa
+  ligada à voz que mais fala no episódio); sem o convidado na tela, zoom 1,0,
+  centro do grupo. (Correção do dono do canal em 2026-11-05.)
 - Nenhum rosto: centro, zoom 1,0, e alerta.
 - Fala sobreposta (duas vozes ao mesmo tempo por mais de 1 s): mantém o
   enquadramento anterior e gera alerta.

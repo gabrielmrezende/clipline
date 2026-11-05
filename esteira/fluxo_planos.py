@@ -39,6 +39,17 @@ def _tempo_de_fala(vozes: list[TrechoVoz], cortes: list[Corte]) -> dict[str, flo
     return tempos
 
 
+def convidado_do_episodio(vozes: list[TrechoVoz], ligacao: dict[str, str]) -> str | None:
+    """Pessoa ligada à voz que mais fala no episódio (o convidado)."""
+    total: dict[str, float] = {}
+    for trecho in vozes:
+        if trecho.voz in ligacao:
+            total[trecho.voz] = total.get(trecho.voz, 0.0) + trecho.fim - trecho.inicio
+    if not total:
+        return None
+    return ligacao[max(sorted(total), key=lambda voz: total[voz])]
+
+
 def _amostras(deteccoes: list[rostos.Deteccao], pessoas: list[str]) -> dict[str, tuple[float, Rosto]]:
     """Por pessoa, a detecção de maior altura (rosto mais nítido)."""
     melhores: dict[str, rostos.Deteccao] = {}
@@ -118,8 +129,9 @@ def _enquadrar_corte(
 ) -> tuple[list[Plano], list[str]]:
     planos: list[Plano] = []
     alertas: list[str] = []
+    convidado = convidado_do_episodio(vozes, ligacao)
     for cena in cenas:
-        novos, avisos = enquadrar_cena(cena, vozes, ligacao)
+        novos, avisos = enquadrar_cena(cena, vozes, ligacao, convidado)
         planos += novos
         alertas += [_relativo_ao_corte(a, cena.inicio - corte.inicio) for a in avisos]
     return planos, alertas + _alertas_de_ligacao(vozes, corte, ligacao)

@@ -109,7 +109,9 @@ Regras que a esteira aplica:
 - Meta: rosto com 28% da altura da faixa do vídeo.
 - Turno de voz com menos de 2 s não divide. Nenhum trecho fica com menos de 2 s.
 - Quem fala fora da tela, com um rosto só: enquadra esse rosto. Com vários
-  rostos: zoom 1,0 no centro do grupo. Sem rosto: centro, zoom 1,0 e alerta.
+  rostos: zoom no convidado (a pessoa ligada à voz que mais fala no episódio);
+  se ele não aparece, zoom 1,0 no centro do grupo. Sem rosto: centro, zoom 1,0
+  e alerta.
 - Fala sobreposta por mais de 1 s: mantém o enquadramento anterior e alerta.
 
 Os alertas vão para o `registro.json` e aparecem no `revisao.md`.

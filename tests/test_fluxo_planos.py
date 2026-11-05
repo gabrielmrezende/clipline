@@ -282,3 +282,12 @@ def test_forcar_acrescenta_voz_ainda_nao_ligada(episodio):
     gravar_pessoas(pasta, {"V1": "P1"}, {"P1": ROSTO_A}, {})
     planejar_episodio(pasta, None, forcar=True, detectar=detectar_falso)
     assert ler_pessoas(pasta)[0] == {"V1": "P1", "V2": "P2"}
+
+
+def test_convidado_e_quem_mais_fala():
+    from esteira.enquadrar import TrechoVoz
+    from esteira.fluxo_planos import convidado_do_episodio
+
+    vozes = [TrechoVoz(0, 30, "V3"), TrechoVoz(30, 40, "V1"), TrechoVoz(40, 45, "V2"), TrechoVoz(45, 50, "V9")]
+    assert convidado_do_episodio(vozes, {"V1": "P1", "V2": "P3", "V3": "P2"}) == "P2"
+    assert convidado_do_episodio(vozes, {}) is None

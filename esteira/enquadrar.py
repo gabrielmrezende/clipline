@@ -145,13 +145,19 @@ def _juntar_curtos(trechos: list[list]) -> list[list]:
     return trechos
 
 
-def _enquadrar_voz(cena: Cena, voz: str | None, ligacao: dict[str, str]) -> Plano:
+def _enquadrar_voz(
+    cena: Cena, voz: str | None, ligacao: dict[str, str], convidado: str | None = None
+) -> Plano:
     pessoa = ligacao.get(voz) if voz is not None else None
     for rosto in cena.rostos:
         if pessoa is not None and rosto.pessoa == pessoa:
             return enquadrar_rosto(rosto)
     if len(cena.rostos) == 1:
         return enquadrar_rosto(cena.rostos[0])
+    # Quem fala está fora da tela: mostra a reação do convidado, se ele aparece.
+    for rosto in cena.rostos:
+        if convidado is not None and rosto.pessoa == convidado:
+            return enquadrar_rosto(rosto)
     if len(cena.rostos) >= 2:
         media = sum(r.x for r in cena.rostos) / len(cena.rostos)
         return Plano(0.0, 0.0, x=media, y=0.5, zoom=1.0)
@@ -159,7 +165,7 @@ def _enquadrar_voz(cena: Cena, voz: str | None, ligacao: dict[str, str]) -> Plan
 
 
 def enquadrar_cena(
-    cena: Cena, vozes: list[TrechoVoz], ligacao: dict[str, str]
+    cena: Cena, vozes: list[TrechoVoz], ligacao: dict[str, str], convidado: str | None = None
 ) -> tuple[list[Plano], list[str]]:
     alertas: list[str] = []
     if not cena.rostos:
@@ -178,7 +184,7 @@ def enquadrar_cena(
             if voz is not None and voz not in ligacao and voz not in sem_pessoa:
                 sem_pessoa.add(voz)
                 alertas.append(f"{_mmss(inicio - cena.inicio)} voz {voz} sem pessoa")
-            base = _enquadrar_voz(cena, voz, ligacao)
+            base = _enquadrar_voz(cena, voz, ligacao, convidado)
             enquadrado = Plano(inicio, fim, base.x, base.y, base.zoom)
         if planos and (planos[-1].x, planos[-1].y, planos[-1].zoom) == (
             enquadrado.x, enquadrado.y, enquadrado.zoom

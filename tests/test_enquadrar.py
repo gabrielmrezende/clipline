@@ -107,6 +107,21 @@ def test_falante_fora_da_tela_varios_rostos():
     assert planos[0].y == 0.5
 
 
+def test_falante_fora_da_tela_zoom_no_convidado():
+    cena = Cena(0, 10, [P1, P2])
+    planos, _ = enquadrar_cena(cena, [TrechoVoz(0, 10, "V3")], LIGACAO, convidado="P2")
+    assert len(planos) == 1
+    esperado = enquadrar_rosto(P2)
+    assert (planos[0].x, planos[0].y, planos[0].zoom) == (esperado.x, esperado.y, esperado.zoom)
+
+
+def test_convidado_fora_da_tela_plano_aberto():
+    cena = Cena(0, 10, [P1, P2])
+    planos, _ = enquadrar_cena(cena, [TrechoVoz(0, 10, "V3")], LIGACAO, convidado="P9")
+    assert planos[0].zoom == 1.0
+    assert planos[0].x == pytest.approx((P1.x + P2.x) / 2)
+
+
 def test_sem_rosto_alerta():
     cena = Cena(0, 10, [])
     planos, alertas = enquadrar_cena(cena, [TrechoVoz(0, 10, "V1")], LIGACAO)
