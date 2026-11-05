@@ -67,6 +67,7 @@ def _bloco(pasta: Path, corte: Corte, palavras: list[Palavra]) -> list[str]:
     try:
         receita = ler_receita(destino / TRABALHO) if (destino / TRABALHO / NOME_ARQUIVO).exists() else None
         alertas = _alertas(registro)
+        linha_video_final = _linha_video_final(destino)
     except (OSError, ValueError, KeyError, TypeError):
         return linhas + ["Erro: montagem ilegível", ""]
     return linhas + [
@@ -77,7 +78,7 @@ def _bloco(pasta: Path, corte: Corte, palavras: list[Palavra]) -> list[str]:
         _linha_musica(receita, corte.clima),
         f'Antes: "{"... " if antes else ""}{antes}"',
         f'Depois: "{depois}{" ..." if depois else ""}"',
-        _linha_video_final(destino),
+        linha_video_final,
         f"Alertas: {'; '.join(alertas) if alertas else 'nenhum'}",
         "",
     ]

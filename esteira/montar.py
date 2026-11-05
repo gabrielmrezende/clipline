@@ -31,6 +31,14 @@ def _renderizar(receita: Receita, destino: Path, video: Path, numero: int, carta
     )
 
 
+def _alertas_gravados(destino: Path) -> list[str]:
+    try:
+        registro = json.loads((destino / TRABALHO / "registro.json").read_text("utf-8"))
+        return [a for a in registro.get("alertas", []) if isinstance(a, str)]
+    except (OSError, ValueError, AttributeError):
+        return []
+
+
 def montar_episodio(
     pasta: Path,
     numeros: set[int] | None = None,
@@ -52,12 +60,14 @@ def montar_episodio(
             resultados[corte.numero] = f"erro: {CORTE_MP4} já existe, use --forcar"
             continue
         faixas: list = []
-        alertas: list[str] = []
+        anteriores = _alertas_gravados(destino)
+        alertas: list[str] = anteriores
         try:
             corte_mp4.unlink(missing_ok=True)
             receita = ler_receita(destino / TRABALHO)
             faixas = receita.faixas
-            alertas = _renderizar(receita, destino, video, corte.numero, cartao)
+            do_render = _renderizar(receita, destino, video, corte.numero, cartao)
+            alertas = anteriores + [a for a in do_render if a not in anteriores]
             (destino / IMAGENS_SUGERIDAS).mkdir(exist_ok=True)
             (destino / VIDEO_FINAL).mkdir(exist_ok=True)
             resultado = f"ok com alertas: {'; '.join(alertas)}" if alertas else "ok"

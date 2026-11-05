@@ -19,14 +19,15 @@ def _preparado(tmp_path, cortes=(BOM,)):
 
 def test_montar_gera_corte_mp4(tmp_path):
     pasta, cartao = _preparado(tmp_path)
-    assert montar_episodio(pasta, cartao=cartao) == {1: "ok com alertas: sem música"}
+    uniao = "sem música para o clima leve; sem música"
+    assert montar_episodio(pasta, cartao=cartao) == {1: f"ok com alertas: {uniao}"}
     corte = pasta / "01-bom-corte"
     assert sondar(corte / "corte.mp4").duracao > 62
     assert not (corte / "final.mp4").exists()
     assert (corte / "imagens-sugeridas").is_dir() and (corte / "video-final").is_dir()
     registro = json.loads((corte / "trabalho" / "registro.json").read_text("utf-8"))
-    assert registro["resultado"] == "ok com alertas: sem música"
-    assert registro["alertas"] == ["sem música"]
+    assert registro["resultado"] == f"ok com alertas: {uniao}"
+    assert registro["alertas"] == ["sem música para o clima leve", "sem música"]
     assert registro["faixas"] and registro["corte"]["numero"] == 1
 
 
@@ -110,7 +111,7 @@ def test_corte_travado_com_forcar_nao_derruba_os_outros(tmp_path, monkeypatch):
     monkeypatch.setattr(montar, "renderizar_final", lambda *args, **kwargs: [])
     r = montar_episodio(pasta, forcar=True, cartao=cartao)
     assert r[1].startswith("erro: ") and "em uso" in r[1]
-    assert r[2] == "ok"
+    assert r[2].startswith("ok")
     registro = json.loads((pasta / "01-bom-corte" / "trabalho" / "registro.json").read_text("utf-8"))
     assert registro["resultado"] == r[1]
 
@@ -122,3 +123,39 @@ def test_ler_receita_ignora_imagens_antigas(tmp_path):
     dados["imagens"] = [{"inicio": 1.0, "fim": 3.0, "arquivo": "imagens/a.jpg", "licenca": ""}]
     (trabalho / NOME_ARQUIVO).write_text(json.dumps(dados), "utf-8")
     assert ler_receita(trabalho).faixas
+
+
+def _gravar_alerta_do_preparar(corte: Path) -> None:
+    arquivo = corte / "trabalho" / "registro.json"
+    registro = json.loads(arquivo.read_text("utf-8")) if arquivo.exists() else {}
+    registro["alertas"] = ["00:05 voz V3 sem pessoa"]
+    arquivo.write_text(json.dumps(registro), "utf-8")
+
+
+def test_montar_preserva_alertas_do_preparar(tmp_path):
+    pasta, cartao = _preparado(tmp_path)
+    corte = pasta / "01-bom-corte"
+    _gravar_alerta_do_preparar(corte)
+    resultado = montar_episodio(pasta, cartao=cartao)[1]
+    registro = json.loads((corte / "trabalho" / "registro.json").read_text("utf-8"))
+    assert registro["alertas"] == ["00:05 voz V3 sem pessoa", "sem música"]
+    assert "00:05 voz V3 sem pessoa" in resultado and "sem música" in resultado
+    montar_episodio(pasta, forcar=True, cartao=cartao)
+    registro = json.loads((corte / "trabalho" / "registro.json").read_text("utf-8"))
+    assert registro["alertas"] == ["00:05 voz V3 sem pessoa", "sem música"]
+
+
+def test_montar_ignora_registro_ilegivel(tmp_path):
+    pasta, cartao = _preparado(tmp_path)
+    (pasta / "01-bom-corte" / "trabalho" / "registro.json").write_text("{quebrado", "utf-8")
+    assert montar_episodio(pasta, cartao=cartao) == {1: "ok com alertas: sem música"}
+
+
+def test_revisao_mostra_alertas_de_quem_fala(tmp_path):
+    from esteira.revisao import escrever_revisao
+
+    pasta, cartao = _preparado(tmp_path)
+    _gravar_alerta_do_preparar(pasta / "01-bom-corte")
+    montar_episodio(pasta, cartao=cartao)
+    texto = escrever_revisao(pasta).read_text("utf-8")
+    assert "Alertas: 00:05 voz V3 sem pessoa; sem música" in texto
