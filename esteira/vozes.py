@@ -19,6 +19,15 @@ class ErroVozes(Exception):
     pass
 
 
+def _sem_token(texto: str) -> str:
+    token = os.environ.get("HF_TOKEN")
+    return texto.replace(token, "***") if token else texto
+
+
+def _erro_da_pipeline(acao: str, erro: Exception) -> ErroVozes:
+    return ErroVozes(_sem_token(f"{acao}: {type(erro).__name__}: {erro}"))
+
+
 def criar_pipeline() -> Callable[[Path, int], list[tuple[float, float, str]]]:
     token = os.environ.get("HF_TOKEN")
     if not token:
@@ -32,7 +41,10 @@ def criar_pipeline() -> Callable[[Path, int], list[tuple[float, float, str]]]:
             'instale o extra vozes: python -m pip install -e ".[vozes]"'
         ) from erro
 
-    pipeline = Pipeline.from_pretrained(MODELO, use_auth_token=token)
+    try:
+        pipeline = Pipeline.from_pretrained(MODELO, use_auth_token=token)
+    except Exception as erro:  # HTTP, rede, arquivo do modelo corrompido
+        raise _erro_da_pipeline(f"não foi possível carregar {MODELO}", erro) from None
     if pipeline is None:
         raise ErroVozes(
             f"não foi possível carregar {MODELO}: aceite os termos de {MODELO} e de "
@@ -62,7 +74,12 @@ def separar_vozes(
     with tempfile.TemporaryDirectory() as temporaria:
         wav = Path(temporaria) / "audio.wav"
         executar_ffmpeg(["-y", "-i", str(video), "-vn", "-ac", "1", "-ar", "16000", str(wav)])
-        brutos = diarizar(wav, pessoas)
+        try:
+            brutos = diarizar(wav, pessoas)
+        except ErroVozes:
+            raise
+        except Exception as erro:  # falta de memória, erro do modelo
+            raise _erro_da_pipeline("falha ao separar as vozes", erro) from None
     nomes: dict[str, str] = {}
     trechos = []
     for inicio, fim, rotulo in sorted(brutos, key=lambda t: t[0]):

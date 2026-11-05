@@ -3,7 +3,7 @@ import json
 import sys
 from pathlib import Path
 
-from esteira.caminhos import CONTEXTO, MUSICAS, garantir_escrita
+from esteira.caminhos import CONTEXTO, MUSICAS, EscritaProibida, garantir_escrita
 from esteira.cartao import gerar_cartao
 from esteira.cortar import TRABALHO, ler_aprovados, pasta_de_trabalho, pasta_do_corte, preparar_episodio
 from esteira.episodio import criar_episodio
@@ -36,11 +36,18 @@ def _vozes(args) -> int:
         trechos = modulo_vozes.separar_vozes(
             Path(args.video), pasta, args.pessoas, criar=modulo_vozes.criar_pipeline, forcar=args.forcar
         )
-    except modulo_vozes.ErroVozes as erro:
-        print(erro, file=sys.stderr)
+    except (modulo_vozes.ErroVozes, FileExistsError) as erro:
+        print(f"Erro: {erro}", file=sys.stderr)
         return 1
     print(f"{len({t.voz for t in trechos})} vozes, {len(trechos)} trechos")
     return 0
+
+
+def _positivo(texto: str) -> int:
+    valor = int(texto)
+    if valor <= 0:
+        raise argparse.ArgumentTypeError(f"precisa ser maior que zero: {texto}")
+    return valor
 
 
 def _validar(args) -> int:
@@ -111,7 +118,7 @@ def _musica(args) -> int:
 def _planos(args) -> int:
     pasta = garantir_escrita(Path(args.pasta))
     numeros = set(args.numero) if args.numero else None
-    resultados = planejar_episodio(pasta, numeros, args.forcar)
+    resultados = planejar_episodio(pasta, numeros, args.forcar or args.religar, religar=args.religar)
     for numero, resultado in resultados.items():
         print(f"{numero:02d}: {resultado}")
     return 1 if any(r.startswith("erro") for r in resultados.values()) else 0
@@ -160,7 +167,7 @@ def principal(argv: list[str] | None = None) -> int:
     c = comandos.add_parser("vozes")
     c.add_argument("video")
     c.add_argument("pasta")
-    c.add_argument("--pessoas", type=int, required=True)
+    c.add_argument("--pessoas", type=_positivo, default=3)
     c.add_argument("--forcar", action="store_true")
     c.set_defaults(funcao=_vozes)
 
@@ -195,6 +202,7 @@ def principal(argv: list[str] | None = None) -> int:
     c.add_argument("pasta")
     c.add_argument("--numero", type=int, action="append")
     c.add_argument("--forcar", action="store_true")
+    c.add_argument("--religar", action="store_true", help="recalcula a ligação voz/pessoa (implica --forcar)")
     c.set_defaults(funcao=_planos)
 
     c = comandos.add_parser("revisao")
@@ -216,6 +224,6 @@ def principal(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         return args.funcao(args)
-    except (ErroMidia, ErroBusca, FileExistsError) as erro:
+    except (ErroMidia, ErroBusca, FileExistsError, EscritaProibida) as erro:
         print(f"Erro: {erro}", file=sys.stderr)
         return 1

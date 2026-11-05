@@ -128,25 +128,34 @@ def test_planos_chama_fluxo(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(cli, "garantir_escrita", lambda caminho: caminho)
     chamadas = []
 
-    def falso(pasta, numeros, forcar):
-        chamadas.append((pasta, numeros, forcar))
+    def falso(pasta, numeros, forcar, religar=False):
+        chamadas.append((pasta, numeros, forcar, religar))
         return {1: "ok", 2: "mantido (já existe)", 3: "ok com alertas: 00:10 sem rosto"}
 
     monkeypatch.setattr(cli, "planejar_episodio", falso)
     assert cli.principal(["planos", str(tmp_path), "--numero", "1", "--forcar"]) == 0
-    assert chamadas == [(tmp_path, {1}, True)]
+    assert chamadas == [(tmp_path, {1}, True, False)]
     saida = capsys.readouterr().out
     assert "02: mantido (já existe)" in saida and "03: ok com alertas: 00:10 sem rosto" in saida
+    assert cli.principal(["planos", str(tmp_path), "--religar"]) == 0
+    assert chamadas[-1] == (tmp_path, None, True, True)
 
 
 def test_planos_sem_vozes_retorna_1(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(cli, "garantir_escrita", lambda caminho: caminho)
-    monkeypatch.setattr(cli, "planejar_episodio", lambda p, n, f: {0: "erro: vozes.json não encontrado"})
+    monkeypatch.setattr(cli, "planejar_episodio", lambda p, n, f, **k: {0: "erro: vozes.json não encontrado"})
     assert cli.principal(["planos", str(tmp_path)]) == 1
     assert "vozes.json não encontrado" in capsys.readouterr().out
 
 
 def test_planos_erro_em_um_corte_retorna_1(tmp_path, monkeypatch):
     monkeypatch.setattr(cli, "garantir_escrita", lambda caminho: caminho)
-    monkeypatch.setattr(cli, "planejar_episodio", lambda p, n, f: {1: "ok", 2: "erro: x"})
+    monkeypatch.setattr(cli, "planejar_episodio", lambda p, n, f, **k: {1: "ok", 2: "erro: x"})
     assert cli.principal(["planos", str(tmp_path)]) == 1
+
+
+def test_escrita_proibida_vira_erro(tmp_path, capsys):
+    assert cli.principal(["preparar", str(tmp_path)]) == 1
+    saida = capsys.readouterr()
+    assert saida.err.startswith("Erro: Escrita fora de 2 - Cortes/ e Automacao/")
+    assert "Traceback" not in saida.err
