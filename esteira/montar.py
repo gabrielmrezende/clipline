@@ -31,12 +31,17 @@ def _renderizar(receita: Receita, destino: Path, video: Path, numero: int, carta
     )
 
 
-def _alertas_gravados(destino: Path) -> list[str]:
+def _alertas_gravados(destino: Path) -> tuple[list[str], list[str] | None]:
+    """Alertas do preparar (ou todos, em registro antigo) e a lista própria do preparar, se houver."""
     try:
         registro = json.loads((destino / TRABALHO / "registro.json").read_text("utf-8"))
-        return [a for a in registro.get("alertas", []) if isinstance(a, str)]
+        proprios = registro.get("alertas_preparar")
+        if isinstance(proprios, list):
+            proprios = [a for a in proprios if isinstance(a, str)]
+            return proprios, proprios
+        return [a for a in registro.get("alertas", []) if isinstance(a, str)], None
     except (OSError, ValueError, AttributeError):
-        return []
+        return [], None
 
 
 def montar_episodio(
@@ -60,19 +65,21 @@ def montar_episodio(
             resultados[corte.numero] = f"erro: {CORTE_MP4} já existe, use --forcar"
             continue
         faixas: list = []
-        anteriores = _alertas_gravados(destino)
+        anteriores, do_preparar = _alertas_gravados(destino)
         alertas: list[str] = anteriores
         try:
             corte_mp4.unlink(missing_ok=True)
             receita = ler_receita(destino / TRABALHO)
             faixas = receita.faixas
             do_render = _renderizar(receita, destino, video, corte.numero, cartao)
+            if any(a.startswith("sem música") for a in anteriores):
+                do_render = [a for a in do_render if not a.startswith("sem música")]
             alertas = anteriores + [a for a in do_render if a not in anteriores]
             (destino / IMAGENS_SUGERIDAS).mkdir(exist_ok=True)
             (destino / VIDEO_FINAL).mkdir(exist_ok=True)
             resultado = f"ok com alertas: {'; '.join(alertas)}" if alertas else "ok"
         except ERROS_DA_RECEITA as erro:
             resultado = f"erro: {erro}"
-        registrar(destino, video, corte, faixas, resultado, alertas)
+        registrar(destino, video, corte, faixas, resultado, alertas, alertas_preparar=do_preparar)
         resultados[corte.numero] = resultado
     return resultados

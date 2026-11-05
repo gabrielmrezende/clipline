@@ -50,23 +50,27 @@ def _escrever_edicoes(edicoes: list[Edicao], caminho: Path) -> None:
 
 
 def registrar(
-    destino: Path, video: Path, corte: Corte, faixas: list, resultado: str, alertas: list[str] | None = None
+    destino: Path,
+    video: Path,
+    corte: Corte,
+    faixas: list,
+    resultado: str,
+    alertas: list[str] | None = None,
+    alertas_preparar: list[str] | None = None,
 ) -> None:
+    dados = {
+        "video": str(video),
+        "corte": asdict(corte),
+        "faixas": faixas,
+        "ffmpeg": versao_ffmpeg(),
+        "data": datetime.now().isoformat(timespec="seconds"),
+        "resultado": resultado,
+        "alertas": alertas or [],
+    }
+    if alertas_preparar is not None:
+        dados["alertas_preparar"] = alertas_preparar
     (pasta_de_trabalho(destino) / "registro.json").write_text(
-        json.dumps(
-            {
-                "video": str(video),
-                "corte": asdict(corte),
-                "faixas": faixas,
-                "ffmpeg": versao_ffmpeg(),
-                "data": datetime.now().isoformat(timespec="seconds"),
-                "resultado": resultado,
-                "alertas": alertas or [],
-            },
-            ensure_ascii=False,
-            indent=2,
-        ),
-        "utf-8",
+        json.dumps(dados, ensure_ascii=False, indent=2), "utf-8"
     )
 
 
@@ -134,6 +138,6 @@ def preparar_episodio(
             resultado = f"erro: {erro}"
         if resultado.startswith("erro") and forcar:
             (destino / TRABALHO / NOME_ARQUIVO).unlink(missing_ok=True)
-        registrar(destino, video, corte, faixas, resultado, alertas)
+        registrar(destino, video, corte, faixas, resultado, alertas, alertas_preparar=list(alertas))
         resultados[corte.numero] = resultado
     return resultados

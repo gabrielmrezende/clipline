@@ -19,7 +19,7 @@ def _preparado(tmp_path, cortes=(BOM,)):
 
 def test_montar_gera_corte_mp4(tmp_path):
     pasta, cartao = _preparado(tmp_path)
-    uniao = "sem música para o clima leve; sem música"
+    uniao = "sem música para o clima leve"
     assert montar_episodio(pasta, cartao=cartao) == {1: f"ok com alertas: {uniao}"}
     corte = pasta / "01-bom-corte"
     assert sondar(corte / "corte.mp4").duracao > 62
@@ -27,7 +27,7 @@ def test_montar_gera_corte_mp4(tmp_path):
     assert (corte / "imagens-sugeridas").is_dir() and (corte / "video-final").is_dir()
     registro = json.loads((corte / "trabalho" / "registro.json").read_text("utf-8"))
     assert registro["resultado"] == f"ok com alertas: {uniao}"
-    assert registro["alertas"] == ["sem música para o clima leve", "sem música"]
+    assert registro["alertas"] == ["sem música para o clima leve"]
     assert registro["faixas"] and registro["corte"]["numero"] == 1
 
 
@@ -128,7 +128,7 @@ def test_ler_receita_ignora_imagens_antigas(tmp_path):
 def _gravar_alerta_do_preparar(corte: Path) -> None:
     arquivo = corte / "trabalho" / "registro.json"
     registro = json.loads(arquivo.read_text("utf-8")) if arquivo.exists() else {}
-    registro["alertas"] = ["00:05 voz V3 sem pessoa"]
+    registro["alertas"] = registro["alertas_preparar"] = ["00:05 voz V3 sem pessoa"]
     arquivo.write_text(json.dumps(registro), "utf-8")
 
 
@@ -159,3 +159,18 @@ def test_revisao_mostra_alertas_de_quem_fala(tmp_path):
     montar_episodio(pasta, cartao=cartao)
     texto = escrever_revisao(pasta).read_text("utf-8")
     assert "Alertas: 00:05 voz V3 sem pessoa; sem música" in texto
+
+
+def test_remontar_tira_alerta_de_render_antigo(tmp_path, monkeypatch):
+    pasta, cartao = _preparado(tmp_path)
+    montar_episodio(pasta, cartao=cartao)
+    arquivo = pasta / "01-bom-corte" / "trabalho" / "registro.json"
+    registro = json.loads(arquivo.read_text("utf-8"))
+    registro["alertas_preparar"] = ["00:05 voz V3 sem pessoa"]
+    registro["alertas"] = ["00:05 voz V3 sem pessoa", "áudio perto de saturar: -0.2 dB"]
+    arquivo.write_text(json.dumps(registro), "utf-8")
+    monkeypatch.setattr(montar, "renderizar_final", lambda *args, **kwargs: [])
+    montar_episodio(pasta, forcar=True, cartao=cartao)
+    registro = json.loads(arquivo.read_text("utf-8"))
+    assert registro["alertas"] == ["00:05 voz V3 sem pessoa"]
+    assert registro["alertas_preparar"] == ["00:05 voz V3 sem pessoa"]
