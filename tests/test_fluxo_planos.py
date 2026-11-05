@@ -5,6 +5,7 @@ import pytest
 from esteira import fluxo_planos, planos
 from esteira.fluxo_planos import planejar_episodio
 from esteira.pessoas import gravar_pessoas, ler_pessoas
+from esteira.midia import ErroMidia
 from esteira.planos import ler_planos
 from esteira.rostos import Deteccao
 from tests.auxiliares import preparar_teste
@@ -143,3 +144,102 @@ def test_preparar_leva_alertas_de_planos(episodio):
     preparar_teste(pasta)
     registro = json.loads((trabalho / "registro.json").read_text("utf-8"))
     assert "00:10 sem rosto" in registro["alertas"]
+
+
+OUTRO = {**CORTE, "numero": 2, "titulo": "Outro", "inicio": 30.0, "fim": 50.0}
+
+
+def _dois_cortes(pasta, trechos=None):
+    (pasta / "aprovados.json").write_text(json.dumps({"cortes": [CORTE, OUTRO]}), "utf-8")
+    trechos = trechos or [(0.0, 10.0, "V1"), (10.0, 20.0, "V2"), (30.0, 50.0, "V2")]
+    vozes = {"trechos": [{"inicio": a, "fim": b, "voz": v} for a, b, v in trechos]}
+    (pasta / "transcricao" / "vozes.json").write_text(json.dumps(vozes), "utf-8")
+
+
+def test_ligacao_conta_so_a_fala_dentro_dos_cortes(episodio):
+    pasta, _ = episodio
+    vozes = {"trechos": [{"inicio": 0.0, "fim": 10.0, "voz": "V1"}, {"inicio": 10.0, "fim": 20.0, "voz": "V2"},
+                         {"inicio": 100.0, "fim": 400.0, "voz": "V1"}]}
+    (pasta / "transcricao" / "vozes.json").write_text(json.dumps(vozes), "utf-8")
+    planejar_episodio(pasta, None, detectar=detectar_falso)
+    assert ler_pessoas(pasta)[0]["V1"] == "P1"
+
+
+def test_numeros_nao_perde_ligacao_de_outro_corte(episodio):
+    pasta, _ = episodio
+    _dois_cortes(pasta)
+    resultado = planejar_episodio(pasta, {2}, forcar=True, detectar=detectar_falso)
+    assert list(resultado) == [2]
+    assert ler_pessoas(pasta)[0] == {"V1": "P1", "V2": "P2"}
+    assert not (_trabalho(pasta) / "enquadramento.json").exists()
+    assert (pasta / "02-outro" / "trabalho" / "enquadramento.json").exists()
+
+
+def test_reaproveita_rostos_gravados(episodio):
+    pasta, _ = episodio
+    _dois_cortes(pasta)
+    chamadas = []
+
+    def contando(video, inicio, fim):
+        chamadas.append(inicio)
+        return detectar_falso(video, inicio, fim)
+
+    planejar_episodio(pasta, None, detectar=contando)
+    assert chamadas == [0.0, 30.0]
+    assert (_trabalho(pasta) / "rostos.json").exists()
+    chamadas.clear()
+    assert planejar_episodio(pasta, None, detectar=contando) == {1: "mantido (já existe)", 2: "mantido (já existe)"}
+    assert chamadas == []
+    planejar_episodio(pasta, {1}, forcar=True, detectar=contando)
+    assert chamadas == [0.0]
+
+
+def test_erro_na_deteccao_de_um_corte_nao_para_os_outros(episodio):
+    pasta, _ = episodio
+    _dois_cortes(pasta)
+
+    def quebra_no_primeiro(video, inicio, fim):
+        if inicio == 0.0:
+            raise RuntimeError("modelo quebrou")
+        return detectar_falso(video, inicio, fim)
+
+    resultado = planejar_episodio(pasta, None, detectar=quebra_no_primeiro)
+    assert resultado[1] == "erro: detecção: modelo quebrou"
+    assert resultado[2].startswith("ok")
+    assert (pasta / "02-outro" / "trabalho" / "enquadramento.json").exists()
+
+
+def test_falha_na_folha_de_pessoas_vira_alerta(episodio, monkeypatch):
+    pasta, _ = episodio
+
+    def quebra(*args):
+        raise ErroMidia("ffmpeg falhou")
+
+    monkeypatch.setattr(fluxo_planos, "folha_pessoas", quebra)
+    resultado = planejar_episodio(pasta, None, detectar=detectar_falso)
+    assert resultado == {0: "ok com alertas: pessoas.jpg: erro ffmpeg falhou", 1: "ok"}
+    assert ler_pessoas(pasta) is not None
+
+
+def test_pessoas_ilegivel_para_sem_gravar(episodio):
+    pasta, _ = episodio
+    (pasta / "transcricao" / "pessoas.json").write_text("{ruim", "utf-8")
+    resultado = planejar_episodio(pasta, None, detectar=detectar_falso)
+    assert list(resultado) == [0] and resultado[0].startswith("erro: pessoas.json ilegível: ")
+    assert (pasta / "transcricao" / "pessoas.json").read_text("utf-8") == "{ruim"
+    assert not (_trabalho(pasta) / "enquadramento.json").exists()
+
+
+def test_alerta_sem_tempo_fica_igual():
+    assert fluxo_planos._relativo_ao_corte("sem tempo nenhum", 10) == "sem tempo nenhum"
+    assert fluxo_planos._relativo_ao_corte("00:05 sem rosto", 70) == "01:15 sem rosto"
+
+
+def test_preparar_com_alertas_de_planos_ilegivel(episodio):
+    pasta, _ = episodio
+    trabalho = _trabalho(pasta)
+    trabalho.mkdir(parents=True)
+    (trabalho / "alertas-planos.json").write_text("[ruim", "utf-8")
+    preparar_teste(pasta)
+    registro = json.loads((trabalho / "registro.json").read_text("utf-8"))
+    assert registro["alertas"][0].startswith("alertas-planos.json ilegível: ")

@@ -7,6 +7,8 @@ limpeza de pausas).
 """
 
 import json
+import re
+from dataclasses import asdict
 from pathlib import Path
 
 from esteira import rostos
@@ -20,6 +22,7 @@ from esteira.transcrever import ler_palavras
 from esteira.vozes import ErroVozes, ler_vozes
 
 ALERTAS = "alertas-planos.json"
+ROSTOS = "rostos.json"
 MANTIDO = "mantido (já existe)"
 PALAVRAS_NO_ROTULO = 6
 TOLERANCIA_CAIXA = 0.05  # distância horizontal máxima entre o plano e o rosto da caixa
@@ -49,8 +52,10 @@ def _amostras(deteccoes: list[rostos.Deteccao], pessoas: list[str]) -> dict[str,
 
 def _relativo_ao_corte(alerta: str, deslocamento: float) -> str:
     """'MM:SS texto' relativo à cena -> relativo ao corte."""
-    tempo, _, texto = alerta.partition(" ")
-    minutos, segundos = tempo.split(":")
+    achado = re.match(r"(\d+):(\d{2}) (.*)", alerta)
+    if achado is None:
+        return alerta
+    minutos, segundos, texto = achado.groups()
     return f"{_mmss(int(minutos) * 60 + int(segundos) + deslocamento)} {texto}"
 
 
@@ -110,9 +115,44 @@ def _enquadrar_corte(
     return planos, alertas + _alertas_de_ligacao(vozes, corte, ligacao)
 
 
+def _vozes_nos_cortes(vozes: list[TrechoVoz], cortes: list[Corte]) -> list[TrechoVoz]:
+    """Trechos de voz recortados aos intervalos dos cortes (a fala fora deles não conta)."""
+    recortados = []
+    for corte in cortes:
+        for trecho in vozes:
+            inicio, fim = max(corte.inicio, trecho.inicio), min(corte.fim, trecho.fim)
+            if fim > inicio:
+                recortados.append(TrechoVoz(inicio, fim, trecho.voz))
+    return recortados
+
+
+def _ler_rostos(destino: Path, corte: Corte) -> tuple[list[float], list[rostos.Deteccao]] | None:
+    """Cache de `trabalho/rostos.json`; vale só se o corte tem os mesmos tempos."""
+    arquivo = Path(destino) / TRABALHO / ROSTOS
+    if not arquivo.exists():
+        return None
+    try:
+        dados = json.loads(arquivo.read_text("utf-8"))
+        if (dados["inicio"], dados["fim"]) != (corte.inicio, corte.fim):
+            return None
+        return list(dados["limites"]), [rostos.Deteccao(**d) for d in dados["deteccoes"]]
+    except (ValueError, KeyError, TypeError):
+        return None
+
+
+def _gravar_rostos(destino: Path, corte: Corte, limites: list[float], deteccoes: list[rostos.Deteccao]) -> None:
+    dados = {"inicio": corte.inicio, "fim": corte.fim, "limites": limites,
+             "deteccoes": [asdict(d) for d in deteccoes]}
+    (pasta_de_trabalho(destino) / ROSTOS).write_text(json.dumps(dados), "utf-8")
+
+
 def planejar_episodio(
     pasta: Path, numeros: set[int] | None, forcar: bool = False, detectar=rostos.detectar
 ) -> dict[int, str]:
+    """Rostos, ligação, pessoas.json e pessoas.jpg usam sempre todos os cortes de
+    aprovados.json; `numeros` filtra só o enquadramento e o planos.jpg. Detecções ficam
+    em `trabalho/rostos.json`; `forcar` refaz as dos cortes pedidos (todos, sem `numeros`).
+    Alertas do episódio (pessoas.jpg, detecção de corte não pedido) vão na chave 0."""
     pasta = Path(pasta)
     video = Path(json.loads((pasta / "episodio.json").read_text("utf-8"))["video"])
     try:
@@ -120,21 +160,36 @@ def planejar_episodio(
     except ErroVozes as erro:
         return {0: f"erro: {erro}"}
     try:
+        existente = ler_pessoas(pasta)
+    except (ValueError, KeyError, TypeError, OSError) as erro:
+        return {0: f"erro: pessoas.json ilegível: {erro}"}
+    try:
         palavras = ler_palavras(pasta)
     except FileNotFoundError:
         palavras = []
 
-    cortes = [c for c in ler_aprovados(pasta) if numeros is None or c.numero in numeros]
-    resultados: dict[int, str] = {}
-    lidos: list[tuple[Corte, list[float], list[rostos.Deteccao]]] = []
-    for corte in cortes:
-        try:
-            limites = limites_de_cena(video, corte.inicio, corte.fim)
-            lidos.append((corte, limites, detectar(video, corte.inicio, corte.fim)))
-        except ERROS as erro:
-            resultados[corte.numero] = f"erro: {erro}"
+    def pedido(corte: Corte) -> bool:
+        return numeros is None or corte.numero in numeros
 
-    existente = ler_pessoas(pasta)
+    resultados: dict[int, str] = {}
+    globais: list[str] = []
+    lidos: list[tuple[Corte, list[float], list[rostos.Deteccao]]] = []
+    for corte in ler_aprovados(pasta):
+        destino = pasta_do_corte(pasta, corte)
+        try:
+            guardado = None if forcar and pedido(corte) else _ler_rostos(destino, corte)
+            if guardado is None:
+                limites = limites_de_cena(video, corte.inicio, corte.fim)
+                deteccoes = detectar(video, corte.inicio, corte.fim)
+                _gravar_rostos(destino, corte, limites, deteccoes)
+                guardado = (limites, deteccoes)
+            lidos.append((corte, *guardado))
+        except Exception as erro:  # cv2.error, ImportError etc.: só este corte para
+            if pedido(corte):
+                resultados[corte.numero] = f"erro: detecção: {erro}"
+            else:
+                globais.append(f"corte {corte.numero:02d}: erro na detecção: {erro}")
+
     todas = [d for _, _, deteccoes in lidos for d in deteccoes]
     pessoas, assinaturas = rostos.agrupar(todas, existente[1] if existente else {})
     cenas_por_corte: dict[int, list[Cena]] = {}
@@ -144,15 +199,28 @@ def planejar_episodio(
         cenas_por_corte[corte.numero] = rostos.cenas_com_rostos(deteccoes, pessoas[inicio:fim], limites)
         inicio = fim
 
+    cortes_lidos = [corte for corte, _, _ in lidos]
     todas_as_cenas = [c for cenas in cenas_por_corte.values() for c in cenas]
-    ligacao, assinaturas, nomes = _ligacao(vozes, todas_as_cenas, existente, assinaturas, forcar)
-    gravar_pessoas(pasta, ligacao, assinaturas, nomes)
+    ligacao, assinaturas, nomes = _ligacao(
+        _vozes_nos_cortes(vozes, cortes_lidos), todas_as_cenas, existente, assinaturas, forcar
+    )
+    try:
+        gravar_pessoas(pasta, ligacao, assinaturas, nomes)
+    except OSError as erro:
+        return {**resultados, 0: f"erro: gravar pessoas.json: {erro}"}
     amostras = _amostras(todas, pessoas)
     if amostras:
-        tempo_de_fala = _tempo_de_fala(vozes, [corte for corte, _, _ in lidos])
-        folha_pessoas(video, amostras, ligacao, tempo_de_fala, nomes, pasta / "transcricao" / "pessoas.jpg")
+        tempo_de_fala = _tempo_de_fala(vozes, cortes_lidos)
+        try:
+            folha_pessoas(video, amostras, ligacao, tempo_de_fala, nomes, pasta / "transcricao" / "pessoas.jpg")
+        except Exception as erro:
+            globais.append(f"pessoas.jpg: erro {erro}")
+    if globais:
+        resultados[0] = f"ok com alertas: {'; '.join(globais)}"
 
-    for corte, _, _ in lidos:
+    for corte in cortes_lidos:
+        if not pedido(corte):
+            continue
         cenas = cenas_por_corte[corte.numero]
         destino = pasta_do_corte(pasta, corte)
         try:

@@ -85,7 +85,13 @@ def _alertas_de_planos(destino: Path) -> list[str]:
     arquivo = Path(destino) / TRABALHO / "alertas-planos.json"
     if not arquivo.exists():
         return []
-    return list(json.loads(arquivo.read_text("utf-8")))
+    try:
+        dados = json.loads(arquivo.read_text("utf-8"))
+    except (OSError, ValueError) as erro:
+        return [f"alertas-planos.json ilegível: {erro}"]
+    if not isinstance(dados, list):
+        return ["alertas-planos.json ilegível: não é uma lista"]
+    return [str(a) for a in dados]
 
 
 def preparar_episodio(
