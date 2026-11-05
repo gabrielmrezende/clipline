@@ -24,10 +24,20 @@ def criar_pipeline() -> Callable[[Path, int], list[tuple[float, float, str]]]:
     if not token:
         raise ErroVozes(MENSAGEM_SEM_TOKEN)
     _registrar_dlls_nvidia()
-    import torch
-    from pyannote.audio import Pipeline
+    try:
+        import torch
+        from pyannote.audio import Pipeline
+    except ImportError as erro:
+        raise ErroVozes(
+            'instale o extra vozes: python -m pip install -e ".[vozes]"'
+        ) from erro
 
     pipeline = Pipeline.from_pretrained(MODELO, use_auth_token=token)
+    if pipeline is None:
+        raise ErroVozes(
+            f"não foi possível carregar {MODELO}: aceite os termos de {MODELO} e de "
+            "pyannote/segmentation-3.0 no Hugging Face e confira o HF_TOKEN."
+        )
     if torch.cuda.is_available():
         pipeline.to(torch.device("cuda"))
 
