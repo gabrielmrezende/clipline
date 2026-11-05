@@ -3,7 +3,7 @@
 Grava `transcricao/pessoas.json`, `transcricao/pessoas.jpg` e, por corte,
 `trabalho/enquadramento.json`, `trabalho/alertas-planos.json` e `trabalho/planos.jpg`.
 Os tempos dos alertas são relativos ao início do corte (linha do episódio, antes da
-limpeza de pausas).
+limpeza de pausas); o `preparar` os passa para o tempo do `corte.mp4`.
 """
 
 import json
@@ -82,18 +82,28 @@ def _rotulo(
 
 
 def _ligacao(
-    vozes: list[TrechoVoz], cenas: list[Cena], existente, assinaturas: dict[str, list[float]], forcar: bool,
+    vozes: list[TrechoVoz], cenas: list[Cena], existente, assinaturas: dict[str, list[float]],
+    forcar: bool, religar: bool = False,
 ) -> tuple[dict[str, str], dict[str, list[float]], dict[str, str]]:
-    """Sem `forcar`, um pessoas.json existente manda: ligação, nomes e assinaturas dele
-    ficam como estão e só entram as assinaturas de pessoas novas. Com `forcar`, a
-    ligação é recalculada; os nomes continuam (as pessoas guardam o mesmo código)."""
+    """Um pessoas.json existente manda: ligação, nomes e assinaturas dele ficam como
+    estão (inclusive correções manuais) e só entram as assinaturas de pessoas novas.
+    Com `forcar`, também entram as vozes ainda sem pessoa que o cálculo ligar a uma
+    pessoa livre. Só `religar` recalcula a ligação do zero; os nomes continuam (as
+    pessoas guardam o mesmo código)."""
     if existente is None:
         return ligar(vozes, cenas), assinaturas, {}
     ligacao_antiga, assinaturas_antigas, nomes = existente
-    if forcar:
+    if religar:
         return ligar(vozes, cenas), assinaturas, nomes
     novas = {p: s for p, s in assinaturas.items() if p not in assinaturas_antigas}
-    return ligacao_antiga, {**assinaturas_antigas, **novas}, nomes
+    ligacao = dict(ligacao_antiga)
+    if forcar:
+        usadas = set(ligacao.values())
+        for voz, pessoa in ligar(vozes, cenas).items():
+            if voz not in ligacao and pessoa not in usadas:
+                ligacao[voz] = pessoa
+                usadas.add(pessoa)
+    return ligacao, {**assinaturas_antigas, **novas}, nomes
 
 
 def _alertas_de_ligacao(vozes: list[TrechoVoz], corte: Corte, ligacao: dict[str, str]) -> list[str]:
@@ -147,12 +157,15 @@ def _gravar_rostos(destino: Path, corte: Corte, limites: list[float], deteccoes:
 
 
 def planejar_episodio(
-    pasta: Path, numeros: set[int] | None, forcar: bool = False, detectar=rostos.detectar
+    pasta: Path, numeros: set[int] | None, forcar: bool = False, detectar=rostos.detectar,
+    religar: bool = False,
 ) -> dict[int, str]:
     """Rostos, ligação, pessoas.json e pessoas.jpg usam sempre todos os cortes de
     aprovados.json; `numeros` filtra só o enquadramento e o planos.jpg. Detecções ficam
-    em `trabalho/rostos.json`; `forcar` refaz as dos cortes pedidos (todos, sem `numeros`).
+    em `trabalho/rostos.json`; `forcar` refaz as dos cortes pedidos (todos, sem `numeros`)
+    e preserva a ligação de pessoas.json; `religar` (implica `forcar`) recalcula a ligação.
     Alertas do episódio (pessoas.jpg, detecção de corte não pedido) vão na chave 0."""
+    forcar = forcar or religar
     pasta = Path(pasta)
     video = Path(json.loads((pasta / "episodio.json").read_text("utf-8"))["video"])
     try:
@@ -202,7 +215,7 @@ def planejar_episodio(
     cortes_lidos = [corte for corte, _, _ in lidos]
     todas_as_cenas = [c for cenas in cenas_por_corte.values() for c in cenas]
     ligacao, assinaturas, nomes = _ligacao(
-        _vozes_nos_cortes(vozes, cortes_lidos), todas_as_cenas, existente, assinaturas, forcar
+        _vozes_nos_cortes(vozes, cortes_lidos), todas_as_cenas, existente, assinaturas, forcar, religar
     )
     try:
         gravar_pessoas(pasta, ligacao, assinaturas, nomes)

@@ -243,3 +243,42 @@ def test_preparar_com_alertas_de_planos_ilegivel(episodio):
     preparar_teste(pasta)
     registro = json.loads((trabalho / "registro.json").read_text("utf-8"))
     assert registro["alertas"][0].startswith("alertas-planos.json ilegível: ")
+
+
+def _x_dos_planos(pasta):
+    return [(p.inicio, p.fim, p.x) for p in ler_planos(_trabalho(pasta))]
+
+
+def detectar_dois(video, inicio, fim):
+    """A à esquerda e B à direita durante todo o corte."""
+    deteccoes = []
+    t = inicio
+    while t < fim:
+        deteccoes += [Deteccao(t, 0.3, 0.4, 0.1, 0.2, ROSTO_A), Deteccao(t, 0.7, 0.4, 0.1, 0.2, ROSTO_B)]
+        t += 0.5
+    return deteccoes
+
+
+def test_forcar_preserva_ligacao_editada_e_religar_recalcula(episodio):
+    pasta, _ = episodio
+    planejar_episodio(pasta, None, detectar=detectar_falso)
+    ligacao, assinaturas, _ = ler_pessoas(pasta)
+    assert ligacao == {"V1": "P1", "V2": "P2"}
+    gravar_pessoas(pasta, {"V1": "P2", "V2": "P1"}, assinaturas, {"P1": "Arthur"})
+
+    planejar_episodio(pasta, None, forcar=True, detectar=detectar_dois)
+    assert ler_pessoas(pasta)[0] == {"V1": "P2", "V2": "P1"}
+    assert ler_pessoas(pasta)[2] == {"P1": "Arthur"}
+    assert _x_dos_planos(pasta) == [(0.0, 10.0, 0.7), (10.0, 20.0, 0.3)]
+
+    planejar_episodio(pasta, None, religar=True, detectar=detectar_falso)
+    assert ler_pessoas(pasta)[0] == {"V1": "P1", "V2": "P2"}
+    assert ler_pessoas(pasta)[2] == {"P1": "Arthur"}
+    assert _x_dos_planos(pasta) == [(0.0, 10.0, 0.3), (10.0, 20.0, 0.7)]
+
+
+def test_forcar_acrescenta_voz_ainda_nao_ligada(episodio):
+    pasta, _ = episodio
+    gravar_pessoas(pasta, {"V1": "P1"}, {"P1": ROSTO_A}, {})
+    planejar_episodio(pasta, None, forcar=True, detectar=detectar_falso)
+    assert ler_pessoas(pasta)[0] == {"V1": "P1", "V2": "P2"}
