@@ -59,15 +59,15 @@ def _foto(inicio=10.0, fim=11.0, **extra):
 
 
 def test_buscar_grava_candidatas_e_folha(tmp_path):
-    ep, corte = _episodio(tmp_path, [_foto(escolhas=[2], url=['u'], bytes=[1])])
+    ep, corte = _episodio(tmp_path, [_foto(escolhas=[2], url=['u'], bytes=[1], resumidas=[2])])
     assert buscar_episodio(ep, None, [], falso, baixar) == {1: "ok"}
     momento = ler_pedidos(corte / "trabalho")[0]
-    assert len(momento.candidatas) == 2 and momento.escolhas == [] and momento.url == [] and momento.bytes == []
+    assert len(momento.candidatas) == 2 and momento.escolhas == momento.url == momento.bytes == momento.resumidas == []
     assert (corte / "trabalho" / "candidatas" / "01-1.jpg").exists()
 
 
 def test_buscar_grava_candidatas_em_trabalho(tmp_path):
-    ep, corte = _episodio(tmp_path, [_foto(escolhas=[2], url=['u'], bytes=[1])])
+    ep, corte = _episodio(tmp_path, [_foto(escolhas=[2], url=['u'], bytes=[1], resumidas=[2])])
     assert buscar_episodio(ep, None, [], falso, baixar) == {1: "ok"}
     assert (corte / "trabalho" / "candidatas" / "01-1.jpg").exists()
     assert (corte / "trabalho" / "pedidos.json").exists()
@@ -133,16 +133,27 @@ def _proximo(cor, esperada):
     return all(abs(a - b) < 30 for a, b in zip(cor, esperada))
 
 
-def test_resumo_nao_baixa(tmp_path, monkeypatch):
+def test_resumo_nao_baixa(tmp_path):
     ep, corte = _sugeridos(tmp_path)
-    chamadas = []
-    monkeypatch.setattr("esteira.rede.baixar_url", lambda *a: chamadas.append(a))
+    consultas, medidas = [], []
+
+    def consultar(params):
+        consultas.append(params)
+        return falso(params)
+
     tamanhos = {"https://u/1920px-A1.jpg": 1000, "https://u/1920px-A2.jpg": 2048}
-    fotos, total, resultados = resumir_episodio(ep, None, falso, tamanhos.get)
+
+    def medir(url):
+        medidas.append(url)
+        return tamanhos[url]
+
+    fotos, total, resultados = resumir_episodio(ep, None, consultar, medir)
     assert (fotos, total, resultados) == (2, 3048, {1: "ok"})
-    assert chamadas == []
+    assert [c["titles"] for c in consultas] == ["File:A2.jpg", "File:A1.jpg"]  # só o link final
+    assert medidas == ["https://u/1920px-A2.jpg", "https://u/1920px-A1.jpg"]  # só o tamanho (HEAD)
     momento = ler_pedidos(corte / "trabalho")[0]
     assert momento.url == ["https://u/1920px-A2.jpg", "https://u/1920px-A1.jpg"] and momento.bytes == [2048, 1000]
+    assert momento.resumidas == [2, 1]
     assert not (corte / "imagens-sugeridas").exists()
 
 
@@ -231,6 +242,7 @@ def test_sugerir_nao_apaga_arquivo_do_dono(tmp_path):
     sugerir_episodio(ep, None, [], falso, baixar_cor)
     momentos = ler_pedidos(corte / "trabalho")
     momentos[0].escolhas, momentos[0].url, momentos[0].bytes = [1], [momentos[0].url[1]], [1]
+    momentos[0].resumidas = [1]
     momentos[1].inicio, momentos[1].fim = 40.0, 43.0
     gravar_pedidos(corte / "trabalho", momentos)
     assert sugerir_episodio(ep, None, [], falso, baixar_cor) == {1: "ok"}
@@ -246,6 +258,59 @@ def test_sugerir_nao_sobrescreve_arquivo_do_dono_com_mesmo_nome(tmp_path):
     resultado = sugerir_episodio(ep, None, [], falso, baixar_cor)[1]
     assert "0030-manchete.png" in resultado and (pasta / "0030-manchete.png").read_bytes() == b"do dono"
     assert "0030-manchete.png" not in json.loads((corte / "trabalho" / "sugeridas.json").read_text("utf-8"))
+    guia = (pasta / "guia.md").read_text("utf-8")
+    assert "Opções: 0030-manchete.png" not in guia
+    assert "Sem imagem: arquivo do dono mantido (0030-manchete.png)" in guia
+
+
+def test_sugerir_foto_do_dono_sem_credito(tmp_path):
+    ep, corte = _sugeridos(tmp_path)
+    pasta = corte / "imagens-sugeridas"
+    pasta.mkdir()
+    (pasta / "0012-yas-marina-1.jpg").write_bytes(b"do dono")
+    resumir_episodio(ep, None, falso, lambda u: 1)
+    sugerir_episodio(ep, None, [], falso, baixar_cor)
+    guia = (pasta / "guia.md").read_text("utf-8")
+    assert "Opções: 0012-yas-marina-2.jpg\n" in guia
+    assert "Sem imagem: opção 1: arquivo do dono mantido (0012-yas-marina-1.jpg)" in guia
+    assert "Beltrana" not in guia and "2. Fulano, CC BY-SA 4.0, https://c/A1" in guia
+
+
+def test_sugerir_recusa_escolhas_trocadas_depois_do_resumo(tmp_path):
+    ep, corte = _sugeridos(tmp_path)
+    momentos = ler_pedidos(corte / "trabalho")
+    momentos[0].candidatas.append(_candidata(3, "Sicrano"))
+    gravar_pedidos(corte / "trabalho", momentos)
+    resumir_episodio(ep, None, falso, lambda u: 1)
+    momentos = ler_pedidos(corte / "trabalho")
+    momentos[0].escolhas = [3, 1]
+    gravar_pedidos(corte / "trabalho", momentos)
+    assert sugerir_episodio(ep, None, [], falso, baixar_cor) == {1: "erro: rode imagens resumo"}
+    assert not (corte / "imagens-sugeridas").exists()
+
+
+def test_sugerir_nao_herda_motivo_antigo(tmp_path):
+    ep, corte = _sugeridos(tmp_path)
+    momentos = ler_pedidos(corte / "trabalho")
+    momentos[1].motivo = "cartão falhou"
+    gravar_pedidos(corte / "trabalho", momentos)
+    resumir_episodio(ep, None, falso, lambda u: 1)
+    assert sugerir_episodio(ep, None, [], falso, baixar_cor) == {1: "ok"}
+    assert "Sem imagem" not in (corte / "imagens-sugeridas" / "guia.md").read_text("utf-8")
+
+
+def test_sugerir_lista_em_dia_se_interromper(tmp_path, monkeypatch):
+    ep, corte = _sugeridos(tmp_path)
+    resumir_episodio(ep, None, falso, lambda u: 1)
+
+    def interrompe(*a):
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr("esteira.fluxo_imagens.gerar_cartao", interrompe)
+    with pytest.raises(KeyboardInterrupt):
+        sugerir_episodio(ep, None, [], falso, baixar_cor)
+    assert json.loads((corte / "trabalho" / "sugeridas.json").read_text("utf-8")) == [
+        "0012-yas-marina-1.jpg", "0012-yas-marina-2.jpg"]
 
 
 def test_sugerir_recusa_prompt_com_pessoa(tmp_path):

@@ -32,6 +32,7 @@ class Momento:
     motivo: str = ""
     url: list[str] = field(default_factory=list)  # paralela a escolhas
     bytes: list[int | None] = field(default_factory=list)  # paralela a escolhas
+    resumidas: list[int] = field(default_factory=list)  # escolhas do último resumo
 
 
 def ler_pedidos(pasta: Path) -> list[Momento]:
@@ -121,7 +122,7 @@ def validar_escolhas(momentos: list[Momento]) -> list[str]:
         e = m.escolhas
         if not (
             isinstance(e, list) and 1 <= len(e) <= MAXIMO_ESCOLHAS and len(set(e)) == len(e)
-            and all(isinstance(n, int) and 1 <= n <= len(m.candidatas) for n in e)
+            and all(type(n) is int and 1 <= n <= len(m.candidatas) for n in e)
         ):
             erros.append(f"momento {numero}: escolhas inválidas")
     return erros

@@ -109,7 +109,7 @@ def buscar_episodio(
                 titulo = f"Corte {corte.numero:02d} · momento {posicao} · {m.nome}"
                 montar_folha(titulo, lista, miniaturas, pasta_de_trabalho(destino) / "candidatas" / f"{corte.numero:02d}-{posicao}.jpg")
                 m.candidatas = [asdict(c) for c in lista]
-                m.escolhas, m.url, m.bytes, m.motivo = [], [], [], ""
+                m.escolhas, m.url, m.bytes, m.resumidas, m.motivo = [], [], [], [], ""
                 if not lista:
                     alertas.append(f"momento {posicao} sem candidata")
         gravar_pedidos(pasta_de_trabalho(destino), momentos)
@@ -174,7 +174,8 @@ def resumir_episodio(
             resultados[corte.numero] = f"erro: Wikimedia indisponível: {erro}"
             continue
         for posicao, (urls, tamanhos) in resolvidos.items():
-            momentos[posicao - 1].url, momentos[posicao - 1].bytes = urls, tamanhos
+            original = momentos[posicao - 1]
+            original.url, original.bytes, original.resumidas = urls, tamanhos, list(original.escolhas)
             fotos += sum(1 for u in urls if u)
             total += sum(t or 0 for t in tamanhos)
         gravar_pedidos(pasta_de_trabalho(destino), momentos)
@@ -197,12 +198,12 @@ def _arquivos(m: Momento) -> list[str]:
     return [f"{_base(m)}.png"] if m.tipo == "noticia" else []
 
 
-def _bloco_guia(pasta: Path, m: Momento) -> str:
+def _bloco_guia(pasta: Path, m: Momento, geradas: set[str]) -> str:
     linhas = [f"## {_minutos(m.inicio)} a {_minutos(m.fim)} · {m.nome} ({TIPOS_GUIA[m.tipo]})", f'Fala: "{m.fala}"']
     if m.tipo == "ia":
         linhas.append(f'Prompt (ChatGPT, 9:16): "{m.prompt}"')
         return "\n".join(linhas)
-    presentes = [(k, nome) for k, nome in enumerate(_arquivos(m), 1) if (pasta / nome).exists()]
+    presentes = [(k, nome) for k, nome in enumerate(_arquivos(m), 1) if nome in geradas and (pasta / nome).exists()]
     if presentes:
         linhas.append("Opções: " + ", ".join(nome for _, nome in presentes))
     if m.motivo or not presentes:
@@ -222,7 +223,8 @@ def escrever_guia(destino: Path, momentos: list[Momento]) -> Path:
     pasta = Path(destino) / IMAGENS_SUGERIDAS
     pasta.mkdir(parents=True, exist_ok=True)
     ativos = sorted((m for m in momentos if not m.descartar), key=lambda m: m.inicio)
-    blocos = [_bloco_guia(pasta, m) for m in ativos] or ["Nenhuma imagem sugerida neste corte."]
+    geradas = set(_ler_sugeridas(Path(destino) / TRABALHO))
+    blocos = [_bloco_guia(pasta, m, geradas) for m in ativos] or ["Nenhuma imagem sugerida neste corte."]
     caminho = pasta / GUIA
     _gravar_texto(caminho, LEMBRETES + "\n" + "\n\n".join(blocos) + "\n")
     return caminho
@@ -238,10 +240,14 @@ def _ler_sugeridas(trabalho: Path) -> list[str]:
     return [n for n in dados if isinstance(n, str) and Path(n).name == n and Path(n).suffix in EXTENSOES_GERADAS]
 
 
+def _gravar_sugeridas(trabalho: Path, geradas: list[str]) -> None:
+    _gravar_texto(trabalho / SUGERIDAS, json.dumps(sorted(geradas), ensure_ascii=False, indent=2) + "\n")
+
+
 def _produzir(caminho: Path, produzir: Callable[[Path], object], falha: str) -> str:
     """Gera um arquivo; devolve o motivo da falha, ou "" quando deu certo."""
     if caminho.exists():
-        return f"{caminho.name} já existe e não é da esteira, mantido"
+        return f"arquivo do dono mantido ({caminho.name})"
     try:
         produzir(caminho)
         return ""
@@ -257,6 +263,10 @@ def _sugerir_um(destino: Path, momentos: list[Momento], alertas: list[str], baix
     for nome in _ler_sugeridas(trabalho):  # só o que a própria esteira gerou
         (pasta / nome).unlink(missing_ok=True)
     geradas: list[str] = []
+    _gravar_sugeridas(trabalho, geradas)
+    for m in momentos:
+        if not m.descartar:
+            m.motivo = ""  # não herda "Sem imagem" de rodadas antigas
     with tempfile.TemporaryDirectory() as temporaria:
         for posicao, m in enumerate(momentos, 1):
             if m.descartar or m.tipo == "ia":
@@ -278,6 +288,7 @@ def _sugerir_um(destino: Path, momentos: list[Momento], alertas: list[str], baix
                     falhas.append((k, motivo))
                 else:
                     geradas.append(nome)
+                    _gravar_sugeridas(trabalho, geradas)  # lista sempre em dia, mesmo se interromper
             if not falhas:
                 continue
             if len(falhas) == len(_arquivos(m)) and len({motivo for _, motivo in falhas}) == 1:
@@ -285,9 +296,13 @@ def _sugerir_um(destino: Path, momentos: list[Momento], alertas: list[str], baix
             else:
                 m.motivo = "; ".join(f"opção {k}: {motivo}" for k, motivo in falhas)
             alertas.append(f"momento {posicao} ({m.nome}): {m.motivo}")
-    _gravar_texto(trabalho / SUGERIDAS, json.dumps(sorted(geradas), ensure_ascii=False, indent=2) + "\n")
     escrever_guia(destino, momentos)
     return _resultado(alertas)
+
+
+def _resumido(m: Momento) -> bool:
+    """O resumo foi feito com estas mesmas escolhas (o download que o dono confirmou)."""
+    return m.resumidas == m.escolhas and len(m.url) == len(m.bytes) == len(m.escolhas)
 
 
 def sugerir_episodio(
@@ -308,7 +323,7 @@ def sugerir_episodio(
             resultados[corte.numero] = carregado
             continue
         copia, alertas = _ajustados(*carregado)
-        if any(len(m.url) != len(m.escolhas) or len(m.bytes) != len(m.escolhas) for _, m in _fotos_ativas(copia)):
+        if any(not _resumido(m) for _, m in _fotos_ativas(copia)):
             resultados[corte.numero] = ERRO_SEM_RESUMO
             continue
         resultados[corte.numero] = _sugerir_um(destino, copia, alertas, baixar)

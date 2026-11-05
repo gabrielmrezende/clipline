@@ -104,7 +104,7 @@ def _com_escolhas(escolhas):
 
 
 def test_escolhas_invalidas():
-    for escolhas in ([0], [1, 1], [1, 2, 3, 4], [7], []):
+    for escolhas in ([0], [1, 1], [1, 2, 3, 4], [7], [], [True], [1.0]):
         assert validar_escolhas(_com_escolhas(escolhas)) == ["momento 1: escolhas inválidas"], escolhas
     assert validar_escolhas(_com_escolhas([2, 1])) == []
 
