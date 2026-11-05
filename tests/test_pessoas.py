@@ -66,3 +66,26 @@ def test_folha_pessoas(tmp_path, monkeypatch):
     assert len(chamadas) == 2
     with Image.open(saida) as folha:
         assert folha.width <= 2 * 640
+
+
+def test_vazamento_nao_liga():
+    # V1 fala 30 s, só 0,5 s dentro do close de P4; P2 já é de V2
+    vozes = [TrechoVoz(0, 20, "V2"), TrechoVoz(20, 20.5, "V1"), TrechoVoz(20.5, 50, "V1")]
+    cenas = [
+        Cena(0, 20, [_rosto("P2")]),
+        Cena(20, 20.5, [_rosto("P4")]),
+        Cena(20.5, 50, [_rosto("P2", 0.3), _rosto("P1", 0.7)]),
+    ]
+    assert pessoas.ligar(vozes, cenas) == {"V2": "P2"}
+
+
+def test_folha_sem_pessoas(tmp_path):
+    import pytest
+
+    with pytest.raises(ValueError, match="nenhuma pessoa"):
+        pessoas.folha_pessoas(tmp_path / "v.mp4", {}, {}, {}, {}, tmp_path / "p.jpg")
+
+
+def test_gravar_cria_pasta(tmp_path):
+    pessoas.gravar_pessoas(tmp_path, {}, {}, {})
+    assert pessoas.ler_pessoas(tmp_path) == ({}, {}, {})

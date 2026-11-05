@@ -21,6 +21,8 @@ COLUNAS = 3
 MARGEM_RECORTE = 1.0  # o recorte tem (1 + 2 * margem) vezes o lado maior do rosto
 LARGURA_QUADRO = 1280  # largura do quadro extraído para o recorte
 ALTURA_LEGENDA = 44
+LIGACAO_MINIMA = 2.0  # segundos de close para uma voz poder ligar a uma pessoa
+FRACAO_MINIMA = 0.10  # e fração mínima da fala total da voz
 
 
 def ligar(vozes: list[TrechoVoz], cenas: list[Cena]) -> dict[str, str]:
@@ -31,7 +33,12 @@ def ligar(vozes: list[TrechoVoz], cenas: list[Cena]) -> dict[str, str]:
     ordem do nome da voz e depois da pessoa. Um par só vale se a voz e a pessoa ainda
     estão livres, então duas vozes nunca ficam com a mesma pessoa: a de maior soma vence
     e a outra segue para a próxima pessoa livre, ou fica de fora do dicionário.
+    Um par só pode ligar se a soma for >= LIGACAO_MINIMA segundos e >= FRACAO_MINIMA da
+    fala total da voz, para um "vazamento" curto não ligar a voz à pessoa errada.
     """
+    fala_total: dict[str, float] = {}
+    for trecho in vozes:
+        fala_total[trecho.voz] = fala_total.get(trecho.voz, 0.0) + (trecho.fim - trecho.inicio)
     somas: dict[tuple[str, str], float] = {}
     for cena in cenas:
         if len(cena.rostos) != 1:
@@ -44,7 +51,9 @@ def ligar(vozes: list[TrechoVoz], cenas: list[Cena]) -> dict[str, str]:
                 somas[chave] = somas.get(chave, 0.0) + dentro
     ligacao: dict[str, str] = {}
     usadas: set[str] = set()
-    for (voz, pessoa), _ in sorted(somas.items(), key=lambda i: (-i[1], i[0][0], i[0][1])):
+    for (voz, pessoa), soma in sorted(somas.items(), key=lambda i: (-i[1], i[0][0], i[0][1])):
+        if soma < LIGACAO_MINIMA - 1e-9 or soma < FRACAO_MINIMA * fala_total[voz] - 1e-9:
+            continue
         if voz not in ligacao and pessoa not in usadas:
             ligacao[voz] = pessoa
             usadas.add(pessoa)
@@ -57,6 +66,7 @@ def gravar_pessoas(
     assinaturas: dict[str, list[float]],
     nomes: dict[str, str],
 ) -> None:
+    (Path(pasta) / "transcricao").mkdir(parents=True, exist_ok=True)
     dados = {"ligacao": ligacao, "assinaturas": assinaturas, "nomes": nomes}
     _gravar(Path(pasta) / "transcricao" / ARQUIVO, json.dumps(dados, ensure_ascii=False, indent=1))
 
@@ -90,7 +100,12 @@ def folha_pessoas(
     nomes: dict[str, str],
     saida: Path,
 ) -> Path:
-    """Uma célula por pessoa: recorte do rosto e a legenda `P2 = V1 · Nome · 312 s de fala`."""
+    """Uma célula por pessoa: recorte do rosto e a legenda `P2 = V1 · Nome · 312 s de fala`.
+
+    `tempo_de_fala` é indexado por voz (ex.: {"V1": 312.0}), não por pessoa.
+    """
+    if not amostras:
+        raise ValueError("nenhuma pessoa para a folha")
     voz_da_pessoa = {pessoa: voz for voz, pessoa in ligacao.items()}
     pessoas_ordenadas = sorted(amostras)
     linhas = max((len(pessoas_ordenadas) + COLUNAS - 1) // COLUNAS, 1)
@@ -109,11 +124,12 @@ def folha_pessoas(
             x, y = i % COLUNAS * lado, i // COLUNAS * (lado + ALTURA_LEGENDA)
             with Image.open(quadro) as imagem:
                 folha.paste(_recorte(imagem.convert("RGB"), rosto), (x, y))
-            voz = voz_da_pessoa.get(pessoa, "sem voz")
-            partes = [f"{pessoa} = {voz}"]
+            voz = voz_da_pessoa.get(pessoa)
+            partes = [f"{pessoa} = {voz or 'sem voz'}"]
             if nomes.get(pessoa):
                 partes.append(nomes[pessoa])
-            partes.append(f"{tempo_de_fala.get(voz, 0):.0f} s de fala")
+            if voz:
+                partes.append(f"{tempo_de_fala.get(voz, 0):.0f} s de fala")
             desenho.text((x + 8, y + lado + 6), " · ".join(partes), font=fonte, fill="#FFEE00",
                          stroke_width=2, stroke_fill="#000000")
     folha.save(saida, quality=85)
