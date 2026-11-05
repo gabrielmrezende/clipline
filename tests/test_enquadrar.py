@@ -148,3 +148,34 @@ def test_voz_sem_pessoa():
     planos, alertas = enquadrar_cena(cena, [TrechoVoz(0, 10, "V3")], {"V1": "P1"})
     assert planos[0].x == P1.x
     assert any("voz V3 sem pessoa" in a for a in alertas)
+
+
+def _por_pessoa(planos):
+    pessoa = {P1.x: "P1", P2.x: "P2"}
+    return [(p.inicio, p.fim, pessoa[p.x]) for p in planos]
+
+
+def test_trecho_curto_no_meio_junta_ao_anterior():
+    cena = Cena(0, 20, [P1, P2])
+    vozes = [TrechoVoz(0, 10, "V1"), TrechoVoz(8.5, 12, "V2"), TrechoVoz(11.5, 20, "V1")]
+    planos, alertas = enquadrar_cena(cena, vozes, LIGACAO)
+    assert _por_pessoa(planos) == [(0, 10, "P1"), (10, 12, "P2"), (12, 20, "P1")]
+    assert all(p.fim - p.inicio >= 2.0 for p in planos)
+    assert alertas == ["00:08 fala sobreposta"]
+
+
+def test_trecho_curto_no_comeco_junta_ao_seguinte():
+    cena = Cena(0, 20, [P1, P2])
+    vozes = [TrechoVoz(0, 3, "V1"), TrechoVoz(1.5, 20, "V2")]
+    planos, _ = enquadrar_cena(cena, vozes, LIGACAO)
+    assert _por_pessoa(planos) == [(0, 3, "P1"), (3, 20, "P2")]
+    _sem_buracos(planos, 0, 20)
+
+
+def test_sobreposicao_longa_com_v2_primeiro_na_lista_copia_o_anterior():
+    cena = Cena(0, 20, [P1, P2])
+    vozes = [TrechoVoz(6, 20, "V2"), TrechoVoz(0, 11, "V1")]
+    planos, alertas = enquadrar_cena(cena, vozes, LIGACAO)
+    assert _plano_em(planos, 8).x == P1.x
+    assert "00:06 fala sobreposta" in alertas
+    _sem_buracos(planos, 0, 20)
