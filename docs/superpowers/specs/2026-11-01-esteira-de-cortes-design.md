@@ -31,11 +31,14 @@ CapCut. Nada é publicado automaticamente nesta versão.
 
 ```text
 Tudo é Política/
-  Entre Assuntos/, Por Trás do TCC/ ...   (somente leitura pela esteira)
+  1 - Programas/                          (somente leitura pela esteira)
+    Entre Assuntos/, Por Trás do TCC/ ...
+  3 - Identidade/
+    Logos/, Encerramentos/                (logo e vídeos Final Corte)
   Contexto/
   Automacao/
     docs/                                 (specs e planos)
-  Cortes/
+  2 - Cortes/
     <Quadro NN - Convidado>/
       episodio.json
       transcricao/
@@ -150,7 +153,7 @@ do canal em `redes-e-publicacao.md`.
 
 ## 6. Proteções
 
-- A esteira grava somente em `Cortes/` e `Automacao/`.
+- A esteira grava somente em `2 - Cortes/` e `Automacao/`.
 - Senhas, chaves e tokens não entram em `Contexto/`.
 - Nenhum arquivo do canal é apagado, movido ou renomeado sem confirmação.
 - Arquivos horizontais e versões intermediárias não são usados como

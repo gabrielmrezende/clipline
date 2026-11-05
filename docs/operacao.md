@@ -4,7 +4,8 @@ Roteiro para o Claude Code. Rodar comandos a partir de `Automacao/`, com
 `.venv\Scripts\python.exe -m esteira`.
 
 Antes de sugerir qualquer coisa, ler todos os arquivos de `Contexto/`.
-Nunca alterar pastas de episódios.
+Nunca alterar pastas de episódios (`1 - Programas/`). A saída vai para
+`2 - Cortes/<Quadro NN - Convidado>/`.
 
 O dono do canal diz "faça os cortes do episódio X". O Claude Code segue as
 etapas 1 a 10 sem pausa. A única aprovação humana é a da etapa 10, com o corte
