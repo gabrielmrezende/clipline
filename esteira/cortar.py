@@ -1,12 +1,14 @@
 import json
+import re
 from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
 
 from esteira.caminhos import CONTEXTO, ENCERRAMENTOS, MUSICAS
+from esteira.enquadrar import _mmss
 from esteira.episodio import slug
 from esteira.legenda import corrigir_palavras, escrever_srt, montar_cues
-from esteira.limpeza import planejar_limpeza
+from esteira.limpeza import planejar_limpeza, remapear
 from esteira.midia import ErroMidia, versao_ffmpeg
 from esteira.modelos import Corte, Edicao, Palavra
 from esteira.musica import atualizar_musica
@@ -98,6 +100,24 @@ def _alertas_de_planos(destino: Path) -> list[str]:
     return [str(a) for a in dados]
 
 
+SEM_ENQUADRAMENTO = "sem enquadramento.json: rode planos"
+
+
+def _no_tempo_do_corte(alerta: str, corte: Corte, faixas: list[tuple[float, float]]) -> str:
+    """'MM:SS texto' relativo ao início do corte na linha do episódio -> tempo no corte.mp4.
+    Um instante dentro de uma pausa removida vai para o próximo instante mantido."""
+    achado = re.match(r"(\d+):(\d{2}) (.*)", alerta)
+    if achado is None or not faixas:
+        return alerta
+    minutos, segundos, texto = achado.groups()
+    t = corte.inicio + int(minutos) * 60 + int(segundos)
+    novo = remapear(t, faixas)
+    if novo is None:
+        seguinte = next((de for de, _ in faixas if de >= t), None)
+        novo = remapear(seguinte, faixas) if seguinte is not None else sum(b - a for a, b in faixas)
+    return f"{_mmss(novo)} {texto}"
+
+
 def preparar_episodio(
     pasta: Path,
     numeros: set[int] | None = None,
@@ -128,6 +148,9 @@ def preparar_episodio(
             if problemas:
                 raise ErroMidia("; ".join(problemas))
             faixas = _preparar_um(destino, corte, palavras, nomes)
+            alertas = [_no_tempo_do_corte(a, corte, faixas) for a in alertas]
+            if not (destino / TRABALHO / "enquadramento.json").exists():
+                alertas.append(SEM_ENQUADRAMENTO)
             try:
                 if atualizar_musica(pasta_de_trabalho(destino), corte, f"{pasta.name}/{destino.name}", pasta_musicas) is None:
                     alertas.append(f"sem música para o clima {corte.clima}")

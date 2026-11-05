@@ -10,7 +10,9 @@ from tests.auxiliares import preparar_episodio_teste, preparar_teste
 
 BOM = {"numero": 1, "titulo": "Bom corte", "inicio": 1.0, "fim": 62.9, "clima": "leve"}
 RUIM = {"numero": 2, "titulo": "Ruim", "inicio": 1.0, "fim": 10.9, "clima": "tenso"}
-SEM_MUSICA = "ok com alertas: sem música para o clima leve"
+SEM_ENQ = "sem enquadramento.json: rode planos"
+SO_MUSICA = "ok com alertas: sem música para o clima leve"
+SEM_MUSICA = f"ok com alertas: {SEM_ENQ}; sem música para o clima leve"
 
 
 def test_le_aprovados(tmp_path):
@@ -127,7 +129,7 @@ def test_preparar_preenche_musica_e_credito(tmp_path):
     pasta, _ = preparar_episodio_teste(tmp_path, [BOM, {**BOM, "numero": 2, "titulo": "Outro"}])
     musicas = tmp_path / "musicas"
     _catalogo(musicas, "Alegre", "Feliz")
-    assert preparar_teste(pasta) == {1: "ok", 2: "ok"}
+    assert preparar_teste(pasta) == {1: f"ok com alertas: {SEM_ENQ}", 2: f"ok com alertas: {SEM_ENQ}"}
     musica = ler_receita(pasta / "01-bom-corte" / "trabalho").musica
     assert musica.arquivo == str(musicas / "leve/Alegre.mp3")
     assert (musica.volume_db, musica.titulo, musica.credito) == (-20.0, "Alegre", credito("Alegre"))
@@ -137,7 +139,7 @@ def test_preparar_preenche_musica_e_credito(tmp_path):
         "ep/01-bom-corte": "leve/Alegre.mp3",
         "ep/02-outro": "leve/Feliz.mp3",
     }
-    assert preparar_teste(pasta, {1}, forcar=True) == {1: "ok"}
+    assert preparar_teste(pasta, {1}, forcar=True) == {1: f"ok com alertas: {SEM_ENQ}"}
     assert ler_receita(pasta / "01-bom-corte" / "trabalho").musica.titulo == "Alegre"
 
 
@@ -146,7 +148,7 @@ def test_preparar_sem_musica_registra_alerta(tmp_path):
     _catalogo(tmp_path / "musicas")
     assert preparar_teste(pasta) == {1: SEM_MUSICA}
     registro = json.loads((pasta / "01-bom-corte" / "trabalho" / "registro.json").read_text("utf-8"))
-    assert registro["alertas"] == ["sem música para o clima leve"]
+    assert registro["alertas"] == [SEM_ENQ, "sem música para o clima leve"]
     assert ler_receita(pasta / "01-bom-corte" / "trabalho").musica is None
 
 
@@ -174,9 +176,43 @@ def test_preparar_falha_da_musica_vira_alerta_e_nao_para_os_outros(tmp_path):
     resultado = preparar_teste(pasta)
     assert set(resultado) == {1, 2}
     for texto in resultado.values():
-        assert texto.startswith("ok com alertas: música: erro ")
+        assert texto.startswith(f"ok com alertas: {SEM_ENQ}; música: erro ")
     assert (pasta / "01-bom-corte" / "trabalho" / "montagem.json").exists()
     assert (pasta / "02-outro" / "trabalho" / "montagem.json").exists()
     assert ler_receita(pasta / "01-bom-corte" / "trabalho").musica is None
     registro = json.loads((pasta / "01-bom-corte" / "trabalho" / "registro.json").read_text("utf-8"))
-    assert registro["alertas"][0].startswith("música: erro ")
+    assert registro["alertas"][1].startswith("música: erro ")
+
+
+def test_preparar_sem_enquadramento_alerta(tmp_path):
+    pasta, _ = preparar_episodio_teste(tmp_path, [BOM, {**BOM, "numero": 2, "titulo": "Outro"}])
+    trabalho = pasta / "02-outro" / "trabalho"
+    trabalho.mkdir(parents=True)
+    gravar_planos(trabalho, [Plano(1.0, 62.9)])
+    r = preparar_teste(pasta)
+    assert r[1] == "ok com alertas: sem enquadramento.json: rode planos; sem música para o clima leve"
+    assert r[2] == SO_MUSICA
+    registro = json.loads((pasta / "01-bom-corte" / "trabalho" / "registro.json").read_text("utf-8"))
+    assert "sem enquadramento.json: rode planos" in registro["alertas_preparar"]
+
+
+def test_preparar_poe_alertas_de_planos_no_tempo_do_corte(tmp_path):
+    corte = {**BOM, "inicio": 1.0, "fim": 62.9}
+    pasta, _ = preparar_episodio_teste(tmp_path, [corte])
+    palavras = json.loads((pasta / "transcricao" / "palavras.json").read_text("utf-8"))
+    palavras = [p for p in palavras if not 5 <= p["inicio"] < 15]  # pausa de 4,9 a 15 s
+    (pasta / "transcricao" / "palavras.json").write_text(json.dumps(palavras), "utf-8")
+    trabalho = pasta / "01-bom-corte" / "trabalho"
+    trabalho.mkdir(parents=True)
+    gravar_planos(trabalho, [Plano(1.0, 62.9)])
+    alertas = ["00:02 voz V3 sem pessoa", "00:20 sem rosto", "00:08 fala sobreposta", "sem tempo"]
+    (trabalho / "alertas-planos.json").write_text(json.dumps(alertas), "utf-8")
+    preparar_teste(pasta)
+    faixas = ler_receita(trabalho).faixas
+    assert faixas[0][1] < 5 and faixas[1][0] > 14  # a pausa saiu
+    registro = json.loads((trabalho / "registro.json").read_text("utf-8"))
+    # 00:20 -> 21 s no episódio; a pausa de ~10 s antes dele saiu do corte.mp4
+    # 00:08 -> 9 s, dentro da pausa removida: vai para o próximo instante mantido (3,975 s)
+    assert registro["alertas_preparar"][:4] == [
+        "00:02 voz V3 sem pessoa", "00:10 sem rosto", "00:03 fala sobreposta", "sem tempo",
+    ]

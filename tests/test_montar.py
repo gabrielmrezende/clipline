@@ -19,7 +19,7 @@ def _preparado(tmp_path, cortes=(BOM,)):
 
 def test_montar_gera_corte_mp4(tmp_path):
     pasta, cartao = _preparado(tmp_path)
-    uniao = "sem música para o clima leve"
+    uniao = "sem enquadramento.json: rode planos; sem música para o clima leve"
     assert montar_episodio(pasta, cartao=cartao) == {1: f"ok com alertas: {uniao}"}
     corte = pasta / "01-bom-corte"
     assert sondar(corte / "corte.mp4").duracao > 62
@@ -27,7 +27,7 @@ def test_montar_gera_corte_mp4(tmp_path):
     assert (corte / "imagens-sugeridas").is_dir() and (corte / "video-final").is_dir()
     registro = json.loads((corte / "trabalho" / "registro.json").read_text("utf-8"))
     assert registro["resultado"] == f"ok com alertas: {uniao}"
-    assert registro["alertas"] == ["sem música para o clima leve"]
+    assert registro["alertas"] == ["sem enquadramento.json: rode planos", "sem música para o clima leve"]
     assert registro["faixas"] and registro["corte"]["numero"] == 1
 
 
