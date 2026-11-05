@@ -90,3 +90,22 @@ def test_detectar_com_detector_falso(tmp_path, monkeypatch):
     assert [d.tempo for d in dets] == [10.0, 10.5, 11.0, 11.5]
     assert dets[0].altura == pytest.approx(0.2)
     assert formatos[0] == (360, 640, 3)
+
+
+def _real_disponivel():
+    try:
+        import cv2  # noqa: F401
+    except ImportError:
+        return False
+    from esteira import rostos
+
+    return all((rostos.MODELOS / n).exists() for n in (rostos.MODELO_DETECTOR, rostos.MODELO_RECONHECEDOR))
+
+
+@pytest.mark.skipif(not _real_disponivel(), reason="sem opencv ou sem os modelos .onnx")
+def test_detector_real_imagem_sem_rosto():
+    import numpy as np
+
+    from esteira.rostos import _detector_opencv
+
+    assert _detector_opencv()(np.zeros((360, 640, 3), dtype=np.uint8)) == []

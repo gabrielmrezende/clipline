@@ -34,8 +34,16 @@ class Deteccao:
 def _detector_opencv():
     import cv2
 
-    yunet = cv2.FaceDetectorYN.create(str(MODELOS / MODELO_DETECTOR), "", (320, 320), SCORE_MINIMO)
-    sface = cv2.FaceRecognizerSF.create(str(MODELOS / MODELO_RECONHECEDOR), "")
+    import numpy as np
+
+    # Por buffer: o OpenCV no Windows não abre caminho com acento ("Tudo é Política").
+    def carregar(nome):
+        return np.fromfile(str(MODELOS / nome), dtype=np.uint8)
+
+    vazio = np.empty(0, dtype=np.uint8)
+    yunet = cv2.FaceDetectorYN.create(
+        "onnx", carregar(MODELO_DETECTOR), vazio, (320, 320), SCORE_MINIMO)
+    sface = cv2.FaceRecognizerSF.create("onnx", carregar(MODELO_RECONHECEDOR), vazio)
 
     def detector(quadro):  # quadro RGB (numpy)
         bgr = cv2.cvtColor(quadro, cv2.COLOR_RGB2BGR)
@@ -99,7 +107,9 @@ def _cosseno(a: list[float], b: list[float]) -> float:
     return sum(x * y for x, y in zip(_normalizar(a), _normalizar(b)))
 
 
-def agrupar(deteccoes: list[Deteccao], conhecidas: dict[str, list[float]]):
+def agrupar(
+    deteccoes: list[Deteccao], conhecidas: dict[str, list[float]]
+) -> tuple[list[str], dict[str, list[float]]]:
     """Devolve (pessoa de cada detecção, assinaturas atualizadas). A assinatura da
     pessoa é a média das assinaturas normalizadas (a conhecida entra com peso 1)."""
     somas = {nome: ([float(a) for a in _normalizar(sig)], 1) for nome, sig in conhecidas.items()}
