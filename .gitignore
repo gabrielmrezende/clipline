@@ -10,3 +10,4 @@ __pycache__/
 *.wav
 *.WAV
 *.mp3
+modelos/*.onnx

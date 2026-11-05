@@ -6,6 +6,7 @@ dependencies = [
     "faster-whisper",
     "av<18",
     "pillow",
+    "opencv-python",
     "nvidia-cublas-cu12",
     "nvidia-cudnn-cu12",
 ]
