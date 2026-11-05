@@ -24,9 +24,15 @@ download das fotos (etapa 8). Nada é publicado.
     imagens-sugeridas/   guia.md, MMSS-nome-K.jpg (fotos), MMSS-nome.png (notícia)
     video-final/         do dono do canal; a esteira nunca grava nela
     post.md
-    trabalho/            enquadramento.json, montagem.json, legenda.srt,
-                         registro.json, pedidos.json, planos.jpg, candidatas/
+    trabalho/            enquadramento.json, alertas-planos.json, rostos.json,
+                         planos.jpg, montagem.json, legenda.srt, edicoes.md,
+                         registro.json, pedidos.json, sugeridas.json, candidatas/
 ```
+
+Em `trabalho/`: `rostos.json` guarda os rostos detectados pelo `planos` (cache);
+`alertas-planos.json`, os alertas de quem fala; `edicoes.md`, as remoções
+automáticas de pausas e repetições; `sugeridas.json`, a lista das fotos que a
+própria esteira gravou em `imagens-sugeridas/`.
 
 `MMSS` é o início do momento no `corte.mp4` (`0112` = 1:12).
 
@@ -112,18 +118,23 @@ Conferir, sem parar o fluxo:
 
 1. `transcricao/pessoas.jpg`: rosto, voz e tempo de fala de cada pessoa.
    Preencher `nomes` em `transcricao/pessoas.json` (`{"P1": "Nome"}`). Se uma
-   voz estiver ligada à pessoa errada, corrigir a `ligacao` no mesmo arquivo.
+   voz estiver ligada à pessoa errada, corrigir a `ligacao` no mesmo arquivo
+   (`{"V1": "P2"}`) e rodar `planos --forcar` para refazer o enquadramento com
+   a correção.
 2. `trabalho/planos.jpg` de cada corte: cada trecho com uma caixa no rosto
    escolhido, o nome de quem fala e as primeiras palavras da fala. Conferir
    todas as folhas.
 
 Se algo estiver errado, editar `trabalho/enquadramento.json` (cada plano tem
 `inicio`, `fim`, `x`, `y` e `zoom`, com `x` e `y` entre 0 e 1 na imagem
-original) e seguir.
+original e `zoom` de 1,0 a 2,0) e seguir.
 
-Rodar `planos` de novo não sobrescreve `enquadramento.json` nem `pessoas.json`
-editados à mão. Só `--forcar` refaz. Antes de usar `--forcar`, perguntar ao
-dono do canal. Use `--numero N` para um corte só.
+Rodar `planos` de novo não sobrescreve `enquadramento.json` editado à mão.
+`--forcar` refaz o enquadramento, mas preserva a `ligacao` e os `nomes` de
+`pessoas.json` (só acrescenta vozes ainda sem pessoa). `--religar` recalcula a
+ligação do zero (implica `--forcar`); os nomes continuam. Antes de usar
+`--forcar` ou `--religar`, perguntar ao dono do canal. Use `--numero N` para um
+corte só.
 
 ## 6. Preparar
 
@@ -135,8 +146,15 @@ Cria `montagem.json`, `legenda.srt` e `registro.json` em `trabalho/`. A
 música sai do clima do corte. Use `--numero N` para um corte só e `--forcar`
 para refazer.
 
+Corte sem `trabalho/enquadramento.json` sai no centro, com zoom 1,0, e o
+`preparar` alerta `sem enquadramento.json: rode planos`.
+
+Os alertas de quem fala entram no `registro.json` com o tempo do `corte.mp4`
+(depois da remoção das pausas).
+
 Se o enquadramento mudar depois do `preparar`, editar o
-`enquadramento.json` e remontar (ver "Corrigir um corte").
+`enquadramento.json` e remontar (ver "Corrigir um corte"). O `montar` lê o
+`enquadramento.json` direto; não é preciso rodar `preparar` de novo.
 
 ### Música
 
@@ -213,6 +231,10 @@ Passos:
    escolhidas, prepara em 1080x1920, grava em `imagens-sugeridas/`, gera os
    cartões de notícia e o `guia.md`.
 
+   Atenção: o `sugerir` apaga antes as fotos que a própria esteira gravou
+   (as de `trabalho/sugeridas.json`). Sem rede, elas somem e não voltam. Rode
+   o `sugerir` só depois de um `resumo` bem-sucedido.
+
 Use `--numero N` em qualquer passo para um corte só. Para trocar uma escolha,
 mudar o `pedidos.json`, rodar `resumo`, pedir a confirmação e rodar `sugerir`
 de novo.
@@ -272,7 +294,12 @@ vídeo em `video-final/`. Corte sem vídeo ali não foi aprovado. Não existe
 
 ## Corrigir um corte
 
-Para zoom ou quem fala errado: editar `trabalho/enquadramento.json` do corte.
+Para zoom ou quem fala errado: editar `trabalho/enquadramento.json` do corte
+(zoom de 1,0 a 2,0; fora disso o `montar` dá erro no corte). O `montar` usa o
+`enquadramento.json` editado, sem precisar de novo `preparar`. Se a voz estiver
+ligada à pessoa errada em todo o episódio, corrigir a `ligacao` em
+`transcricao/pessoas.json` e rodar `planos --forcar` (com `--numero N` para um
+corte só), que preserva a correção.
 Para legenda, faixa ou outro ajuste: editar `trabalho/montagem.json`. Depois,
 remontar só esse corte:
 
