@@ -174,3 +174,42 @@ def test_remontar_tira_alerta_de_render_antigo(tmp_path, monkeypatch):
     registro = json.loads(arquivo.read_text("utf-8"))
     assert registro["alertas"] == ["00:05 voz V3 sem pessoa"]
     assert registro["alertas_preparar"] == ["00:05 voz V3 sem pessoa"]
+
+
+def _render_falso(capturados):
+    def renderizar(receita, *args, **kwargs):
+        capturados.append(list(receita.planos))
+        return []
+
+    return renderizar
+
+
+def test_montar_usa_enquadramento_editado_depois_do_preparar(tmp_path, monkeypatch):
+    from esteira.planos import Plano, gravar_planos
+
+    pasta, cartao = preparar_episodio_teste(tmp_path, [BOM])
+    trabalho = pasta / "01-bom-corte" / "trabalho"
+    trabalho.mkdir(parents=True)
+    gravar_planos(trabalho, [Plano(1.0, 62.9, x=0.3, zoom=1.5)])
+    preparar_teste(pasta)
+    editados = [Plano(1.0, 30.0, x=0.7, zoom=2.0), Plano(30.0, 62.9, x=0.2, zoom=1.0)]
+    gravar_planos(trabalho, editados)
+    capturados = []
+    monkeypatch.setattr(montar, "renderizar_final", _render_falso(capturados))
+    assert montar_episodio(pasta, cartao=cartao)[1].startswith("ok")
+    assert capturados == [editados]
+    assert ler_receita(trabalho).planos == [Plano(1.0, 62.9, x=0.3, zoom=1.5)]
+
+
+def test_montar_recusa_zoom_fora_da_faixa(tmp_path, monkeypatch):
+    from esteira.planos import Plano, gravar_planos
+
+    pasta, cartao = _preparado(tmp_path)
+    trabalho = pasta / "01-bom-corte" / "trabalho"
+    capturados = []
+    monkeypatch.setattr(montar, "renderizar_final", _render_falso(capturados))
+    for zoom in (2.5, 0.8):
+        gravar_planos(trabalho, [Plano(1.0, 30.0), Plano(30.0, 62.9, zoom=zoom)])
+        resultado = montar_episodio(pasta, forcar=True, cartao=cartao)[1]
+        assert resultado == "erro: enquadramento.json: zoom fora de 1,0 a 2,0 no plano 2"
+    assert capturados == []

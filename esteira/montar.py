@@ -14,10 +14,22 @@ from esteira.cortar import (
     registrar,
 )
 from esteira.midia import ErroMidia
+from esteira.planos import Plano, ler_planos
 from esteira.receita import NOME_ARQUIVO, Receita, ler_receita, validar_receita
 from esteira.render import renderizar_final
 
 ERROS_DA_RECEITA = (ErroMidia, OSError, ValueError, KeyError, TypeError)
+ZOOM_MINIMO = 1.0
+ZOOM_MAXIMO = 2.0
+
+
+def _planos_do_corte(destino: Path, receita: Receita) -> list[Plano]:
+    """O enquadramento.json manda quando existe: editá-lo depois do preparar vale no montar."""
+    planos = ler_planos(destino / TRABALHO) if (destino / TRABALHO / "enquadramento.json").exists() else receita.planos
+    for numero, plano in enumerate(planos, 1):
+        if not ZOOM_MINIMO <= plano.zoom <= ZOOM_MAXIMO:
+            raise ErroMidia(f"enquadramento.json: zoom fora de 1,0 a 2,0 no plano {numero}")
+    return planos
 
 
 def _renderizar(receita: Receita, destino: Path, video: Path, numero: int, cartao: Path | None) -> list[str]:
@@ -71,6 +83,7 @@ def montar_episodio(
             corte_mp4.unlink(missing_ok=True)
             receita = ler_receita(destino / TRABALHO)
             faixas = receita.faixas
+            receita.planos = _planos_do_corte(destino, receita)
             do_render = _renderizar(receita, destino, video, corte.numero, cartao)
             if any(a.startswith("sem música") for a in anteriores):
                 do_render = [a for a in do_render if not a.startswith("sem música")]
