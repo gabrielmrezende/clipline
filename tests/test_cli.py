@@ -1,3 +1,5 @@
+import pytest
+
 from esteira import cli
 from esteira.fluxo_imagens import ErroBusca
 from esteira.musica import Faixa, credito, gravar_catalogo
@@ -22,10 +24,39 @@ def test_imagens_buscar_chama_fluxo(tmp_path, monkeypatch, capsys):
     assert "01: ok" in capsys.readouterr().out
 
 
-def test_imagens_lista_chama_fluxo(tmp_path, monkeypatch):
+def test_imagens_resumo_imprime_total(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(cli, "garantir_escrita", lambda caminho: caminho)
-    monkeypatch.setattr(cli, "listar_episodio", lambda p, n, pessoas: {1: "ok"})
-    assert cli.principal(["imagens", "lista", str(tmp_path)]) == 0
+    chamadas = []
+
+    def falso(pasta, numeros, pessoas=None):
+        chamadas.append((pasta, numeros, pessoas))
+        return 3, 5 * 1_048_576, {1: "ok", 2: "erro: momento 1: escolhas inválidas"}
+
+    monkeypatch.setattr(cli, "resumir_episodio", falso)
+    assert cli.principal(["imagens", "resumo", str(tmp_path)]) == 1
+    saida = capsys.readouterr().out
+    assert "3 fotos, 5,0 MB, origem Wikimedia Commons" in saida
+    assert "02: erro: momento 1: escolhas inválidas" in saida
+    assert isinstance(chamadas[0][2], list)
+
+
+def test_imagens_sugerir_chama_fluxo(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(cli, "garantir_escrita", lambda caminho: caminho)
+    chamadas = []
+
+    def falso(pasta, numeros, pessoas):
+        chamadas.append((pasta, numeros))
+        return {1: "ok"}
+
+    monkeypatch.setattr(cli, "sugerir_episodio", falso)
+    assert cli.principal(["imagens", "sugerir", str(tmp_path), "--numero", "1"]) == 0
+    assert chamadas == [(tmp_path, {1})] and "01: ok" in capsys.readouterr().out
+
+
+def test_imagens_sem_lista_nem_baixar(tmp_path):
+    for acao in ("lista", "baixar"):
+        with pytest.raises(SystemExit):
+            cli.principal(["imagens", acao, str(tmp_path)])
 
 
 def test_imagens_buscar_api_fora(tmp_path, monkeypatch, capsys):
@@ -37,12 +68,6 @@ def test_imagens_buscar_api_fora(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(cli, "buscar_episodio", quebra)
     assert cli.principal(["imagens", "buscar", str(tmp_path)]) == 1
     assert "Wikimedia indisponível" in capsys.readouterr().err
-
-
-def test_imagens_baixar_erro_retorna_1(tmp_path, monkeypatch):
-    monkeypatch.setattr(cli, "garantir_escrita", lambda caminho: caminho)
-    monkeypatch.setattr(cli, "baixar_episodio", lambda p, n: {1: "erro: x"})
-    assert cli.principal(["imagens", "baixar", str(tmp_path)]) == 1
 
 
 def test_cli_musica(tmp_path, monkeypatch, capsys):

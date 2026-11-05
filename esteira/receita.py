@@ -8,8 +8,6 @@ from esteira.planos import Plano
 
 NOME_ARQUIVO = "montagem.json"
 TOLERANCIA = 0.05
-IMAGEM_MINIMA = 2.0  # usadas por pedidos.py até a Tarefa 8
-IMAGEM_MAXIMA = 5.0
 VOLUME_MINIMO = -22.0
 VOLUME_MAXIMO = -18.0
 

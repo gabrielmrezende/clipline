@@ -7,7 +7,7 @@ from esteira.caminhos import CONTEXTO, MUSICAS, garantir_escrita
 from esteira.cartao import gerar_cartao
 from esteira.cortar import TRABALHO, ler_aprovados, pasta_de_trabalho, pasta_do_corte, preparar_episodio
 from esteira.episodio import criar_episodio
-from esteira.fluxo_imagens import ErroBusca, baixar_episodio, buscar_episodio, listar_episodio
+from esteira.fluxo_imagens import ErroBusca, buscar_episodio, resumir_episodio, sugerir_episodio
 from esteira.fluxo_planos import planejar_episodio
 from esteira.midia import ErroMidia
 from esteira.montar import montar_episodio
@@ -76,10 +76,14 @@ def _montar(args) -> int:
 def _imagens(args) -> int:
     pasta = garantir_escrita(Path(args.pasta))
     numeros = set(args.numero) if args.numero else None
-    if args.acao == "baixar":
-        return _imprimir(baixar_episodio(pasta, numeros))
     pessoas = pessoas_do_glossario(CONTEXTO / "glossario.md")
-    fluxo = buscar_episodio if args.acao == "buscar" else listar_episodio
+    if args.acao == "resumo":
+        fotos, total, resultados = resumir_episodio(pasta, numeros, pessoas=pessoas)
+        codigo = _imprimir(resultados)
+        megas = f"{total / 1_048_576:.1f}".replace(".", ",")
+        print(f"{fotos} fotos, {megas} MB, origem Wikimedia Commons")
+        return codigo
+    fluxo = buscar_episodio if args.acao == "buscar" else sugerir_episodio
     return _imprimir(fluxo(pasta, numeros, pessoas))
 
 
@@ -171,7 +175,7 @@ def principal(argv: list[str] | None = None) -> int:
     c.set_defaults(funcao=_preparar)
 
     c = comandos.add_parser("imagens")
-    c.add_argument("acao", choices=["buscar", "lista", "baixar"])
+    c.add_argument("acao", choices=["buscar", "resumo", "sugerir"])
     c.add_argument("pasta")
     c.add_argument("--numero", type=int, action="append")
     c.set_defaults(funcao=_imagens)

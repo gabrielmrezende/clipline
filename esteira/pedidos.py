@@ -4,11 +4,14 @@ import unicodedata
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
-from esteira import receita
+from esteira.receita import TOLERANCIA
 
 TIPOS = ("foto", "noticia", "ia")
 ARQUIVO = "pedidos.json"
 SECOES_DE_PESSOAS = ("Apresentadores", "Convidados", "Pessoas")
+IMAGEM_MINIMA = 2.0
+IMAGEM_MAXIMA = 5.0
+MAXIMO_ESCOLHAS = 3
 
 
 @dataclass
@@ -24,17 +27,28 @@ class Momento:
     data: str = ""
     prompt: str = ""
     candidatas: list[dict] = field(default_factory=list)
-    escolha: int | None = None
+    escolhas: list[int] = field(default_factory=list)
     descartar: bool = False
     motivo: str = ""
-    numero: int | None = None
-    url: str = ""
-    bytes: int | None = None
+    url: list[str] = field(default_factory=list)  # paralela a escolhas
+    bytes: list[int | None] = field(default_factory=list)  # paralela a escolhas
 
 
 def ler_pedidos(pasta: Path) -> list[Momento]:
     dados = json.loads((Path(pasta) / ARQUIVO).read_text("utf-8"))
-    return [Momento(**item) for item in dados["momentos"]]
+    return [Momento(**_atualizar(item)) for item in dados["momentos"]]
+
+
+def _atualizar(item: dict) -> dict:
+    """Converte o formato antigo (escolha única, numero, url e bytes simples)."""
+    item = dict(item)
+    item.pop("numero", None)
+    if "escolha" in item:
+        escolha = item.pop("escolha")
+        item.setdefault("escolhas", [escolha] if escolha else [])
+    if not isinstance(item.get("url", []), list) or not isinstance(item.get("bytes", []), list):
+        item["url"], item["bytes"] = [], []
+    return item
 
 
 def gravar_pedidos(pasta: Path, momentos: list[Momento]) -> None:
@@ -99,6 +113,20 @@ def validar_pedidos(momentos: list[Momento], duracao: float, pessoas: list[str])
     return erros
 
 
+def validar_escolhas(momentos: list[Momento]) -> list[str]:
+    erros = []
+    for numero, m in enumerate(momentos, 1):
+        if m.descartar or m.tipo != "foto":
+            continue
+        e = m.escolhas
+        if not (
+            isinstance(e, list) and 1 <= len(e) <= MAXIMO_ESCOLHAS and len(set(e)) == len(e)
+            and all(isinstance(n, int) and 1 <= n <= len(m.candidatas) for n in e)
+        ):
+            erros.append(f"momento {numero}: escolhas inválidas")
+    return erros
+
+
 def ajustar_tempos(momentos: list[Momento], duracao: float) -> list[str]:
     mantidos = [m for m in momentos if not m.descartar]
     originais = [(m.inicio, m.fim) for m in mantidos]
@@ -120,14 +148,14 @@ def _ajustar_uma_vez(momentos: list[Momento], duracao: float) -> list[int]:
     for posicao, i in enumerate(ordem):
         m = momentos[i]
         proximo_inicio = momentos[ordem[posicao + 1]].inicio if posicao + 1 < len(ordem) else duracao
-        m.fim = min(m.fim, m.inicio + receita.IMAGEM_MAXIMA, proximo_inicio)
-        if m.fim - m.inicio < receita.IMAGEM_MINIMA:
-            m.fim = max(m.fim, min(m.inicio + receita.IMAGEM_MINIMA, proximo_inicio, duracao))
-        if m.fim - m.inicio < receita.IMAGEM_MINIMA:
-            m.inicio = min(m.inicio, max(m.fim - receita.IMAGEM_MINIMA, anterior_fim, 0))
-        if m.fim - m.inicio < receita.IMAGEM_MINIMA - receita.TOLERANCIA:
+        m.fim = min(m.fim, m.inicio + IMAGEM_MAXIMA, proximo_inicio)
+        if m.fim - m.inicio < IMAGEM_MINIMA:
+            m.fim = max(m.fim, min(m.inicio + IMAGEM_MINIMA, proximo_inicio, duracao))
+        if m.fim - m.inicio < IMAGEM_MINIMA:
+            m.inicio = min(m.inicio, max(m.fim - IMAGEM_MINIMA, anterior_fim, 0))
+        if m.fim - m.inicio < IMAGEM_MINIMA - TOLERANCIA:
             m.descartar = True
-            m.motivo = f"não cabe em {receita.IMAGEM_MINIMA:g} s"
+            m.motivo = f"não cabe em {IMAGEM_MINIMA:g} s"
             descartados.append(i)
             continue
         anterior_fim = m.fim

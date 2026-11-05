@@ -4,6 +4,7 @@ from esteira.pedidos import (
     gravar_pedidos,
     ler_pedidos,
     pessoas_do_glossario,
+    validar_escolhas,
     validar_pedidos,
 )
 
@@ -76,7 +77,8 @@ def test_fim_do_corte():
 
 
 def test_ida_e_volta_json(tmp_path):
-    m = [Momento(1, 3, "f", "foto", "A", busca="x", candidatas=[{"titulo": "File:A.jpg"}], escolha=1)]
+    m = [Momento(1, 3, "f", "foto", "A", busca="x", candidatas=[{"titulo": "File:A.jpg"}], escolhas=[1],
+                 url=["https://u/A.jpg"], bytes=[10])]
     gravar_pedidos(tmp_path, m); assert ler_pedidos(tmp_path) == m
 
 
@@ -94,3 +96,27 @@ def test_sobreposicao_sem_espaco_descarta():
 def test_nome_vazio_apos_normalizar_e_ignorado():
     m = [Momento(1, 3, "f", "ia", "A", prompt="paisagem")]
     assert validar_pedidos(m, 60, ["李"]) == []
+
+
+def _com_escolhas(escolhas):
+    return [Momento(1, 3, "f", "foto", "A", busca="x", candidatas=[{"titulo": f"File:{i}.jpg"} for i in range(6)],
+                    escolhas=escolhas)]
+
+
+def test_escolhas_invalidas():
+    for escolhas in ([0], [1, 1], [1, 2, 3, 4], [7], []):
+        assert validar_escolhas(_com_escolhas(escolhas)) == ["momento 1: escolhas inválidas"], escolhas
+    assert validar_escolhas(_com_escolhas([2, 1])) == []
+
+
+def test_escolhas_ignora_descartada_e_outros_tipos():
+    m = [Momento(1, 3, "f", "foto", "A", busca="x", descartar=True), Momento(5, 7, "f", "ia", "B", prompt="p")]
+    assert validar_escolhas(m) == []
+
+
+def test_le_pedido_antigo_com_escolha(tmp_path):
+    (tmp_path / "pedidos.json").write_text(
+        '{"momentos": [{"inicio": 1, "fim": 3, "fala": "f", "tipo": "foto", "nome": "A", "escolha": 2, '
+        '"numero": 1, "url": "https://u/x.jpg", "bytes": 10}]}', "utf-8")
+    m = ler_pedidos(tmp_path)[0]
+    assert (m.escolhas, m.url, m.bytes) == ([2], [], [])
