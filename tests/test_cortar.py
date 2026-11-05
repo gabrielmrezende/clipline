@@ -1,7 +1,7 @@
 import json
 
 from esteira import cortar
-from esteira.cortar import atualizar_imagens, ler_aprovados, pasta_de_trabalho
+from esteira.cortar import ler_aprovados, pasta_de_trabalho
 from esteira.modelos import Corte
 from esteira.musica import Faixa, atualizar_musica, credito, gravar_catalogo, ler_uso
 from esteira.planos import Plano, gravar_planos
@@ -11,12 +11,6 @@ from tests.auxiliares import preparar_episodio_teste, preparar_teste
 BOM = {"numero": 1, "titulo": "Bom corte", "inicio": 1.0, "fim": 62.9, "clima": "leve"}
 RUIM = {"numero": 2, "titulo": "Ruim", "inicio": 1.0, "fim": 10.9, "clima": "tenso"}
 SEM_MUSICA = "ok com alertas: sem música para o clima leve"
-
-
-def _escrever_imagem(corte):
-    (corte / "imagens").mkdir(parents=True, exist_ok=True)
-    (corte / "imagens" / "01-gripen.jpg").write_bytes(b"x")
-    (corte / "imagens.md").write_text("## 1. 00:00:05 a 00:00:08 — Gripen\n", "utf-8")
 
 
 def test_le_aprovados(tmp_path):
@@ -32,7 +26,7 @@ def test_preparar_gera_receita_sem_video(tmp_path):
         assert (corte / "trabalho" / nome).exists(), nome
     assert not list(corte.glob("*.mp4"))
     receita = ler_receita(corte / "trabalho")
-    assert receita.faixas and receita.legenda and receita.imagens == []
+    assert receita.faixas and receita.legenda
     assert json.loads((corte / "trabalho" / "registro.json").read_text("utf-8"))["resultado"] == SEM_MUSICA
 
 
@@ -66,28 +60,6 @@ def test_preparar_usa_enquadramento_gravado(tmp_path):
     gravar_planos(corte / "trabalho", [Plano(1.0, 62.9, x=0.3, zoom=2)])
     preparar_teste(pasta)
     assert ler_receita(corte / "trabalho").planos == [Plano(1.0, 62.9, x=0.3, zoom=2)]
-
-
-def test_preparar_inclui_imagens_aprovadas(tmp_path):
-    pasta, _ = preparar_episodio_teste(tmp_path, [BOM])
-    corte = pasta / "01-bom-corte"
-    _escrever_imagem(corte)
-    preparar_teste(pasta)
-    assert [i.arquivo for i in ler_receita(corte / "trabalho").imagens] == ["imagens/01-gripen.jpg"]
-
-
-def test_atualizar_imagens_preserva_destaques(tmp_path):
-    pasta, _ = preparar_episodio_teste(tmp_path, [BOM])
-    preparar_teste(pasta)
-    corte = pasta / "01-bom-corte"
-    receita = ler_receita(corte / "trabalho")
-    receita.legenda[0].destaque = "fala"
-    gravar_receita(corte / "trabalho", receita)
-    _escrever_imagem(corte)
-    assert atualizar_imagens(corte) == 1
-    nova = ler_receita(corte / "trabalho")
-    assert [i.arquivo for i in nova.imagens] == ["imagens/01-gripen.jpg"]
-    assert nova.legenda[0].destaque == "fala"
 
 
 def test_um_corte_invalido_nao_para_os_outros(tmp_path):
@@ -147,15 +119,6 @@ def test_forcar_com_erro_de_sistema_apaga_a_receita_antiga(tmp_path, monkeypatch
     assert not (pasta / "01-bom-corte" / "trabalho" / "montagem.json").exists()
 
 
-def test_imagens_md_fora_de_utf8_nao_para_os_outros(tmp_path):
-    pasta, _ = preparar_episodio_teste(tmp_path, [BOM, {**BOM, "numero": 2, "titulo": "Outro"}])
-    corte = pasta / "01-bom-corte"
-    (corte / "imagens").mkdir(parents=True)
-    (corte / "imagens.md").write_bytes("## 1. 00:00:05 a 00:00:08 - Avião\n".encode("latin-1"))
-    r = preparar_teste(pasta)
-    assert r[1].startswith("erro") and r[2] == SEM_MUSICA
-
-
 def _catalogo(pasta_musicas, *titulos):
     gravar_catalogo(pasta_musicas, [Faixa(t, "leve", 200.0, f"leve/{t}.mp3", credito(t)) for t in titulos])
 
@@ -191,8 +154,6 @@ def test_atualizar_musica_preserva_legenda(tmp_path):
     pasta, _ = preparar_episodio_teste(tmp_path, [BOM])
     preparar_teste(pasta)
     corte = pasta / "01-bom-corte"
-    _escrever_imagem(corte)
-    atualizar_imagens(corte)
     receita = ler_receita(corte / "trabalho")
     receita.legenda[0].destaque = "fala"
     gravar_receita(corte / "trabalho", receita)
@@ -200,7 +161,7 @@ def test_atualizar_musica_preserva_legenda(tmp_path):
     _catalogo(musicas, "Alegre")
     assert atualizar_musica(corte / "trabalho", ler_aprovados(pasta)[0], "ep/01-bom-corte", musicas) == "Alegre"
     nova = ler_receita(corte / "trabalho")
-    assert nova.legenda[0].destaque == "fala" and len(nova.imagens) == 1
+    assert nova.legenda[0].destaque == "fala"
     assert nova.musica.titulo == "Alegre"
     assert ler_uso(musicas)["ep/01-bom-corte"]["arquivo"] == "leve/Alegre.mp3"
 

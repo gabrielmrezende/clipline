@@ -9,7 +9,7 @@ from PIL import Image
 
 from esteira import rede, wikimedia
 from esteira.cartao import gerar_cartao
-from esteira.cortar import TRABALHO, atualizar_imagens, ler_aprovados, pasta_de_trabalho, pasta_do_corte
+from esteira.cortar import TRABALHO, ler_aprovados, pasta_de_trabalho, pasta_do_corte
 from esteira.episodio import slug
 from esteira.folhas import montar_folha
 from esteira.imagens import EXTENSOES
@@ -407,10 +407,7 @@ def _baixar_um(destino: Path, momentos: list[Momento], baixar: Callable[[str, Pa
             alertas.append(f"imagem {m.numero}: {falha}")
     if origens != anteriores:
         _gravar_texto(pasta_imagens / ORIGENS, json.dumps(origens, ensure_ascii=False, indent=2) + chr(10))
-    try:
-        quantidade = atualizar_imagens(destino)
-    except FileNotFoundError:
-        return ERRO_SEM_MONTAGEM
+    quantidade = sum(1 for c in pasta_imagens.glob("*") if c.is_file() and c.suffix.lower() in EXTENSOES)
     return f"ok com alertas: {'; '.join(alertas)}" if alertas else f"ok: {quantidade} imagens"
 
 

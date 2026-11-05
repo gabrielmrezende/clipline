@@ -3,9 +3,9 @@ from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont
 
 from esteira.cartao import ARQUIVO_FONTE
-from esteira.render import PROPORCAO_TELA_CHEIA
 from esteira.wikimedia import Candidata
 
+PROPORCAO_TELA_CHEIA = 1.5
 COLUNAS = 3
 LINHAS = 2
 CELULA = 400

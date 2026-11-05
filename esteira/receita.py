@@ -8,18 +8,10 @@ from esteira.planos import Plano
 
 NOME_ARQUIVO = "montagem.json"
 TOLERANCIA = 0.05
-IMAGEM_MINIMA = 2.0
+IMAGEM_MINIMA = 2.0  # usadas por pedidos.py até a Tarefa 8
 IMAGEM_MAXIMA = 5.0
 VOLUME_MINIMO = -22.0
 VOLUME_MAXIMO = -18.0
-
-
-@dataclass
-class Imagem:
-    inicio: float
-    fim: float
-    arquivo: str
-    licenca: str = ""
 
 
 @dataclass
@@ -35,7 +27,6 @@ class Receita:
     faixas: list[tuple[float, float]]
     planos: list[Plano]
     legenda: list[Cue]
-    imagens: list[Imagem] = field(default_factory=list)
     musica: Musica | None = None
     encerramento: bool = True
     versao: int = 1
@@ -57,7 +48,6 @@ def ler_receita(pasta: Path) -> Receita:
         faixas=[tuple(f) for f in dados["faixas"]],
         planos=[Plano(**p) for p in dados["planos"]],
         legenda=[Cue(**c) for c in dados["legenda"]],
-        imagens=[Imagem(**i) for i in dados.get("imagens", [])],
         musica=Musica(**musica) if musica else None,
         encerramento=dados.get("encerramento", True),
         versao=dados.get("versao", 1),
@@ -67,20 +57,6 @@ def ler_receita(pasta: Path) -> Receita:
 def validar_receita(receita: Receita, pasta: Path) -> list[str]:
     problemas: list[str] = []
     duracao = duracao_principal(receita)
-    numeradas = list(enumerate(receita.imagens, 1))
-    for n, imagem in numeradas:
-        if imagem.inicio < -TOLERANCIA:
-            problemas.append(f"imagem {n} começa antes do corte")
-        if imagem.fim > duracao + TOLERANCIA:
-            problemas.append(f"imagem {n} passa do fim do corte")
-        if not IMAGEM_MINIMA - TOLERANCIA <= imagem.fim - imagem.inicio <= IMAGEM_MAXIMA + TOLERANCIA:
-            problemas.append(f"imagem {n} fora de 2 a 5 segundos")
-        if not (Path(pasta) / imagem.arquivo).exists():
-            problemas.append(f"imagem {n} não encontrada: {imagem.arquivo}")
-    ordenadas = sorted(numeradas, key=lambda par: par[1].inicio)
-    for (n, a), (m, b) in zip(ordenadas, ordenadas[1:]):
-        if b.inicio < a.fim - TOLERANCIA:
-            problemas.append(f"imagens {n} e {m} se sobrepõem")
     if receita.musica:
         if not Path(receita.musica.arquivo).exists():
             problemas.append("música não encontrada")

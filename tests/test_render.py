@@ -6,7 +6,7 @@ from PIL import Image
 from esteira.midia import ErroMidia, executar_ffmpeg, pico_de_audio, saida_ffmpeg, sondar
 from esteira.modelos import Cue
 from esteira import render
-from esteira.receita import Imagem, Musica, Receita
+from esteira.receita import Musica, Receita
 from esteira.render import renderizar_final
 from tests.auxiliares import gerar_video_teste
 
@@ -72,69 +72,18 @@ def test_final_sem_encerramento(tmp_path):
     assert sondar(saida).duracao == pytest.approx(2, abs=0.2)
 
 
-def test_imagem_aparece_no_tempo(tmp_path):
-    pasta, origem, cartao = _cenario(tmp_path)
-    _imagem_vermelha(pasta / "imagens" / "01.png")
-    saida = pasta / "final.mp4"
-    receita = Receita([(0.0, 3.0)], [], [], imagens=[Imagem(0.5, 2.5, "imagens/01.png")])
-    renderizar_final(receita, origem, cartao, pasta, saida)
-    durante = _quadro(saida, 1.5, pasta / "q1.png")
-    assert _vermelho(durante.getpixel((540, 100)))
-    assert _vermelho(durante.getpixel((540, 1800)))
-    assert _vermelho(durante.getpixel((5, 960)))
-    assert _vermelho(durante.getpixel((1075, 960)))
-    antes = _quadro(saida, 0.2, pasta / "q0.png")
-    depois = _quadro(saida, 2.8, pasta / "q2.png")
-    assert not _vermelho(antes.getpixel((540, 100)))
-    assert not _vermelho(depois.getpixel((540, 100)))
-
-
-def _faixas_verticais(caminho, largura, altura):
-    caminho.parent.mkdir(parents=True, exist_ok=True)
-    imagem = Image.new("RGB", (largura, altura), (0, 255, 0))
-    imagem.paste((255, 0, 0), (0, 0, largura // 3, altura))
-    imagem.paste((0, 0, 255), (largura - largura // 3, 0, largura, altura))
-    imagem.save(caminho)
-    return caminho
-
-
 def _azul(pixel):
     r, g, b = pixel
     return b > 200 and r < 70 and g < 70
 
 
-def test_imagem_horizontal_aparece_inteira(tmp_path):
+def test_legenda_aparece_o_corte_inteiro(tmp_path):
     pasta, origem, cartao = _cenario(tmp_path)
-    _faixas_verticais(pasta / "imagens" / "01.png", 1800, 900)
-    saida = pasta / "final.mp4"
-    receita = Receita([(0.0, 3.0)], [], [], imagens=[Imagem(0.5, 2.5, "imagens/01.png")])
-    renderizar_final(receita, origem, cartao, pasta, saida)
-    durante = _quadro(saida, 1.5, pasta / "q.png")
-    assert _vermelho(durante.getpixel((150, 960)))
-    assert _azul(durante.getpixel((930, 960)))
-
-
-def test_imagem_vertical_continua_em_tela_cheia(tmp_path):
-    pasta, origem, cartao = _cenario(tmp_path)
-    _faixas_verticais(pasta / "imagens" / "01.png", 1080, 1920)
-    saida = pasta / "final.mp4"
-    receita = Receita([(0.0, 3.0)], [], [], imagens=[Imagem(0.5, 2.5, "imagens/01.png")])
-    renderizar_final(receita, origem, cartao, pasta, saida)
-    durante = _quadro(saida, 1.5, pasta / "q.png")
-    assert _vermelho(durante.getpixel((150, 100)))
-    assert _azul(durante.getpixel((930, 1800)))
-
-
-def test_legenda_some_durante_imagem(tmp_path):
-    pasta, origem, cartao = _cenario(tmp_path)
-    _imagem_vermelha(pasta / "imagens" / "01.png")
-    saida = pasta / "final.mp4"
-    receita = Receita(
-        [(0.0, 3.0)], [], [Cue(0, 3, ["LEGENDA BEM LONGA"])], imagens=[Imagem(0.5, 2.5, "imagens/01.png")]
-    )
+    saida = pasta / "corte.mp4"
+    receita = Receita([(0.0, 3.0)], [], [Cue(0, 3, ["LEGENDA BEM LONGA"])])
     renderizar_final(receita, origem, cartao, pasta, saida)
     assert _brancos_na_legenda(_quadro(saida, 0.2, pasta / "q0.png")) > 20
-    assert _brancos_na_legenda(_quadro(saida, 1.5, pasta / "q1.png")) == 0
+    assert _brancos_na_legenda(_quadro(saida, 1.5, pasta / "q1.png")) > 20
 
 
 def test_musica_curta_repete_e_duracao_mantem(tmp_path):
@@ -160,17 +109,15 @@ def test_musica_longa_e_cortada(tmp_path):
     assert sondar(saida).duracao == pytest.approx(3, abs=0.2)
 
 
-def test_caminhos_com_acento_em_imagem_e_musica(tmp_path):
+def test_caminhos_com_acento_em_musica(tmp_path):
     pasta, origem, cartao = _cenario(tmp_path)
-    _imagem_vermelha(pasta / "imagens" / "01-ação.png")
     musica = _musica(pasta / "música ação.wav", 1)
     saida = pasta / "final.mp4"
     receita = Receita(
         [(0.0, 3.0)], [], [Cue(0, 3, ["olá"])],
-        imagens=[Imagem(0.5, 2.5, "imagens/01-ação.png")], musica=Musica(str(musica), -20.0),
+        musica=Musica(str(musica), -20.0),
     )
     renderizar_final(receita, origem, cartao, pasta, saida)
-    assert _vermelho(_quadro(saida, 1.5, pasta / "q.png").getpixel((540, 960)))
     assert sondar(saida).duracao == pytest.approx(4, abs=0.2)
 
 

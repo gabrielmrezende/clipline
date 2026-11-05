@@ -167,22 +167,3 @@ def escrever_ass(cues: list[Cue], caminho: Path) -> None:
         for c in cues
     ]
     Path(caminho).write_text(CABECALHO_ASS + "\n".join(eventos) + "\n", "utf-8", newline="\n")
-
-
-def ocultar_durante(cues: list[Cue], intervalos: list[tuple[float, float]]) -> list[Cue]:
-    for de, ate in intervalos:
-        restantes = []
-        for cue in cues:
-            if cue.fim <= de or cue.inicio >= ate:
-                restantes.append(cue)
-            elif cue.inicio < de and cue.fim > ate:
-                if de - cue.inicio >= cue.fim - ate:
-                    restantes.append(replace(cue, fim=de))
-                else:
-                    restantes.append(replace(cue, inicio=ate))
-            elif cue.inicio < de:
-                restantes.append(replace(cue, fim=de))
-            elif cue.fim > ate:
-                restantes.append(replace(cue, inicio=ate))
-        cues = restantes
-    return cues

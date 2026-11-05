@@ -2,16 +2,12 @@ import shutil
 from collections.abc import Callable
 from pathlib import Path
 
-from PIL import Image
-
 from esteira.caminhos import FONTES
-from esteira.legenda import escrever_ass, ocultar_durante
+from esteira.legenda import escrever_ass
 from esteira.midia import ErroMidia, executar_ffmpeg, pico_de_audio, sondar
 from esteira.planos import Plano, dividir_em_segmentos, recorte
-from esteira.receita import Imagem, Musica, Receita, duracao_principal
+from esteira.receita import Musica, Receita, duracao_principal
 
-ZOOM_IMAGEM = 1.08
-PROPORCAO_TELA_CHEIA = 1.5
 TRANSICAO_ENCERRAMENTO = 0.5
 FADE_MUSICA_ENTRADA = 0.5
 FADE_MUSICA_SAIDA = 1.5
@@ -69,33 +65,6 @@ def _filtro_cartao(cartao: int, logo: int | None, tem_audio: bool, duracao: floa
     return partes
 
 
-def _tela_cheia(arquivo: Path) -> bool:
-    with Image.open(arquivo) as imagem:
-        largura, altura = imagem.size
-    return altura / largura >= PROPORCAO_TELA_CHEIA
-
-
-def _filtro_imagem(entrada: int, saida: str, ordem: int, imagem: Imagem, tela_cheia: bool) -> str:
-    cobrir = "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920"
-    if tela_cheia:
-        filtro = f"[{entrada}:v]{cobrir}"
-    else:
-        filtro = (
-            f"[{entrada}:v]split=2[{saida}f][{saida}t];[{saida}f]{cobrir},gblur=sigma=40[{saida}d];"
-            f"[{saida}t]scale=1080:-2[{saida}c];[{saida}d][{saida}c]overlay=0:(H-h)/2"
-        )
-    if ZOOM_IMAGEM > 1:
-        quadros = round((imagem.fim - imagem.inicio) * 30)
-        passo = f"{ZOOM_IMAGEM - 1:.4f}*in/{max(quadros - 1, 1)}"
-        z = f"(1+{passo})" if ordem % 2 == 0 else f"({ZOOM_IMAGEM}-{passo})"
-        x0, y0, x1, y1 = f"W/2-W/2/{z}", f"H/2-H/2/{z}", f"W/2+W/2/{z}", f"H/2+H/2/{z}"
-        filtro += (
-            f",perspective=x0='{x0}':y0='{y0}':x1='{x1}':y1='{y0}':x2='{x0}':y2='{y1}':x3='{x1}':y3='{y1}'"
-            ":interpolation=cubic:eval=frame"
-        )
-    return filtro + f",setsar=1,format=yuv420p,setpts=PTS-STARTPTS+{imagem.inicio:.3f}/TB[{saida}]"
-
-
 def _filtro_musica(entrada: int, musica: Musica, duracao: float) -> list[str]:
     saida_fade = max(0.0, duracao - FADE_MUSICA_SAIDA)
     return [
@@ -150,16 +119,6 @@ def renderizar_final(
     partes.append(f"{rotulos}concat=n={len(segmentos)}:v=1:a=1[vprin][aprin]")
 
     rotulo_video = "vprin"
-    for ordem, imagem in enumerate(receita.imagens):
-        arquivo = (Path(pasta) / imagem.arquivo).resolve()
-        duracao = imagem.fim - imagem.inicio
-        entradas.append(["-loop", "1", "-framerate", "30", "-t", f"{duracao:.3f}", "-i", str(arquivo)])
-        partes.append(_filtro_imagem(len(entradas) - 1, f"img{ordem}", ordem, imagem, _tela_cheia(arquivo)))
-        partes.append(
-            f"[{rotulo_video}][img{ordem}]overlay=enable='between(t,{imagem.inicio:.3f},{imagem.fim:.3f})'"
-            f":eof_action=pass[vi{ordem}]"
-        )
-        rotulo_video = f"vi{ordem}"
     partes.append(f"[{rotulo_video}]ass=.legenda_tmp/legenda.ass:fontsdir=.legenda_tmp[vleg]")
 
     alertas: list[str] = []
@@ -205,8 +164,7 @@ def renderizar_final(
         pico = pico_de_audio(arquivo, duracao_principal(receita))
 
     try:
-        intervalos = [(i.inicio, i.fim) for i in receita.imagens]
-        escrever_ass(ocultar_durante(receita.legenda, intervalos), temporaria / "legenda.ass")
+        escrever_ass(receita.legenda, temporaria / "legenda.ass")
         shutil.copy(FONTES / "Montserrat-Bold.ttf", temporaria / "Montserrat-Bold.ttf")
         _codificar(args, saida, esperado, cwd=saida.parent, verificar=medir)
     finally:

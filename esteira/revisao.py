@@ -1,8 +1,7 @@
 import json
 from pathlib import Path
 
-from esteira.cortar import TRABALHO, ler_aprovados, pasta_do_corte
-from esteira.imagens import secoes_sem_arquivo
+from esteira.cortar import CORTE_MP4, TRABALHO, ler_aprovados, pasta_do_corte
 from esteira.modelos import Corte, Palavra
 from esteira.receita import NOME_ARQUIVO, Receita, ler_receita
 from esteira.transcrever import ler_palavras
@@ -16,11 +15,6 @@ def contexto_do_trecho(palavras: list[Palavra], inicio: float, fim: float, n: in
 
 def _alertas(registro: dict, receita: Receita | None, destino: Path) -> list[str]:
     alertas = list(registro.get("alertas", []))
-    if receita:
-        for n, imagem in enumerate(receita.imagens, 1):
-            if not imagem.licenca:
-                alertas.append(f"imagem {n} sem licença registrada")
-        alertas += [f"imagem {n} sem arquivo" for n in secoes_sem_arquivo(destino)]
     return alertas
 
 
@@ -42,7 +36,7 @@ def _bloco(pasta: Path, corte: Corte, palavras: list[Palavra]) -> list[str]:
     resultado = registro.get("resultado", "")
     if resultado.startswith("erro:"):
         return linhas + [f"Erro: {resultado[len('erro:'):].strip()}", ""]
-    if not (destino / "final.mp4").exists():
+    if not (destino / CORTE_MP4).exists():
         return linhas + ["Erro: corte não montado", ""]
 
     antes, depois = contexto_do_trecho(palavras, corte.inicio, corte.fim)
@@ -53,7 +47,7 @@ def _bloco(pasta: Path, corte: Corte, palavras: list[Palavra]) -> list[str]:
     except (OSError, ValueError, KeyError, TypeError):
         return linhas + ["Erro: montagem ilegível", ""]
     return linhas + [
-        f"Vídeo: [final.mp4]({destino.name}/final.mp4)",
+        f"Vídeo: [{CORTE_MP4}]({destino.name}/{CORTE_MP4})",
         f"Redes: {redes}",
         f"Publicação sugerida: {corte.data or 'sem data'}",
         _linha_musica(receita, corte.clima),

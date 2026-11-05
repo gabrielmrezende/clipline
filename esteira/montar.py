@@ -3,7 +3,16 @@ from pathlib import Path
 
 from esteira.caminhos import SOBREPOSICAO
 from esteira.cartao import gerar_sobreposicao
-from esteira.cortar import TRABALHO, escolher_encerramento, ler_aprovados, pasta_de_trabalho, pasta_do_corte, registrar
+from esteira.cortar import (
+    CORTE_MP4,
+    IMAGENS_SUGERIDAS,
+    TRABALHO,
+    VIDEO_FINAL,
+    escolher_encerramento,
+    ler_aprovados,
+    pasta_do_corte,
+    registrar,
+)
 from esteira.midia import ErroMidia
 from esteira.receita import NOME_ARQUIVO, Receita, ler_receita, validar_receita
 from esteira.render import renderizar_final
@@ -18,7 +27,7 @@ def _renderizar(receita: Receita, destino: Path, video: Path, numero: int, carta
     if not SOBREPOSICAO.exists():
         gerar_sobreposicao(SOBREPOSICAO)
     return renderizar_final(
-        receita, video, cartao or escolher_encerramento(numero), destino, destino / "final.mp4", SOBREPOSICAO
+        receita, video, cartao or escolher_encerramento(numero), destino, destino / CORTE_MP4, SOBREPOSICAO
     )
 
 
@@ -38,17 +47,19 @@ def montar_episodio(
         if not (destino / TRABALHO / NOME_ARQUIVO).exists():
             resultados[corte.numero] = f"erro: {NOME_ARQUIVO} não encontrado, rode preparar"
             continue
-        final = destino / "final.mp4"
-        if final.exists() and not forcar:
-            resultados[corte.numero] = "erro: final.mp4 já existe, use --forcar"
+        corte_mp4 = destino / CORTE_MP4
+        if corte_mp4.exists() and not forcar:
+            resultados[corte.numero] = f"erro: {CORTE_MP4} já existe, use --forcar"
             continue
         faixas: list = []
         alertas: list[str] = []
         try:
-            final.unlink(missing_ok=True)
-            receita = ler_receita(pasta_de_trabalho(destino))
+            corte_mp4.unlink(missing_ok=True)
+            receita = ler_receita(destino / TRABALHO)
             faixas = receita.faixas
             alertas = _renderizar(receita, destino, video, corte.numero, cartao)
+            (destino / IMAGENS_SUGERIDAS).mkdir(exist_ok=True)
+            (destino / VIDEO_FINAL).mkdir(exist_ok=True)
             resultado = f"ok com alertas: {'; '.join(alertas)}" if alertas else "ok"
         except ERROS_DA_RECEITA as erro:
             resultado = f"erro: {erro}"

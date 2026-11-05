@@ -1,7 +1,6 @@
 from esteira.modelos import Corte, Cue
 from esteira.planos import Plano
 from esteira.receita import (
-    Imagem,
     Musica,
     Receita,
     duracao_principal,
@@ -11,16 +10,12 @@ from esteira.receita import (
 )
 
 
-def _receita(tmp_path, imagens=None, musica=None, legenda=None):
-    (tmp_path / "imagens").mkdir(exist_ok=True)
-    (tmp_path / "imagens" / "01-a.jpg").write_bytes(b"x")
-    (tmp_path / "imagens" / "02-b.jpg").write_bytes(b"x")
+def _receita(tmp_path, musica=None, legenda=None):
     return Receita(
         [(10.0, 20.0)],
         [Plano(10.0, 20.0)],
         legenda if legenda is not None else [Cue(0.0, 5.0, ["o gripen é um caça"], "Gripen,")],
-        imagens or [],
-        musica,
+        musica=musica,
     )
 
 
@@ -29,7 +24,6 @@ def test_receita_ida_e_volta(tmp_path):
         [(1.0, 3.0)],
         [Plano(1.0, 3.0, 0.3, 0.5, 1.35)],
         [Cue(0.0, 1.0, ["o gripen"], "gripen")],
-        [Imagem(0.5, 1.5, "imagens/01-a.jpg")],
         Musica("C:/m.mp3", -20),
     )
     gravar_receita(tmp_path, r)
@@ -49,39 +43,8 @@ def test_duracao_principal():
 def test_receita_valida_nao_tem_problemas(tmp_path):
     musica = tmp_path / "m.mp3"
     musica.write_bytes(b"x")
-    r = _receita(
-        tmp_path,
-        [Imagem(1.0, 3.0, "imagens/01-a.jpg"), Imagem(3.0, 6.0, "imagens/02-b.jpg")],
-        Musica(str(musica), -20),
-    )
+    r = _receita(tmp_path, Musica(str(musica), -20))
     assert validar_receita(r, tmp_path) == []
-
-
-def test_imagem_fora_do_corte(tmp_path):
-    r = _receita(tmp_path, [Imagem(8.0, 11.0, "imagens/01-a.jpg")])
-    assert validar_receita(r, tmp_path) == ["imagem 1 passa do fim do corte"]
-
-
-def test_imagens_sobrepostas(tmp_path):
-    r = _receita(
-        tmp_path, [Imagem(1.0, 4.0, "imagens/01-a.jpg"), Imagem(3.0, 6.0, "imagens/02-b.jpg")]
-    )
-    assert validar_receita(r, tmp_path) == ["imagens 1 e 2 se sobrepõem"]
-
-
-def test_imagem_curta_ou_longa(tmp_path):
-    r = _receita(
-        tmp_path, [Imagem(0.0, 1.5, "imagens/01-a.jpg"), Imagem(2.0, 7.5, "imagens/02-b.jpg")]
-    )
-    assert validar_receita(r, tmp_path) == [
-        "imagem 1 fora de 2 a 5 segundos",
-        "imagem 2 fora de 2 a 5 segundos",
-    ]
-
-
-def test_arquivo_de_imagem_inexistente(tmp_path):
-    r = _receita(tmp_path, [Imagem(1.0, 3.0, "imagens/99-z.jpg")])
-    assert validar_receita(r, tmp_path) == ["imagem 1 não encontrada: imagens/99-z.jpg"]
 
 
 def test_musica_inexistente_ou_volume_fora(tmp_path):
@@ -106,11 +69,6 @@ def test_corte_aceita_campos_novos():
     c = Corte(1, "t", 0, 60, "leve")
     assert c.instagram is False
     assert c.data == ""
-
-
-def test_imagem_com_inicio_negativo(tmp_path):
-    r = _receita(tmp_path, [Imagem(-1.0, 2.0, "imagens/01-a.jpg")])
-    assert validar_receita(r, tmp_path) == ["imagem 1 começa antes do corte"]
 
 
 def test_legenda_passa_do_fim_do_corte(tmp_path):

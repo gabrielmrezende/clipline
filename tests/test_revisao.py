@@ -3,7 +3,7 @@ from pathlib import Path
 
 from esteira.cortar import pasta_do_corte
 from esteira.modelos import Corte, Palavra
-from esteira.receita import Imagem, Musica, Receita, gravar_receita
+from esteira.receita import Musica, Receita, gravar_receita
 from esteira.revisao import contexto_do_trecho, escrever_revisao
 
 PALAVRAS = [{"texto": f"p{i}", "inicio": i - 0.4, "fim": i + 0.4} for i in range(30)]
@@ -17,11 +17,11 @@ def _episodio(tmp_path: Path, cortes: list[Corte]) -> Path:
     return pasta
 
 
-def _montado(pasta: Path, corte: Corte, resultado="ok", alertas=None, imagens=None, musica=None) -> None:
+def _montado(pasta: Path, corte: Corte, resultado="ok", alertas=None, musica=None) -> None:
     destino = pasta_do_corte(pasta, corte)
     (destino / "trabalho").mkdir(parents=True)
-    (destino / "final.mp4").write_bytes(b"")
-    receita = Receita([(corte.inicio, corte.fim)], [], [], imagens or [], musica)
+    (destino / "corte.mp4").write_bytes(b"")
+    receita = Receita([(corte.inicio, corte.fim)], [], [], musica=musica)
     gravar_receita(destino / "trabalho", receita)
     registro = {"resultado": resultado, "alertas": alertas or []}
     (destino / "trabalho" / "registro.json").write_text(json.dumps(registro), "utf-8")
@@ -50,7 +50,7 @@ def test_revisao_tem_bloco_por_corte(tmp_path):
     assert caminho == pasta / "revisao.md"
     assert "## 1. Primeiro Corte" in texto
     assert "## 2. Segundo" in texto
-    assert "Vídeo: [final.mp4](01-primeiro-corte/final.mp4)" in texto
+    assert "Vídeo: [corte.mp4](01-primeiro-corte/corte.mp4)" in texto
     assert "Redes: YouTube, TikTok e Instagram" in texto
     assert "Redes: YouTube e TikTok\n" in texto
     assert "Publicação sugerida: 2026-11-04 18:00" in texto
@@ -66,16 +66,15 @@ def test_revisao_mostra_alertas_e_erros(tmp_path):
     b = Corte(2, "Quebrado", 10, 20, "tenso")
     c = Corte(3, "Sem Registro", 10, 20, "tenso")
     pasta = _episodio(tmp_path, [a, b, c])
-    imagens = [Imagem(0, 2, "imagens/a.png", "CC"), Imagem(3, 5, "imagens/b.png", "")]
-    _montado(pasta, a, "ok com alertas: sem música", ["sem música"], imagens)
+    _montado(pasta, a, "ok com alertas: sem música", ["sem música"])
     _montado(pasta, b, "erro: imagem 1 não encontrada")
-    (pasta_do_corte(pasta, b) / "final.mp4").unlink()
+    (pasta_do_corte(pasta, b) / "corte.mp4").unlink()
     pasta_do_corte(pasta, c).mkdir()
 
     texto = escrever_revisao(pasta).read_text("utf-8")
     blocos = texto.split("## ")
 
-    assert "Alertas: sem música; imagem 2 sem licença registrada" in blocos[1]
+    assert "Alertas: sem música" in blocos[1]
     assert blocos[1].split("Alertas:")[1].count("sem música") == 1
     assert "Erro: imagem 1 não encontrada" in blocos[2]
     assert "Vídeo:" not in blocos[2]
@@ -118,16 +117,3 @@ def test_revisao_mostra_musica(tmp_path):
 
     assert "Publicação sugerida: 2026-11-04 18:00\nMúsica: Carefree\n" in blocos[1]
     assert "Publicação sugerida: sem data\nMúsica: nenhuma (sem música para o clima tenso)\n" in blocos[2]
-
-
-def test_alerta_imagem_sem_arquivo(tmp_path):
-    corte = Corte(1, "Com Imagens", 10, 20, "tenso")
-    pasta = _episodio(tmp_path, [corte])
-    _montado(pasta, corte, imagens=[Imagem(0, 2, "imagens/01-a.png", "CC")])
-    destino = pasta_do_corte(pasta, corte)
-    (destino / "imagens").mkdir()
-    (destino / "imagens" / "01-a.png").write_bytes(b"x")
-    (destino / "imagens.md").write_text(
-        "## 1. 00:00:00 a 00:00:02 — A\n\n## 2. 00:00:03 a 00:00:05 — B\n", "utf-8")
-    texto = escrever_revisao(pasta).read_text("utf-8")
-    assert "imagem 2 sem arquivo" in texto and "imagem 1 sem arquivo" not in texto

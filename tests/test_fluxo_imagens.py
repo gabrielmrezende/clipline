@@ -4,7 +4,6 @@ import pytest
 from PIL import Image
 
 from esteira.fluxo_imagens import ErroBusca, buscar_episodio, listar_episodio, nome_arquivo
-from esteira.imagens import ler_imagens
 from esteira.pedidos import Momento, gravar_pedidos, ler_pedidos
 from esteira.planos import Plano
 from esteira.receita import Receita, gravar_receita
@@ -116,13 +115,9 @@ def test_listar_exige_escolha(tmp_path):
     assert not (corte / "imagens.md").exists()
 
 
-def test_listar_escreve_imagens_md_lido_pelo_leitor(tmp_path):
+def test_listar_escreve_imagens_md(tmp_path):
     ep, corte = _completo(tmp_path)
     assert listar_episodio(ep, None, [], falso, lambda u: 2048) == {1: "ok"}
-    (corte / "imagens").mkdir(exist_ok=True)
-    for arquivo in ("01-gripen.jpg", "02-uno-com-escada.png", "03-manchete.png"):
-        (corte / "imagens" / arquivo).write_bytes(b"x")
-    assert [(i.inicio, i.fim) for i in ler_imagens(corte)] == [(10.0, 12.0), (20.0, 23.0), (30.0, 33.0)]
     texto = (corte / "imagens.md").read_text("utf-8")
     assert "Baixar: https://u/1920px-A1.jpg" in texto
     assert "## 1. 00:00:10,000 a 00:00:12,000 — Gripen" in texto
@@ -210,7 +205,6 @@ def test_nome_arquivo():
 
 # --- baixar_episodio ---
 from esteira.fluxo_imagens import baixar_episodio  # noqa: E402
-from esteira.receita import ler_receita  # noqa: E402
 
 
 def _listado(tmp_path, ia=True):
@@ -241,7 +235,6 @@ def test_baixar_foto_cartao_e_ia(tmp_path):
     ep, corte = _listado(tmp_path)
     _ia(ep)
     assert baixar_episodio(ep, None, baixar) == {1: "ok: 3 imagens"}
-    assert len(ler_receita(corte / "trabalho").imagens) == 3
     assert sorted(p.name for p in (corte / "imagens").iterdir()) == [
         ".origens.json", "01-gripen.jpg", "02-uno-com-escada.png", "03-manchete.png"]
     origens = json.loads((corte / "imagens" / ".origens.json").read_text("utf-8"))
@@ -361,7 +354,6 @@ def test_baixar_filtro_de_cortes_mantem_ia_de_todos(tmp_path):
     assert Image.open(corte1 / "imagens" / "02-uno-com-escada.png").getpixel((0, 0)) == (1, 1, 1)
     assert Image.open(corte2 / "imagens" / "01-chuva-forte.png").getpixel((0, 0)) == (2, 2, 2)
     assert not (corte1 / "imagens" / "01-gripen.jpg").exists()
-    assert ler_receita(corte1 / "trabalho").imagens == [] and len(ler_receita(corte2 / "trabalho").imagens) == 2
 
 
 def test_baixar_ordem_ia_ignora_corte_com_erro_no_listar(tmp_path):

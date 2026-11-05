@@ -5,7 +5,6 @@ from pathlib import Path
 
 from esteira.caminhos import CONTEXTO, ENCERRAMENTOS, MUSICAS
 from esteira.episodio import slug
-from esteira.imagens import ler_imagens
 from esteira.legenda import corrigir_palavras, escrever_srt, montar_cues
 from esteira.limpeza import planejar_limpeza
 from esteira.midia import ErroMidia, versao_ffmpeg
@@ -78,16 +77,8 @@ def _preparar_um(destino: Path, corte: Corte, palavras: list[Palavra], nomes: li
     trabalho = pasta_de_trabalho(destino)
     escrever_srt(cues, trabalho / "legenda.srt")
     _escrever_edicoes(edicoes, trabalho / "edicoes.md")
-    gravar_receita(trabalho, Receita(faixas, ler_planos(trabalho), cues, ler_imagens(destino)))
+    gravar_receita(trabalho, Receita(faixas, ler_planos(trabalho), cues))
     return faixas
-
-
-def atualizar_imagens(pasta_corte: Path) -> int:
-    trabalho = Path(pasta_corte) / TRABALHO
-    receita = ler_receita(trabalho)
-    receita.imagens = ler_imagens(pasta_corte)
-    gravar_receita(trabalho, receita)
-    return len(receita.imagens)
 
 
 def preparar_episodio(
