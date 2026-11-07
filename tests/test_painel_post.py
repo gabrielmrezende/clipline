@@ -153,3 +153,20 @@ def test_conferir_lista_avisos_de_formato(tmp_path):
     assert "O título do YouTube não pode ter quebra de linha." in avisos
     assert "Nenhum texto pode ter linha começando com '## '." in avisos
     assert post.read_bytes() == antes
+
+
+def test_put_escrita_proibida_403(tmp_path, monkeypatch):
+    from esteira.caminhos import EscritaProibida
+
+    def recusar(*_args, **_kwargs):
+        raise EscritaProibida("fora das pastas permitidas")
+
+    monkeypatch.setattr("esteira.publicar.post.garantir_escrita", recusar)
+    cliente, post = _montar(tmp_path)
+    antes = post.read_bytes()
+    resposta = cliente.put(
+        _url(), json={"versao": versao_post(post), "campos": _campos(post, youtube_titulo="Novo")}
+    )
+    assert resposta.status_code == 403
+    assert resposta.json()["detail"].startswith("Escrita não permitida")
+    assert post.read_bytes() == antes

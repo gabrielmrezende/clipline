@@ -6,6 +6,7 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 
+from esteira.caminhos import EscritaProibida
 from esteira.painel.leitura import CaminhoProibido, NaoEncontrado
 from esteira.painel.rotas import roteador
 
@@ -32,6 +33,10 @@ def criar_app(
     @app.exception_handler(NaoEncontrado)
     async def _nao_encontrado(_requisicao, erro: NaoEncontrado) -> JSONResponse:
         return JSONResponse({"detail": str(erro)}, status_code=404)
+
+    @app.exception_handler(EscritaProibida)
+    async def _escrita_proibida(_requisicao, erro: EscritaProibida) -> JSONResponse:
+        return JSONResponse({"detail": f"Escrita não permitida: {erro}"}, status_code=403)
 
     app.include_router(roteador)
     return app
