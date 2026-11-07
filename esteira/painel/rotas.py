@@ -95,7 +95,7 @@ def calendario(ep: str, requisicao: Request) -> dict:
 @roteador.get("/episodios/{ep}/descartados")
 def descartados(ep: str, requisicao: Request) -> dict:
     pasta = resolver_episodio(requisicao.app.state.cortes, ep)
-    return {"texto": _ler_texto(pasta / "descartados.md")}
+    return {"texto": _ler_texto(pasta / "candidatos.md")}
 
 
 @roteador.get("/episodios/{ep}/cortes/{n}")

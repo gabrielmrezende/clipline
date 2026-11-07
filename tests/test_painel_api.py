@@ -170,7 +170,7 @@ def test_descartados(tmp_path):
     pasta = _ep(tmp_path, [Corte(1, "Um", 10, 20, "tenso")], {1})
     cliente = _cliente(tmp_path)
     assert cliente.get(_url("/descartados")).json() == {"texto": ""}
-    (pasta / "descartados.md").write_text("fora", "utf-8")
+    (pasta / "candidatos.md").write_text("fora", "utf-8")
     assert cliente.get(_url("/descartados")).json() == {"texto": "fora"}
 
 
