@@ -171,11 +171,26 @@ def _ip_local() -> str:
         return "127.0.0.1"
 
 
+def _tem_dependencias_do_painel() -> bool:
+    try:
+        import fastapi  # noqa: F401
+        import uvicorn  # noqa: F401
+    except ImportError:
+        return False
+    return True
+
+
 def _painel(args, servir=None, cofre=None) -> int:
     if args.acao == "codigo":
         codigo = gerar_codigo(cofre or CofreKeyring())
         print(f"Código de acesso: {codigo} (anote; ele não será mostrado de novo)")
         return 0
+    if not _tem_dependencias_do_painel():
+        print(
+            'O painel precisa de fastapi e uvicorn: rode ".venv\\Scripts\\python.exe -m pip install fastapi uvicorn"',
+            file=sys.stderr,
+        )
+        return 1
     if not (ESTATICO / "index.html").is_file():
         print('Painel sem build: rode "npm install" e "npm run build" em painel-web/', file=sys.stderr)
         return 1

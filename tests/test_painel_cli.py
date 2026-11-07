@@ -63,6 +63,20 @@ def test_rede_sem_codigo_sai_com_erro(estatico, tmp_path, capsys, dados):
     assert servidor.chamadas == []
 
 
+@pytest.mark.parametrize("ausente", ["fastapi", "uvicorn"])
+def test_sem_fastapi_ou_uvicorn_avisa_e_sai_1(estatico, tmp_path, monkeypatch, capsys, ausente):
+    monkeypatch.setitem(sys.modules, ausente, None)  # import simulado ausente
+    for carregado in ("esteira.painel.app", "esteira.painel.rotas"):
+        monkeypatch.delitem(sys.modules, carregado, raising=False)
+    servidor = Servidor()
+    assert cli._painel(_args(tmp_path=tmp_path), servidor, CofreFalso()) == 1
+    assert (
+        'O painel precisa de fastapi e uvicorn: rode ".venv\\Scripts\\python.exe -m pip install fastapi uvicorn"'
+        in capsys.readouterr().err
+    )
+    assert servidor.chamadas == []
+
+
 def test_local_serve_em_127(estatico, tmp_path, capsys):
     servidor = Servidor()
     assert cli._painel(_args(tmp_path=tmp_path), servidor, CofreFalso()) == 0
