@@ -140,6 +140,14 @@ def test_fallback_nao_sai_da_pasta(tmp_path, estatico):
     assert cliente.get("/..%2Fsegredo.txt").text == "<html>painel</html>"
 
 
+def test_extra_painel_pede_as_versoes_testadas():
+    import tomllib
+    from pathlib import Path
+
+    projeto = tomllib.loads((Path(__file__).parents[1] / "pyproject.toml").read_text("utf-8"))
+    assert projeto["project"]["optional-dependencies"]["painel"] == ["fastapi>=0.162", "uvicorn>=0.54"]
+
+
 def test_cli_funciona_sem_fastapi():
     codigo = (
         "import sys\n"
