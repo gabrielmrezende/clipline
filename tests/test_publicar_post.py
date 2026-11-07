@@ -135,6 +135,123 @@ def test_gravar_sem_secoes_levanta_erro(tmp_path):
         gravar_textos(c, Textos("a", "b", "c", "d"), base=tmp_path)
 
 
+MISTO = (
+    "## YouTube\r\nTítulo: T\r\n\r\nDescrição:\r\nD\r\n\r\n"
+    "## Instagram\r\nInsta\n\n## TikTok\nTik\r\n\r\n## Música\r\nCrédito: c\r\n"
+)
+SIMPLES = "## YouTube\nTítulo: T\n\nDescrição:\nD\n\n## Instagram\nI\n\n## TikTok\nTik\n"
+QUEBRAS = ["\n", "\r", "\x0b", "\x0c", "\x1c", "\x1d", "\x1e", "\x85", "\u2028", "\u2029"]
+
+
+def _bruto(tmp_path: Path, texto: str) -> Path:
+    caminho = tmp_path / "post.md"
+    caminho.write_bytes(texto.encode("utf-8"))
+    return caminho
+
+
+def test_gravar_fins_de_linha_mistos_mantem_as_outras_secoes(tmp_path):
+    c = _bruto(tmp_path, MISTO)
+    antes = ler_post(c)
+    somente_leitura = secoes_somente_leitura(c)
+    antes.instagram = "Insta NOVO"
+    gravar_textos(c, antes, base=tmp_path)
+    assert c.read_bytes() == MISTO.replace("Insta\n", "Insta NOVO\n").encode("utf-8")
+    depois = ler_post(c)
+    assert (depois.instagram, depois.tiktok) == ("Insta NOVO", "Tik")
+    assert secoes_somente_leitura(c) == somente_leitura == {"Música": "Crédito: c"}
+
+
+def test_gravar_fins_mistos_linhas_novas_usam_o_fim_predominante(tmp_path):
+    c = _bruto(tmp_path, MISTO)
+    textos = ler_post(c)
+    textos.instagram = "A\n\nB"
+    gravar_textos(c, textos, base=tmp_path)
+    esperado = MISTO.replace("Insta\n", "A\r\n\r\nB\n")
+    assert c.read_bytes() == esperado.encode("utf-8")
+    assert ler_post(c).tiktok == "Tik"
+
+
+@pytest.mark.parametrize("nome", ["YouTube", "Instagram", "TikTok"])
+def test_gravar_secao_obrigatoria_repetida_recusa_sem_gravar(tmp_path, nome):
+    repetida = {"YouTube": "Título: X\n\nDescrição:\nY\n", "Instagram": "Segundo\n", "TikTok": "Outro\n"}
+    c = _bruto(tmp_path, SIMPLES + f"\n## {nome}\n" + repetida[nome])
+    antes = c.read_bytes()
+    textos = ler_post(c)
+    textos.instagram = "NOVO"
+    with pytest.raises(ErroPost, match=f"seção ## {nome} repetida"):
+        gravar_textos(c, textos, base=tmp_path)
+    assert c.read_bytes() == antes
+    assert list(tmp_path.glob("*.tmp")) == []
+
+
+@pytest.mark.parametrize("quebra", QUEBRAS, ids=[repr(q) for q in QUEBRAS])
+def test_gravar_titulo_com_quebra_de_linha_recusa_sem_gravar(tmp_path, quebra):
+    c = _bruto(tmp_path, SIMPLES)
+    antes = c.read_bytes()
+    textos = ler_post(c)
+    textos.youtube_titulo = f"abc{quebra}def"
+    with pytest.raises(ErroPost, match="não gravado"):
+        gravar_textos(c, textos, base=tmp_path)
+    assert c.read_bytes() == antes
+    assert list(tmp_path.glob("*.tmp")) == []
+
+
+def test_gravar_que_mudaria_secao_so_de_leitura_recusa(tmp_path):
+    c = _bruto(tmp_path, SIMPLES + "\n## Música\nCrédito: c\n")
+    antes = c.read_bytes()
+    textos = ler_post(c)
+    textos.tiktok = "Tik\u2028## Música\u2028Crédito: falso"
+    with pytest.raises(ErroPost, match="não gravado"):
+        gravar_textos(c, textos, base=tmp_path)
+    assert c.read_bytes() == antes
+
+
+def test_gravar_normaliza_como_o_leitor(tmp_path):
+    c = _bruto(tmp_path, SIMPLES)
+    textos = ler_post(c)
+    textos.instagram = "\n  I  \n"
+    gravar_textos(c, textos, base=tmp_path)
+    assert c.read_bytes() == SIMPLES.encode("utf-8")
+    textos.tiktok = "  Novo\r\nfim  \n\n"
+    gravar_textos(c, textos, base=tmp_path)
+    assert ler_post(c).tiktok == "Novo\nfim"
+    assert c.read_bytes() == SIMPLES.replace("Tik\n", "Novo\nfim\n").encode("utf-8")
+
+
+def test_gravar_secao_vazia_no_fim_sem_quebra(tmp_path):
+    c = _bruto(tmp_path, "## YouTube\r\nTítulo: T\r\n\r\nDescrição:\r\nD\r\n\r\n## Instagram\r\nI\r\n\r\n## TikTok")
+    textos = ler_post(c)
+    assert textos.tiktok == ""
+    textos.tiktok = "Tik"
+    gravar_textos(c, textos, base=tmp_path)
+    assert c.read_bytes().endswith("## TikTok\r\nTik".encode("utf-8"))
+    assert ler_post(c).tiktok == "Tik"
+
+
+def _falhar(*_args, **_kwargs):
+    raise OSError("disco cheio")
+
+
+def _escrever_metade_e_falhar(self, dados):
+    with open(self, "wb") as arquivo:
+        arquivo.write(dados[: len(dados) // 2])
+    raise OSError("disco cheio")
+
+
+@pytest.mark.parametrize("onde", ["replace", "escrita"])
+def test_gravar_apaga_tmp_se_falhar(tmp_path, monkeypatch, onde):
+    c = _post(tmp_path, POST_CORTE_1)
+    antes = c.read_bytes()
+    if onde == "replace":
+        monkeypatch.setattr("esteira.publicar.post.os.replace", _falhar)
+    else:
+        monkeypatch.setattr(Path, "write_bytes", _escrever_metade_e_falhar)
+    with pytest.raises(OSError, match="disco cheio"):
+        gravar_textos(c, Textos("T", "D", "I", "K"), base=tmp_path)
+    assert list(tmp_path.glob("*.tmp")) == []
+    assert c.read_bytes() == antes
+
+
 def test_versao_muda_com_conteudo(tmp_path):
     a = _post(tmp_path, POST_CORTE_1)
     va = versao_post(a)

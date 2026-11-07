@@ -1,6 +1,7 @@
 from datetime import datetime
 from urllib.parse import quote
 
+import pytest
 from fastapi.testclient import TestClient
 
 from esteira.cortar import pasta_do_corte
@@ -116,29 +117,46 @@ def test_put_corpo_invalido_422(tmp_path):
     assert resposta.status_code == 422
 
 
-def test_put_titulo_com_quebra_de_linha_422(tmp_path):
+QUEBRAS = ["\n", "\r", "\r\n", "\x0b", "\x0c", "\x1c", "\x1d", "\x1e", "\x85", " ", " "]
+
+
+@pytest.mark.parametrize("quebra", QUEBRAS, ids=[repr(q) for q in QUEBRAS])
+def test_put_titulo_com_quebra_de_linha_422(tmp_path, quebra):
     cliente, post = _montar(tmp_path)
     antes = post.read_bytes()
     versao = versao_post(post)
-    for titulo in ("linha 1\nlinha 2", "linha 1\rlinha 2"):
-        resposta = cliente.put(
-            _url(), json={"versao": versao, "campos": _campos(post, youtube_titulo=titulo)}
-        )
-        assert resposta.status_code == 422
-        assert resposta.json()["detail"] == "O título do YouTube não pode ter quebra de linha."
+    resposta = cliente.put(
+        _url(), json={"versao": versao, "campos": _campos(post, youtube_titulo=f"linha 1{quebra}linha 2")}
+    )
+    assert resposta.status_code == 422
+    assert resposta.json()["detail"] == "O título do YouTube não pode ter quebra de linha."
     assert post.read_bytes() == antes
+    assert list(post.parent.glob("*.tmp")) == []
 
 
-def test_put_linha_com_cabecalho_422(tmp_path):
+@pytest.mark.parametrize("quebra", ["\n", " ", "\x85"], ids=repr)
+def test_put_linha_com_cabecalho_422(tmp_path, quebra):
     cliente, post = _montar(tmp_path)
     antes = post.read_bytes()
     versao = versao_post(post)
     resposta = cliente.put(
         _url(),
-        json={"versao": versao, "campos": _campos(post, tiktok="texto\n## Outra seção\nmais")},
+        json={"versao": versao, "campos": _campos(post, tiktok=f"texto{quebra}## Outra seção{quebra}mais")},
     )
     assert resposta.status_code == 422
     assert resposta.json()["detail"] == "Nenhum texto pode ter linha começando com '## '."
+    assert post.read_bytes() == antes
+
+
+def test_put_secao_repetida_422_sem_gravar(tmp_path):
+    cliente, post = _montar(tmp_path)
+    post.write_bytes(post.read_bytes() + "\n## Instagram\nCópia\n".encode("utf-8"))
+    antes = post.read_bytes()
+    resposta = cliente.put(
+        _url(), json={"versao": versao_post(post), "campos": _campos(post, instagram="Novo")}
+    )
+    assert resposta.status_code == 422
+    assert resposta.json()["detail"] == "post.md com a seção ## Instagram repetida"
     assert post.read_bytes() == antes
 
 
@@ -153,6 +171,12 @@ def test_conferir_lista_avisos_de_formato(tmp_path):
     assert "O título do YouTube não pode ter quebra de linha." in avisos
     assert "Nenhum texto pode ter linha começando com '## '." in avisos
     assert post.read_bytes() == antes
+
+
+def test_conferir_avisa_quebra_unicode_no_titulo(tmp_path):
+    cliente, post = _montar(tmp_path)
+    resposta = cliente.post(_url("/conferir"), json={"campos": _campos(post, youtube_titulo="a b")})
+    assert "O título do YouTube não pode ter quebra de linha." in resposta.json()["avisos"]
 
 
 def test_put_escrita_proibida_403(tmp_path, monkeypatch):

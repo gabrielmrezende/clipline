@@ -23,6 +23,7 @@ from esteira.publicar.post import (
     gravar_textos,
     ler_post,
     secoes_somente_leitura,
+    tem_quebra_de_linha,
     versao_post,
 )
 from esteira.revisao import BlocoRevisao, dados_revisao
@@ -164,7 +165,7 @@ class GravarPost(BaseModel):
 
 def _avisos_de_formato(campos: CamposPost) -> list[str]:
     avisos = []
-    if "\n" in campos.youtube_titulo or "\r" in campos.youtube_titulo:
+    if tem_quebra_de_linha(campos.youtube_titulo):
         avisos.append("O título do YouTube não pode ter quebra de linha.")
     textos = (campos.youtube_titulo, campos.youtube_descricao, campos.instagram, campos.tiktok)
     if any(linha.startswith("## ") for texto in textos for linha in texto.splitlines()):
