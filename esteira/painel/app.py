@@ -37,7 +37,7 @@ def criar_app(
 
         @app.middleware("http")
         async def _exigir_sessao(requisicao: Request, seguir):
-            caminho = requisicao.url.path
+            caminho = requisicao.scope["path"]  # o mesmo caminho que o roteador usa
             if caminho.startswith("/api/") and caminho != "/api/entrar":
                 if not app.state.porteiro.sessao_valida(requisicao.cookies.get(COOKIE)):
                     return JSONResponse({"detail": "Entre com o código de acesso."}, status_code=401)

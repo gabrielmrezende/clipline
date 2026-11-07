@@ -61,6 +61,18 @@ def test_com_rede_sem_sessao_401(tmp_path):
     assert resposta.json() == {"detail": "Entre com o código de acesso."}
 
 
+def test_sessao_decide_pelo_caminho_do_roteador(tmp_path, monkeypatch):
+    """Se url.path divergir do scope["path"] (o que o roteador usa), a trava segue o roteador."""
+    from starlette.datastructures import URL
+    from starlette.requests import HTTPConnection
+
+    monkeypatch.setattr(HTTPConnection, "url", property(lambda _self: URL("http://testserver/api/entrar")))
+    cofre = CofreFalso()
+    gerar_codigo(cofre)
+    resposta = _app(tmp_path, cofre, Relogio()).get("/api/episodios")
+    assert resposta.status_code == 401
+
+
 def test_entrar_e_usar_cookie(tmp_path):
     cofre = CofreFalso()
     codigo = gerar_codigo(cofre)
