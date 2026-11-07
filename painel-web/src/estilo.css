@@ -213,3 +213,136 @@ input {
     grid-template-columns: repeat(3, 1fr);
   }
 }
+.players video {
+  display: block;
+  width: 100%;
+  max-height: 70vh;
+  background: #000;
+  border-radius: 10px;
+}
+.botoes-video {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+.botoes-video button,
+.editor-post button {
+  min-height: 44px;
+  padding: 0 1rem;
+  cursor: pointer;
+}
+.botoes-video button[aria-pressed="true"] {
+  background: var(--destaque);
+  color: var(--superficie);
+  border-color: var(--destaque);
+  font-weight: 600;
+}
+.corte-layout {
+  display: grid;
+  gap: 1.5rem;
+  grid-template-columns: 1fr;
+}
+.info-corte dl {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.25rem 1rem;
+  margin: 0;
+}
+.info-corte dt {
+  color: var(--suave);
+}
+.info-corte dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.alertas {
+  list-style: none;
+  padding: 0;
+}
+.miniaturas {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 0.5rem;
+  grid-template-columns: repeat(auto-fill, minmax(8rem, 1fr));
+}
+.miniaturas img {
+  width: 100%;
+  height: auto;
+  border-radius: 6px;
+  border: 1px solid var(--borda);
+}
+.editor-post .campo {
+  margin-bottom: 1rem;
+}
+.editor-post label {
+  display: block;
+  font-weight: 600;
+}
+.editor-post textarea {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  margin-top: 0.25rem;
+  padding: 0.5rem 0.75rem;
+  font: inherit;
+  background: var(--superficie);
+  color: var(--texto);
+  border: 1px solid var(--borda);
+  border-radius: 6px;
+  resize: vertical;
+}
+.contador {
+  display: block;
+  text-align: right;
+  font-size: 0.9rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--suave);
+}
+.contador.acima {
+  color: var(--erro-texto);
+  background: var(--erro-fundo);
+  font-weight: 700;
+  border-radius: 6px;
+  padding: 0 0.5rem;
+}
+.avisos-post ul {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 1rem;
+}
+.avisos-post li {
+  margin-bottom: 0.25rem;
+}
+.somente-leitura pre,
+.credito pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  background: var(--cinza-fundo);
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+}
+.somente-leitura summary {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+}
+.acoes-post {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin: 1rem 0;
+}
+.suave {
+  color: var(--suave);
+  margin-left: 0.5rem;
+}
+@media (min-width: 768px) {
+  .corte-layout {
+    grid-template-columns: 1fr 1fr;
+    align-items: start;
+  }
+}
