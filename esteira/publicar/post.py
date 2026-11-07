@@ -1,6 +1,10 @@
+import hashlib
+import os
 import re
 from dataclasses import dataclass
 from pathlib import Path
+
+from esteira.caminhos import garantir_escrita
 
 LIMITE_TITULO = 100
 LIMITE_DESCRICAO = 5000
@@ -78,3 +82,70 @@ def conferir_textos(textos: Textos, credito: str | None, redes: set[str]) -> lis
         if credito and credito not in texto:
             problemas.append(f"{rede}: falta o crédito da música")
     return problemas
+
+
+def versao_post(caminho: Path) -> str:
+    return hashlib.sha256(Path(caminho).read_bytes()).hexdigest()
+
+
+def secoes_somente_leitura(caminho: Path) -> dict[str, str]:
+    secoes = _secoes(Path(caminho).read_text("utf-8"))
+    return {n: c for n, c in secoes.items() if n not in ("YouTube", "Instagram", "TikTok")}
+
+
+def _limites_secao(linhas: list[str], nome: str) -> tuple[int, int]:
+    """Faixa [inicio, fim) do corpo da seção, sem a linha do cabeçalho."""
+    inicio = None
+    for i, linha in enumerate(linhas):
+        if linha.startswith("## "):
+            if inicio is not None:
+                return inicio, i
+            if linha[3:].strip() == nome:
+                inicio = i + 1
+    if inicio is None:
+        raise ErroPost(f"post.md sem a seção ## {nome}")
+    return inicio, len(linhas)
+
+
+def _trocar_faixa(linhas: list[str], inicio: int, fim: int, novo: str) -> None:
+    """Troca só da primeira à última linha não vazia de [inicio, fim)."""
+    cheias = [i for i in range(inicio, fim) if linhas[i].strip()]
+    novas = novo.splitlines()
+    if cheias:
+        linhas[cheias[0]:cheias[-1] + 1] = novas
+    else:
+        linhas[inicio:inicio] = novas
+
+
+def gravar_textos(caminho: Path, textos: Textos, base: Path | None = None) -> str:
+    caminho = Path(caminho)
+    garantir_escrita(caminho, base_extra=base)
+    atual = ler_post(caminho)
+    bruto = caminho.read_bytes().decode("utf-8")
+    fim_linha = "\r\n" if "\r\n" in bruto else "\n"
+    linhas = bruto.split(fim_linha)
+
+    if textos.youtube_titulo != atual.youtube_titulo:
+        ini, fim = _limites_secao(linhas, "YouTube")
+        for i in range(ini, fim):
+            if linhas[i].startswith("Título:"):
+                linhas[i] = f"Título: {textos.youtube_titulo}"
+                break
+    if textos.youtube_descricao != atual.youtube_descricao:
+        ini, fim = _limites_secao(linhas, "YouTube")
+        for i in range(ini, fim):
+            if re.fullmatch(r"Descrição:\s*", linhas[i]):
+                _trocar_faixa(linhas, i + 1, fim, textos.youtube_descricao)
+                break
+    for nome, novo, velho in (
+        ("Instagram", textos.instagram, atual.instagram),
+        ("TikTok", textos.tiktok, atual.tiktok),
+    ):
+        if novo != velho:
+            ini, fim = _limites_secao(linhas, nome)
+            _trocar_faixa(linhas, ini, fim, novo)
+
+    temporario = caminho.with_name(caminho.name + ".tmp")
+    temporario.write_bytes(fim_linha.join(linhas).encode("utf-8"))
+    os.replace(temporario, caminho)
+    return versao_post(caminho)
