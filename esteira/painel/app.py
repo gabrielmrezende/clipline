@@ -4,7 +4,9 @@ from datetime import datetime
 from pathlib import Path
 
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from esteira.caminhos import EscritaProibida
 from esteira.painel.acesso import COOKIE, Cofre, Porteiro
@@ -19,6 +21,7 @@ def criar_app(
     relogio: Callable[[], float] = time.time,
     agora: Callable[[], datetime] = datetime.now,
     estatico: Path | None = None,
+    hosts: list[str] | None = None,
 ) -> FastAPI:
     app = FastAPI(title="Painel de revisão", docs_url=None, redoc_url=None, openapi_url=None)
     app.state.cortes = Path(cortes)
@@ -53,4 +56,24 @@ def criar_app(
         return JSONResponse({"detail": f"Escrita não permitida: {erro}"}, status_code=403)
 
     app.include_router(roteador)
+
+    if estatico is not None and (Path(estatico) / "index.html").is_file():
+        _servir_estatico(app, Path(estatico).resolve())
+
+    if hosts:
+        app.add_middleware(TrustedHostMiddleware, allowed_hosts=hosts)  # contra DNS rebinding
     return app
+
+
+def _servir_estatico(app: FastAPI, estatico: Path) -> None:
+    if (estatico / "assets").is_dir():
+        app.mount("/assets", StaticFiles(directory=estatico / "assets"), name="assets")
+
+    @app.get("/{caminho:path}", include_in_schema=False)
+    async def _pagina(caminho: str):
+        if caminho == "api" or caminho.startswith("api/"):
+            return JSONResponse({"detail": "Não encontrado."}, status_code=404)
+        candidato = (estatico / caminho).resolve()
+        if caminho and candidato.is_file() and candidato.is_relative_to(estatico):
+            return FileResponse(candidato)
+        return FileResponse(estatico / "index.html")

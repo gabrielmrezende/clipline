@@ -3,7 +3,7 @@ import json
 import sys
 from pathlib import Path
 
-from esteira.caminhos import CONTEXTO, MUSICAS, EscritaProibida, garantir_escrita
+from esteira.caminhos import CONTEXTO, CORTES, MUSICAS, EscritaProibida, garantir_escrita
 from esteira.cartao import gerar_cartao
 from esteira.cortar import TRABALHO, ler_aprovados, pasta_de_trabalho, pasta_do_corte, preparar_episodio
 from esteira.episodio import criar_episodio
@@ -14,6 +14,7 @@ from esteira.montar import montar_episodio
 from esteira.musica import (
     atualizar_musica, baixar_catalogo, baixar_musicas, baixar_url, escrever_proposta, ler_catalogo, propor,
 )
+from esteira.painel.acesso import CofreKeyring, gerar_codigo
 from esteira.pedidos import pessoas_do_glossario
 from esteira.publicar import comandos as publicar
 from esteira.publicar.agendar import ErroAgendar
@@ -156,6 +157,53 @@ def _musicas(args) -> int:
     return 0
 
 
+ESTATICO = Path(__file__).parent / "painel" / "estatico"
+
+
+def _ip_local() -> str:
+    import socket
+
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as soquete:
+            soquete.connect(("8.8.8.8", 80))  # UDP: não envia nada, só descobre a interface de saída
+            return soquete.getsockname()[0]
+    except OSError:
+        return "127.0.0.1"
+
+
+def _painel(args, servir=None, cofre=None) -> int:
+    if args.acao == "codigo":
+        codigo = gerar_codigo(cofre or CofreKeyring())
+        print(f"Código de acesso: {codigo} (anote; ele não será mostrado de novo)")
+        return 0
+    if not (ESTATICO / "index.html").is_file():
+        print('Painel sem build: rode "npm install" e "npm run build" em painel-web/', file=sys.stderr)
+        return 1
+    cofre = cofre or CofreKeyring()
+    if args.rede and not (cofre.ler("codigo") and cofre.ler("chave_sessao")):
+        print('Sem código de acesso: rode "python -m esteira painel codigo"', file=sys.stderr)
+        return 1
+    from esteira.painel.app import criar_app
+
+    hosts = ["127.0.0.1", "localhost"]
+    if args.rede:
+        ip = _ip_local()
+        hosts.append(ip)
+    cortes = Path(args.cortes).resolve() if args.cortes else CORTES
+    app = criar_app(cortes, rede=args.rede, cofre=cofre if args.rede else None, estatico=ESTATICO, hosts=hosts)
+    if args.rede:
+        print(f"Painel na rede: http://{ip}:{args.porta}")
+        print("Use só na Wi-Fi de casa. Não use em rede pública.")
+    else:
+        print(f"Painel em http://127.0.0.1:{args.porta}")
+    if servir is None:
+        import uvicorn
+
+        servir = uvicorn.run
+    servir(app, host="0.0.0.0" if args.rede else "127.0.0.1", port=args.porta)
+    return 0
+
+
 def principal(argv: list[str] | None = None) -> int:
     sys.stdout.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser(prog="esteira")
@@ -225,6 +273,13 @@ def principal(argv: list[str] | None = None) -> int:
     c.add_argument("acao", choices=["propor", "baixar"])
     c.add_argument("--forcar", action="store_true")
     c.set_defaults(funcao=_musicas)
+
+    c = comandos.add_parser("painel")
+    c.add_argument("acao", nargs="?", choices=["codigo"])
+    c.add_argument("--rede", action="store_true")
+    c.add_argument("--porta", type=_positivo, default=8765)
+    c.add_argument("--cortes")
+    c.set_defaults(funcao=_painel)
 
     publicar.registrar(comandos)
 

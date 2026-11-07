@@ -11,3 +11,7 @@ __pycache__/
 *.WAV
 *.mp3
 modelos/*.onnx
+esteira/painel/estatico/
+painel-web/node_modules/
+painel-web/test-results/
+painel-web/playwright-report/
