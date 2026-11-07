@@ -35,6 +35,7 @@ def _entrar(cliente, codigo):
 
 
 def test_codigo_tem_formato():
+    assert ALFABETO == "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
     codigo = gerar_codigo(CofreFalso())
     assert len(codigo) == 8
     assert all(c in ALFABETO for c in codigo)

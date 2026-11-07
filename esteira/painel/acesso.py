@@ -6,7 +6,7 @@ from collections.abc import Callable
 from typing import Protocol
 
 SERVICO = "tudo-e-politica-painel"
-ALFABETO = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"  # sem I, O, 0 e 1, que se confundem
+ALFABETO = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"  # sem I, L, O, 0 e 1, que se confundem
 TAMANHO_CODIGO = 8
 ITERACOES = 200_000
 DURACAO_SESSAO = 30 * 86400
