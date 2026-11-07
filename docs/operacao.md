@@ -466,3 +466,10 @@ Só entra música aprovada pelo dono do canal.
 
 Faixa que falhar fica fora do catálogo e o comando informa. Faixa já baixada
 não é baixada de novo.
+
+## Painel de revisão
+
+Para revisar os cortes no navegador (notebook ou celular), abra o painel com
+`.venv\Scripts\python.exe -m esteira painel`. Ele mostra os vídeos, o calendário
+e deixa editar o `post.md`; é a única coisa que grava. Como gerar o build, usar
+na rede e os cuidados estão em `docs/painel.md`.

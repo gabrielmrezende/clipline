@@ -16,3 +16,4 @@ painel-web/node_modules/
 painel-web/test-results/
 painel-web/playwright-report/
 painel-web/tsconfig.tsbuildinfo
+painel-web/e2e/.cortes/
