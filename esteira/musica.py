@@ -9,7 +9,7 @@ from esteira.caminhos import MUSICAS
 from esteira.midia import duracao_audio, executar_ffmpeg
 from esteira.modelos import Corte
 from esteira.rede import abrir, baixar_url
-from esteira.receita import Musica, duracao_principal, gravar_receita, ler_receita
+from esteira.receita import VOLUME_PADRAO, Musica, duracao_principal, gravar_receita, ler_receita
 
 CATALOGO_URL = "https://incompetech.com/music/royalty-free/pieces.json"
 ARQUIVOS_URL = "https://incompetech.com/music/royalty-free/mp3-royaltyfree/"
@@ -196,7 +196,7 @@ def atualizar_musica(pasta_corte: Path, corte: Corte, chave: str, pasta_musicas:
     receita = ler_receita(pasta_corte)
     uso = ler_uso(pasta_musicas)
     faixa = escolher_musica(corte.clima, ler_catalogo(pasta_musicas), uso, duracao_principal(receita), chave)
-    receita.musica = Musica(str(pasta_musicas / faixa.arquivo), -20.0, faixa.titulo, faixa.credito) if faixa else None
+    receita.musica = Musica(str(pasta_musicas / faixa.arquivo), VOLUME_PADRAO, faixa.titulo, faixa.credito) if faixa else None
     gravar_receita(pasta_corte, receita)
     if faixa:
         uso.pop(chave, None)

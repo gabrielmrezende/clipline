@@ -173,6 +173,10 @@ Sem faixa para o clima, o corte sai sem música e a revisão mostra
 `Música: nenhuma (sem música para o clima <clima>)`. Se a biblioteca ainda não
 existir, ver "Biblioteca de música" no fim deste roteiro.
 
+Volume da música: padrão -26 dB (`volume_db` no `montagem.json`), aceito de
+-30 a -18 dB. Se o dono do canal achar a música alta num corte, baixar o
+`volume_db` desse corte e remontar.
+
 O comando `musica` não serve para escolher outra faixa. Para trocar a faixa de
 um corte, editar `arquivo`, `titulo` e `credito` da `musica` no `montagem.json`
 (usando uma faixa do `musicas/catalogo.json`) e remontar o corte.
@@ -293,6 +297,133 @@ saído errados na legenda, comparando com `Contexto/glossario.md`.
 Parar e esperar o dono do canal. Ele coloca as imagens no CapCut e salva o
 vídeo em `video-final/`. Corte sem vídeo ali não foi aprovado. Não existe
 `aprovacao.json`. Nada é publicado.
+
+## 11. Publicar
+
+Só quando o dono do canal pedir, por exemplo "agende o corte 1 para domingo
+18h". O comando é `.venv\Scripts\python.exe -m esteira publicar ...`.
+
+### Fluxo
+
+1. Rodar sem `--confirmar`. O comando confere tudo e mostra o resumo, sem
+   enviar nada:
+
+   ```bash
+   .venv\Scripts\python.exe -m esteira publicar agendar "<pasta do episódio>" --numero N --data "AAAA-MM-DD HH:MM"
+   ```
+
+   `--redes youtube,instagram` limita as redes (padrão: as três). A hora é
+   de Brasília.
+2. Mostrar o resumo inteiro ao dono do canal e esperar um sim claro.
+3. Com o sim, rodar o mesmo comando com `--confirmar`. O YouTube sobe na
+   hora. Instagram e TikTok entram na fila, e a tarefa do Windows publica
+   no horário, ou assim que o PC ligar, se ele estava desligado.
+
+Regras:
+- O sim vale para aquele corte, aquelas redes e aquela data. Outro pedido
+  pede outro resumo e outro sim.
+- Nunca rodar `--confirmar` sem esse sim.
+- Corte sem vídeo em `video-final/` não pode ser agendado.
+
+O `agendar` recusa, e diz o motivo, quando:
+- falta vídeo em `video-final/` ou há mais de um;
+- o vídeo não é 1080x1920, ou passa de 3:00 no YouTube;
+- falta o `post.md`, ou falta a seção de alguma rede;
+- falta o crédito da música em algum texto;
+- a data já passou;
+- o corte já está agendado naquela rede.
+
+### Acompanhar
+
+```bash
+.venv\Scripts\python.exe -m esteira publicar fila
+```
+
+Estados de cada rede:
+- `agendado`: espera o horário.
+- `privado`: no YouTube, antes da auditoria. O dono muda para "agendado"
+  no Studio.
+- `rascunho`: no TikTok, antes da auditoria. O vídeo está nos rascunhos do
+  app, sem o texto. O dono cola o texto do `post.md` e publica.
+- `publicado`: saiu, ou ficou agendado no próprio YouTube.
+- `erro`: o motivo aparece na fila. "Reconecte" pede `publicar conectar
+  <rede>`. Depois de corrigir, agendar de novo.
+- `conferir`: o envio foi interrompido. A esteira não reenvia sozinha para
+  não postar duas vezes. O dono confere no app, e então:
+
+  ```bash
+  .venv\Scripts\python.exe -m esteira publicar marcar "<pasta do episódio>" --numero N --rede R feito
+  ```
+
+  Ou `reenviar`, se o post não saiu.
+
+Cancelar o que ainda não saiu:
+
+```bash
+.venv\Scripts\python.exe -m esteira publicar cancelar "<pasta do episódio>" --numero N
+```
+
+A esteira nunca apaga nem edita nada nas redes. O que já foi enviado, o
+dono apaga no app.
+
+### Cadastro (uma vez, feito pelo dono do canal)
+
+Contas de desenvolvedor, em nome do canal:
+1. **YouTube.** Em https://console.cloud.google.com:
+   - criar um projeto e ativar a "YouTube Data API v3";
+   - configurar a tela de consentimento OAuth e clicar em "Publicar app"
+     ("Em produção"). Em modo de teste, o Google derruba o login a cada
+     7 dias. Não é preciso verificar o app para uso próprio: no login,
+     basta aceitar o aviso de "app não verificado";
+   - em Credenciais, criar um "ID do cliente OAuth" do tipo "App para
+     computador".
+2. **Instagram.** Em https://developers.facebook.com:
+   - criar um app com o caso de uso "Gerenciar mensagens e conteúdo no
+     Instagram" (API do Instagram com login do Instagram);
+   - adicionar @tudoepoliticabr como testadora do Instagram e aceitar o
+     convite no app;
+   - em "Gerar tokens de acesso", gerar o token da conta.
+3. **TikTok.** Em https://developers.tiktok.com:
+   - criar um app com Login Kit e Content Posting API;
+   - registrar o endereço de retorno `http://localhost:8765/retorno`.
+
+Depois, no terminal, um por vez:
+
+```bash
+.venv\Scripts\python.exe -m esteira publicar conectar youtube
+```
+
+```bash
+.venv\Scripts\python.exe -m esteira publicar conectar instagram
+```
+
+```bash
+.venv\Scripts\python.exe -m esteira publicar conectar tiktok
+```
+
+O dono cola o id, o segredo e o token quando o terminal pedir; o que ele
+digita não aparece na tela. Tudo vai para o Gerenciador de Credenciais do
+Windows. O Claude Code nunca digita, lê ou grava esses valores.
+
+Por fim, a tarefa do Windows. Sem `--confirmar`, o comando só mostra o que
+vai criar:
+
+```bash
+.venv\Scripts\python.exe -m esteira publicar instalar-tarefa
+```
+
+Ela roda `publicar rodar` a cada 15 minutos e ao entrar no Windows. O
+registro fica em `Automacao/logs/publicar.log`.
+
+### Auditorias
+
+Até as auditorias saírem, o YouTube sobe vídeos privados e o TikTok manda
+para os rascunhos. Os modos ficam em `Automacao/publicacao.json`:
+- **YouTube:** pedir a auditoria pelo formulário da YouTube API Services
+  (https://support.google.com/youtube/contact/yt_api_form). Aprovada,
+  trocar `"youtube"` para `"agendado"`.
+- **TikTok:** pedir a revisão do app para Direct Post no portal de
+  desenvolvedores. Aprovada, trocar `"tiktok"` para `"direto"`.
 
 ## Corrigir um corte
 

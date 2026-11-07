@@ -9,6 +9,7 @@ dependencies = [
     "opencv-python",
     "nvidia-cublas-cu12",
     "nvidia-cudnn-cu12",
+    "keyring",
 ]
 
 [project.optional-dependencies]

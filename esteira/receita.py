@@ -8,14 +8,15 @@ from esteira.planos import Plano
 
 NOME_ARQUIVO = "montagem.json"
 TOLERANCIA = 0.05
-VOLUME_MINIMO = -22.0
+VOLUME_MINIMO = -30.0
 VOLUME_MAXIMO = -18.0
+VOLUME_PADRAO = -26.0
 
 
 @dataclass
 class Musica:
     arquivo: str
-    volume_db: float = -20.0
+    volume_db: float = VOLUME_PADRAO
     titulo: str = ""
     credito: str = ""
 
@@ -59,7 +60,7 @@ def validar_receita(receita: Receita, pasta: Path) -> list[str]:
         if not Path(receita.musica.arquivo).exists():
             problemas.append("música não encontrada")
         if not VOLUME_MINIMO <= receita.musica.volume_db <= VOLUME_MAXIMO:
-            problemas.append("volume da música fora de -22 a -18 dB")
+            problemas.append("volume da música fora de -30 a -18 dB")
     for n, cue in enumerate(receita.legenda, 1):
         if cue.fim > duracao + TOLERANCIA:
             problemas.append(f"tela {n} passa do fim do corte")

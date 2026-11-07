@@ -132,7 +132,7 @@ def test_preparar_preenche_musica_e_credito(tmp_path):
     assert preparar_teste(pasta) == {1: f"ok com alertas: {SEM_ENQ}", 2: f"ok com alertas: {SEM_ENQ}"}
     musica = ler_receita(pasta / "01-bom-corte" / "trabalho").musica
     assert musica.arquivo == str(musicas / "leve/Alegre.mp3")
-    assert (musica.volume_db, musica.titulo, musica.credito) == (-20.0, "Alegre", credito("Alegre"))
+    assert (musica.volume_db, musica.titulo, musica.credito) == (-26.0, "Alegre", credito("Alegre"))
     assert ler_receita(pasta / "02-outro" / "trabalho").musica.titulo == "Feliz"
     uso = ler_uso(musicas)
     assert {k: v["arquivo"] for k, v in uso.items()} == {

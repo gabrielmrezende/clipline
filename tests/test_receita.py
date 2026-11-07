@@ -51,7 +51,7 @@ def test_musica_inexistente_ou_volume_fora(tmp_path):
     r = _receita(tmp_path, musica=Musica(str(tmp_path / "nao.mp3"), -10))
     assert validar_receita(r, tmp_path) == [
         "música não encontrada",
-        "volume da música fora de -22 a -18 dB",
+        "volume da música fora de -30 a -18 dB",
     ]
 
 
@@ -76,3 +76,12 @@ def test_legenda_passa_do_fim_do_corte(tmp_path):
     assert validar_receita(r, tmp_path) == ["tela 2 passa do fim do corte"]
     r = _receita(tmp_path, legenda=[Cue(9.0, 10.05, ["fim"], None)])
     assert validar_receita(r, tmp_path) == []
+
+
+def test_volume_baixo_ate_menos_30_e_aceito(tmp_path):
+    musica = tmp_path / "m.mp3"
+    musica.write_bytes(b"x")
+    assert validar_receita(_receita(tmp_path, Musica(str(musica), -30)), tmp_path) == []
+    assert validar_receita(_receita(tmp_path, Musica(str(musica), -31)), tmp_path) == [
+        "volume da música fora de -30 a -18 dB",
+    ]

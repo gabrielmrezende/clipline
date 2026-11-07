@@ -15,6 +15,11 @@ from esteira.musica import (
     atualizar_musica, baixar_catalogo, baixar_musicas, baixar_url, escrever_proposta, ler_catalogo, propor,
 )
 from esteira.pedidos import pessoas_do_glossario
+from esteira.publicar import comandos as publicar
+from esteira.publicar.agendar import ErroAgendar
+from esteira.publicar.credenciais import ErroConexao
+from esteira.publicar.http import ErroRede
+from esteira.publicar.post import ErroPost
 from esteira.receita import NOME_ARQUIVO
 from esteira.revisao import escrever_revisao
 from esteira.transcrever import carregar_glossario, ler_palavras, transcrever
@@ -221,9 +226,11 @@ def principal(argv: list[str] | None = None) -> int:
     c.add_argument("--forcar", action="store_true")
     c.set_defaults(funcao=_musicas)
 
+    publicar.registrar(comandos)
+
     args = parser.parse_args(argv)
     try:
         return args.funcao(args)
-    except (ErroMidia, ErroBusca, FileExistsError, EscritaProibida) as erro:
+    except (ErroMidia, ErroBusca, FileExistsError, EscritaProibida, ErroAgendar, ErroPost, ErroConexao, ErroRede) as erro:
         print(f"Erro: {erro}", file=sys.stderr)
         return 1
