@@ -1,10 +1,11 @@
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from pydantic import BaseModel
 
 from esteira.cortar import CORTE_MP4, IMAGENS_SUGERIDAS, VIDEO_FINAL, ler_aprovados
+from esteira.painel.acesso import COOKIE, DURACAO_SESSAO, CodigoErrado, Travado
 from esteira.painel.leitura import (
     NaoEncontrado,
     _credito,
@@ -232,3 +233,25 @@ def gravar_post(ep: str, n: int, corpo: GravarPost, requisicao: Request):
     except (ErroPost, OSError, UnicodeDecodeError) as erro:
         raise HTTPException(422, str(erro)) from erro
     return {"versao": nova, "avisos": _avisos_do_post(corpo.campos, pasta_corte, bloco)}
+
+
+class Entrar(BaseModel):
+    codigo: str
+
+
+@roteador.post("/entrar")
+def entrar(corpo: Entrar, requisicao: Request) -> Response:
+    porteiro = requisicao.app.state.porteiro
+    if porteiro is None:
+        return Response(status_code=204)
+    try:
+        valor = porteiro.entrar(corpo.codigo)
+    except Travado as erro:
+        return JSONResponse({"detail": str(erro)}, status_code=429)
+    except CodigoErrado:
+        return JSONResponse({"detail": "Código errado."}, status_code=401)
+    resposta = Response(status_code=204)
+    resposta.set_cookie(
+        COOKIE, valor, httponly=True, samesite="strict", max_age=DURACAO_SESSAO, path="/"
+    )
+    return resposta
