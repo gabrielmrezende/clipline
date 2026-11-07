@@ -1,4 +1,8 @@
+import hashlib
+import itertools
+import threading
 from datetime import datetime
+from pathlib import Path
 from urllib.parse import quote
 
 import pytest
@@ -43,6 +47,72 @@ def test_get_post(tmp_path):
     assert dados["erro"] is None
     assert dados["redes"] == ["youtube", "tiktok"]
     assert dados["credito"] is None
+
+
+def test_get_post_versao_coerente_com_os_campos(tmp_path, monkeypatch):
+    """Uma edição de fora logo depois da primeira leitura não pode misturar versão e campos."""
+    cliente, post = _montar(tmp_path)
+    original = post.read_bytes()
+    editado = original.replace("Título: A Fórmula 1".encode(), "Título: Editado por fora".encode())
+    ler_bytes, ler_texto = Path.read_bytes, Path.read_text
+    ja_leu = []
+
+    def depois_de_ler(caminho):
+        if caminho.name == "post.md" and not ja_leu:
+            ja_leu.append(True)
+            caminho.write_bytes(editado)
+
+    def read_bytes(self):
+        dados = ler_bytes(self)
+        depois_de_ler(self)
+        return dados
+
+    def read_text(self, *args, **kwargs):
+        texto = ler_texto(self, *args, **kwargs)
+        depois_de_ler(self)
+        return texto
+
+    monkeypatch.setattr(Path, "read_bytes", read_bytes)
+    monkeypatch.setattr(Path, "read_text", read_text)
+    dados = cliente.get(_url()).json()
+    assert ja_leu
+    lidos = editado if dados["campos"]["youtube_titulo"].startswith("Editado") else original
+    assert dados["versao"] == hashlib.sha256(lidos).hexdigest()
+
+
+def test_dois_puts_simultaneos_um_200_um_409(tmp_path, monkeypatch):
+    import esteira.publicar.post as modulo
+
+    cliente, post = _montar(tmp_path)
+    versao = cliente.get(_url()).json()["versao"]
+    original = modulo.versao_dos_bytes
+    chamadas = itertools.count()
+    segundo_entrou = threading.Event()
+
+    def versao_lenta(dados):
+        if next(chamadas) == 0:
+            segundo_entrou.wait(timeout=1)  # sem a trava, o outro PUT confere a versão aqui dentro
+        else:
+            segundo_entrou.set()
+        return original(dados)
+
+    monkeypatch.setattr(modulo, "versao_dos_bytes", versao_lenta)
+    barreira = threading.Barrier(2)
+    codigos = []
+
+    def salvar(texto):
+        barreira.wait()
+        resposta = cliente.put(_url(), json={"versao": versao, "campos": _campos(post, tiktok=texto)})
+        codigos.append(resposta.status_code)
+
+    fios = [threading.Thread(target=salvar, args=(t,)) for t in ("Primeiro", "Segundo")]
+    for fio in fios:
+        fio.start()
+    for fio in fios:
+        fio.join()
+    assert sorted(codigos) == [200, 409]
+    assert ler_post(post).tiktok in ("Primeiro", "Segundo")
+    assert list(post.parent.glob("*.tmp")) == []
 
 
 def test_conferir_nao_grava(tmp_path):

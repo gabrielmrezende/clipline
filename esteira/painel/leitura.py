@@ -52,6 +52,17 @@ def _credito(pasta_corte: Path) -> str | None:
     return receita.musica.credito if receita.musica and receita.musica.credito else None
 
 
+def mensagem_post(erro: Exception) -> str:
+    """A mensagem de um erro ao ler o post.md, sem o caminho absoluto."""
+    if isinstance(erro, FileNotFoundError):
+        return "post.md não encontrado"
+    if isinstance(erro, UnicodeDecodeError):
+        return "post.md ilegível: não está em UTF-8"
+    if isinstance(erro, OSError):
+        return "post.md ilegível"
+    return str(erro)
+
+
 def avisos_post(pasta_corte: Path, redes: list[str]) -> list[str]:
     pasta_corte = Path(pasta_corte)
     try:

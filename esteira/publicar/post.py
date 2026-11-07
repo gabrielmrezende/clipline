@@ -113,6 +113,26 @@ def secoes_somente_leitura(caminho: Path) -> dict[str, str]:
     return somente_leitura_do_texto(Path(caminho).read_text("utf-8"))
 
 
+@dataclass
+class PostLido:
+    textos: Textos
+    somente_leitura: dict[str, str]
+    versao: str
+
+
+def ler_post_completo(caminho: Path) -> PostLido:
+    """Campos, seções só de leitura e versão tirados dos mesmos bytes (uma leitura só)."""
+    dados = Path(caminho).read_bytes()
+    texto = dados.decode("utf-8")
+    return PostLido(interpretar_post(texto), somente_leitura_do_texto(texto), versao_dos_bytes(dados))
+
+
+class ConflitoPost(ErroPost):
+    def __init__(self, versao_atual: str):
+        self.versao_atual = versao_atual
+        super().__init__("O post.md mudou desde que você abriu.")
+
+
 def _linhas(texto: str) -> list[list[str]]:
     """Divide como o leitor (splitlines), guardando o fim de cada linha: [conteúdo, fim]."""
     linhas = []
@@ -179,11 +199,21 @@ def _conferir_antes_de_gravar(texto: str, pedido: Textos, somente_leitura: dict[
         )
 
 
-def gravar_textos(caminho: Path, textos: Textos, base: Path | None = None) -> str:
-    """Troca só os quatro campos; o resto do arquivo fica igual byte a byte."""
+def gravar_textos(
+    caminho: Path, textos: Textos, base: Path | None = None, versao: str | None = None
+) -> str:
+    """Troca só os quatro campos; o resto do arquivo fica igual byte a byte.
+
+    Com versao, confere a versão nos mesmos bytes que edita e levanta ConflitoPost se mudou.
+    """
     caminho = Path(caminho)
     garantir_escrita(caminho, base_extra=base)
-    bruto = caminho.read_bytes().decode("utf-8")
+    original = caminho.read_bytes()
+    if versao is not None:
+        atual_no_disco = versao_dos_bytes(original)
+        if atual_no_disco != versao:
+            raise ConflitoPost(atual_no_disco)
+    bruto = original.decode("utf-8")
     atual = interpretar_post(bruto)
     repetidas = _repetidas(bruto)
     if repetidas:

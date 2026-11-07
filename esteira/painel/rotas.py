@@ -1,3 +1,4 @@
+import threading
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Request
@@ -12,23 +13,24 @@ from esteira.painel.leitura import (
     avisos_post,
     bloco_json,
     listar_episodios,
+    mensagem_post,
     resolver_arquivo,
     resolver_episodio,
     resumo_episodio,
 )
 from esteira.publicar.post import (
+    ConflitoPost,
     ErroPost,
     Textos,
     conferir_textos,
     gravar_textos,
-    ler_post,
-    secoes_somente_leitura,
+    ler_post_completo,
     tem_quebra_de_linha,
-    versao_post,
 )
 from esteira.revisao import BlocoRevisao, dados_revisao
 
 roteador = APIRouter(prefix="/api")
+_TRAVA_GRAVACAO = threading.Lock()
 
 EXT_VIDEO = {".mp4", ".mov"}
 EXT_IMAGEM = {".jpg", ".jpeg", ".png"}
@@ -183,23 +185,22 @@ def _avisos_do_post(campos: CamposPost, pasta_corte: Path, bloco: BlocoRevisao) 
 @roteador.get("/episodios/{ep}/cortes/{n}/post")
 def post_do_corte(ep: str, n: int, requisicao: Request) -> dict:
     pasta, bloco = _pasta_do_corte(requisicao, ep, n)
-    caminho = pasta / bloco.pasta / "post.md"
+    pasta_corte = pasta / bloco.pasta
     try:
-        textos = ler_post(caminho)
-        somente_leitura = secoes_somente_leitura(caminho)
-        versao = versao_post(caminho)
+        lido = ler_post_completo(pasta_corte / "post.md")  # campos e versão dos mesmos bytes
     except (ErroPost, OSError, UnicodeDecodeError) as erro:
         return {
             "campos": None, "somente_leitura": None, "credito": None,
-            "redes": None, "versao": None, "avisos": None, "erro": str(erro),
+            "redes": None, "versao": None, "avisos": None, "erro": mensagem_post(erro),
         }
+    credito = _credito(pasta_corte)
     return {
-        "campos": textos.__dict__,
-        "somente_leitura": somente_leitura,
-        "credito": _credito(pasta / bloco.pasta),
+        "campos": lido.textos.__dict__,
+        "somente_leitura": lido.somente_leitura,
+        "credito": credito,
         "redes": bloco.redes,
-        "versao": versao,
-        "avisos": avisos_post(pasta / bloco.pasta, bloco.redes),
+        "versao": lido.versao,
+        "avisos": conferir_textos(lido.textos, credito, set(bloco.redes)),
         "erro": None,
     }
 
@@ -221,18 +222,19 @@ def gravar_post(ep: str, n: int, corpo: GravarPost, requisicao: Request):
     if formato:
         raise HTTPException(422, formato[0])
     try:
-        # versão e gravação ficam juntas para reduzir a janela de corrida
-        atual = versao_post(caminho)
-        if atual != corpo.versao:
-            return JSONResponse(
-                {"detail": "O post.md mudou desde que você abriu.", "versao_atual": atual},
-                status_code=409,
+        with _TRAVA_GRAVACAO:  # dois PUTs não passam juntos pela versão nem dividem o .tmp
+            nova = gravar_textos(
+                caminho,
+                Textos(**corpo.campos.model_dump()),
+                base=requisicao.app.state.cortes,
+                versao=corpo.versao,
             )
-        nova = gravar_textos(
-            caminho, Textos(**corpo.campos.model_dump()), base=requisicao.app.state.cortes
+    except ConflitoPost as conflito:
+        return JSONResponse(
+            {"detail": str(conflito), "versao_atual": conflito.versao_atual}, status_code=409
         )
     except (ErroPost, OSError, UnicodeDecodeError) as erro:
-        raise HTTPException(422, str(erro)) from erro
+        raise HTTPException(422, mensagem_post(erro)) from erro
     return {"versao": nova, "avisos": _avisos_do_post(corpo.campos, pasta_corte, bloco)}
 
 
