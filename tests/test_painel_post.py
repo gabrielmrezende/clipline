@@ -173,6 +173,14 @@ def test_post_quebrado_devolve_erro(tmp_path):
     assert dados["versao"] is None
 
 
+def test_get_sem_post_mostra_erro_sem_caminho(tmp_path):
+    cliente, post = _montar(tmp_path)
+    post.unlink()
+    dados = cliente.get(_url()).json()
+    assert dados["erro"] == "post.md não encontrado"
+    assert dados["versao"] is None
+
+
 def test_put_sem_post_404(tmp_path):
     cliente, post = _montar(tmp_path)
     campos = _campos(post)

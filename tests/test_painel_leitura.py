@@ -134,7 +134,7 @@ def test_avisos_post_sem_arquivo(tmp_path):
     a = Corte(1, "Um", 10, 20, "tenso")
     pasta = criar_episodio(tmp_path, "ep", [a], {1}, post=False)
     avisos = avisos_post(pasta_do_corte(pasta, a), ["youtube"])
-    assert len(avisos) == 1 and avisos[0].startswith("post: ")
+    assert avisos == ["post: post.md não encontrado"]
 
 
 def test_bloco_json(tmp_path):
@@ -150,4 +150,20 @@ def test_avisos_post_ilegivel(tmp_path):
     pasta = criar_episodio(tmp_path, "ep", [a], {1})
     (pasta_do_corte(pasta, a) / "post.md").write_bytes(b"\xff\xfe\x80 invalido")
     avisos = avisos_post(pasta_do_corte(pasta, a), ["youtube"])
-    assert len(avisos) == 1 and avisos[0].startswith("post: ")
+    assert avisos == ["post: post.md ilegível: não está em UTF-8"]
+
+
+def test_avisos_post_post_e_pasta(tmp_path):
+    a = Corte(1, "Um", 10, 20, "tenso")
+    pasta = criar_episodio(tmp_path, "ep", [a], {1}, post=False)
+    (pasta_do_corte(pasta, a) / "post.md").mkdir()
+    avisos = avisos_post(pasta_do_corte(pasta, a), ["youtube"])
+    assert avisos == ["post: post.md ilegível"]
+
+
+def test_avisos_post_secao_faltando_sem_caminho(tmp_path):
+    a = Corte(1, "Um", 10, 20, "tenso")
+    pasta = criar_episodio(tmp_path, "ep", [a], {1})
+    post = pasta_do_corte(pasta, a) / "post.md"
+    post.write_text(post.read_text("utf-8").split("## TikTok")[0], "utf-8")
+    assert avisos_post(pasta_do_corte(pasta, a), ["youtube"]) == ["post: post.md sem a seção ## TikTok"]

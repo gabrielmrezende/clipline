@@ -3,7 +3,7 @@ from datetime import datetime
 from pathlib import Path
 
 from esteira.cortar import TRABALHO
-from esteira.publicar.post import ErroPost, conferir_textos, ler_post
+from esteira.publicar.post import ErroPost, conferir_textos, ler_post_completo
 from esteira.receita import ler_receita
 from esteira.revisao import BlocoRevisao, dados_revisao
 
@@ -66,9 +66,9 @@ def mensagem_post(erro: Exception) -> str:
 def avisos_post(pasta_corte: Path, redes: list[str]) -> list[str]:
     pasta_corte = Path(pasta_corte)
     try:
-        textos = ler_post(pasta_corte / "post.md")
+        textos = ler_post_completo(pasta_corte / "post.md").textos
     except (ErroPost, OSError, UnicodeDecodeError) as erro:
-        return [f"post: {erro}"]
+        return [f"post: {mensagem_post(erro)}"]
     return conferir_textos(textos, _credito(pasta_corte), set(redes))
 
 
