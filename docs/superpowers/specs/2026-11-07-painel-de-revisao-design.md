@@ -8,7 +8,7 @@ Uma interface web local para o dono do canal revisar os cortes de um episódio
 numa tela só, no notebook ou no celular, na mesma Wi-Fi. Ela substitui a
 navegação manual por `revisao.md`, pastas e arquivos. Tem dois usos ao mesmo
 tempo: **uso real no canal** e **projeto de portfólio**, que depois vira open
-source.
+source com o nome **clipline**.
 
 O fluxo atual continua: o Claude Code escolhe os cortes e escreve os textos, e
 o dono do canal aprova. O painel lê e edita os mesmos arquivos e não duplica a
