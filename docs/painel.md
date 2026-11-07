@@ -4,6 +4,12 @@ Página local para revisar os cortes de um episódio no navegador: vídeo final,
 informações, calendário e edição do `post.md`. O painel **só grava o
 `post.md`** de cada corte. Nada mais é alterado, e nada é publicado.
 
+## Instalar o FastAPI e o uvicorn
+
+Uma vez só, rode `.venv\Scripts\python.exe -m pip install fastapi uvicorn`
+(o `pip install -e .` não funciona neste repositório). Sem eles, o comando
+`painel` avisa e não abre.
+
 ## Gerar o build
 
 Só na primeira vez, ou depois de mudar o código do painel:
@@ -45,6 +51,9 @@ Abra `http://127.0.0.1:8765`. Opções: `--porta N` e `--cortes <pasta>`.
 
 Abrir pelo nome do computador (por exemplo `http://meu-pc:8765`) é recusado com
 erro 400. Use sempre o IP mostrado no terminal.
+
+Com VPN ligada, o endereço mostrado pode ser o da VPN, e o celular não abre.
+Desligue a VPN antes de rodar `painel --rede`.
 
 ## Cuidados
 
