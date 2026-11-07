@@ -316,8 +316,21 @@ input {
 .avisos-post li {
   margin-bottom: 0.25rem;
 }
+.no-arquivo {
+  margin-top: 0.25rem;
+  font-size: 0.9rem;
+}
+.no-arquivo span {
+  font-weight: 600;
+}
+.acoes-conflito {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
 .somente-leitura pre,
-.credito pre {
+.credito pre,
+.no-arquivo pre {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   background: var(--cinza-fundo);

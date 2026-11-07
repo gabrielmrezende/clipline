@@ -31,10 +31,29 @@ export function EditorPost({ ep, n }: Props) {
   const [salvo, setSalvo] = useState(false);
   const [erroSalvar, setErroSalvar] = useState<string | null>(null);
   const [conflito, setConflito] = useState(false);
+  const [disco, setDisco] = useState<Post | null>(null);
+  const [erroDisco, setErroDisco] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
   const [copia, setCopia] = useState<string | null>(null);
   const temporizador = useRef<ReturnType<typeof setTimeout> | null>(null);
   const sequencia = useRef(0);
+
+  const limparConflito = useCallback(() => {
+    setConflito(false);
+    setDisco(null);
+    setErroDisco(null);
+  }, []);
+
+  /** Põe nos campos um post lido do disco e esquece conferências pendentes. */
+  const aplicar = useCallback((dados: Post & { campos: CamposPost }) => {
+    sequencia.current += 1;
+    if (temporizador.current) clearTimeout(temporizador.current);
+    setPost(dados);
+    setErroLeitura(null);
+    setCampos(dados.campos);
+    setVersao(dados.versao);
+    setAvisos(dados.avisos ?? []);
+  }, []);
 
   const carregar = useCallback(async () => {
     sequencia.current += 1;
@@ -46,11 +65,7 @@ export function EditorPost({ ep, n }: Props) {
         setErroLeitura(dados.erro ?? "O post.md não pôde ser lido.");
         setVersao(null);
       } else {
-        setPost(dados);
-        setErroLeitura(null);
-        setCampos(dados.campos);
-        setVersao(dados.versao);
-        setAvisos(dados.avisos ?? []);
+        aplicar({ ...dados, campos: dados.campos });
       }
     } catch (x) {
       setPost(null);
@@ -58,9 +73,9 @@ export function EditorPost({ ep, n }: Props) {
     }
     setSalvo(false);
     setErroSalvar(null);
-    setConflito(false);
+    limparConflito();
     setCarregando(false);
-  }, [caminho]);
+  }, [caminho, aplicar, limparConflito]);
 
   useEffect(() => {
     setCarregando(true);
@@ -91,26 +106,52 @@ export function EditorPost({ ep, n }: Props) {
     agendarConferencia(novos);
   }
 
-  async function salvar() {
-    if (versao === null) return;
+  /** Depois de um 409: lê o post de novo só para mostrar o disco; o rascunho fica nos campos. */
+  async function lerDisco() {
+    setConflito(true);
+    setDisco(null);
+    setErroDisco(null);
+    try {
+      const dados = await pedir<Post>(caminho);
+      if (dados.erro || !dados.campos || dados.versao === null) {
+        setErroDisco(dados.erro ?? "O post.md não pôde ser lido.");
+      } else {
+        setDisco(dados);
+      }
+    } catch (x) {
+      setErroDisco(mensagem(x));
+    }
+  }
+
+  async function salvar(versaoEnviada: string | null) {
+    if (versaoEnviada === null) return;
     setSalvando(true);
     setSalvo(false);
     setErroSalvar(null);
-    setConflito(false);
     try {
       const r = await enviarJson<{ versao: string; avisos: string[] }>(caminho, "PUT", {
-        versao,
+        versao: versaoEnviada,
         campos,
       });
       setVersao(r.versao);
       setAvisos(r.avisos);
       setSalvo(true);
+      limparConflito();
     } catch (x) {
-      if (x instanceof ErroApi && x.status === 409) setConflito(true);
+      if (x instanceof ErroApi && x.status === 409) await lerDisco();
       else setErroSalvar(mensagem(x));
     } finally {
       setSalvando(false);
     }
+  }
+
+  function usarArquivo() {
+    if (!disco?.campos) return;
+    if (!window.confirm("Descartar o que você escreveu e usar a versão do arquivo?")) return;
+    aplicar({ ...disco, campos: disco.campos });
+    setSalvo(false);
+    setErroSalvar(null);
+    limparConflito();
   }
 
   async function copiarCredito() {
@@ -153,6 +194,12 @@ export function EditorPost({ ep, n }: Props) {
             <span id={`contador-${chave}`} className={acima ? "contador acima" : "contador"}>
               {tamanho}/{limite}
             </span>
+            {disco?.campos && disco.campos[chave] !== campos[chave] ? (
+              <div className="no-arquivo">
+                <span>No arquivo agora:</span>
+                <pre>{disco.campos[chave]}</pre>
+              </div>
+            ) : null}
           </div>
         );
       })}
@@ -194,17 +241,25 @@ export function EditorPost({ ep, n }: Props) {
         </div>
       ) : null}
       <div className="acoes-post">
-        <button type="button" onClick={salvar} disabled={quebrado || salvando}>
+        <button type="button" onClick={() => void salvar(versao)} disabled={quebrado || salvando}>
           Salvar
         </button>
         <span role="status">{salvo ? "Salvo." : ""}</span>
       </div>
       {conflito ? (
-        <div role="alert" className="mensagem-erro">
+        <div role="alert" className="mensagem-erro conflito">
           <p>O post.md mudou desde que você abriu.</p>
-          <button type="button" onClick={() => void carregar()}>
-            Carregar a versão nova
-          </button>
+          {erroDisco ? <p>{erroDisco}</p> : null}
+          {disco ? (
+            <div className="acoes-conflito">
+              <button type="button" onClick={usarArquivo} disabled={salvando}>
+                Usar a versão do arquivo
+              </button>
+              <button type="button" onClick={() => void salvar(disco.versao)} disabled={salvando}>
+                Salvar o meu por cima
+              </button>
+            </div>
+          ) : null}
         </div>
       ) : null}
       {erroSalvar ? (

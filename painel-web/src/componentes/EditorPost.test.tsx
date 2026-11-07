@@ -55,6 +55,7 @@ beforeEach(() => {
 afterEach(() => {
   vi.useRealTimers();
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
 });
 
 async function montar() {
@@ -71,6 +72,27 @@ async function avancar(ms: number) {
 }
 
 const conferencias = () => chamadas.filter((c) => c.url.endsWith("/post/conferir"));
+const puts = () => chamadas.filter((c) => c.metodo === "PUT");
+
+/** O primeiro GET devolve v1; o PUT com v1 dá 409; o GET seguinte traz o disco (v9). */
+function conflitoComDisco(disco: Partial<typeof CAMPOS>) {
+  let gets = 0;
+  manipulador = (url, metodo) => {
+    if (url.endsWith("/post/conferir")) return resposta({ avisos: [] });
+    if (metodo === "PUT") {
+      if (puts()[puts().length - 1].corpo.versao === "v9") return resposta({ versao: "v10", avisos: [] });
+      return resposta({ detail: "O post.md mudou desde que você abriu.", versao_atual: "v9" }, 409);
+    }
+    gets += 1;
+    return resposta(gets === 1 ? postOk() : postOk({ versao: "v9", campos: { ...CAMPOS, ...disco } }));
+  };
+}
+
+async function salvarRascunho(campo: HTMLTextAreaElement, texto: string) {
+  fireEvent.change(campo, { target: { value: texto } });
+  fireEvent.click(screen.getByRole("button", { name: "Salvar" }));
+  await avancar(0);
+}
 
 describe("EditorPost", () => {
   it("contador fica vermelho acima de 100", async () => {
@@ -94,24 +116,57 @@ describe("EditorPost", () => {
     expect(conferencias()).toHaveLength(1);
   });
 
-  it("conflito mantém o rascunho", async () => {
-    manipulador = (url, metodo) => {
-      if (metodo === "PUT")
-        return resposta(
-          { detail: "O post.md mudou desde que você abriu.", versao_atual: "v9" },
-          409,
-        );
-      if (url.endsWith("/post/conferir")) return resposta({ avisos: [] });
-      return resposta(postOk());
-    };
+  it("no 409 mostra o texto do arquivo e mantém o rascunho", async () => {
+    conflitoComDisco({ instagram: "do disco" });
     await montar();
     const campo = screen.getByLabelText(/Instagram/) as HTMLTextAreaElement;
-    fireEvent.change(campo, { target: { value: "rascunho meu" } });
-    fireEvent.click(screen.getByRole("button", { name: "Salvar" }));
-    await avancar(0);
+    await salvarRascunho(campo, "rascunho meu");
     expect(screen.getByText("O post.md mudou desde que você abriu.")).toBeTruthy();
     expect(campo.value).toBe("rascunho meu");
-    expect(screen.getByRole("button", { name: "Carregar a versão nova" })).toBeTruthy();
+    expect(screen.getAllByText("No arquivo agora:")).toHaveLength(1);
+    expect(screen.getByText("do disco")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Usar a versão do arquivo" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Salvar o meu por cima" })).toBeTruthy();
+    expect(chamadas.filter((c) => c.metodo === "GET")).toHaveLength(2);
+  });
+
+  it("salvar o meu por cima manda a versão nova lida do arquivo", async () => {
+    conflitoComDisco({ instagram: "do disco" });
+    await montar();
+    const campo = screen.getByLabelText(/Instagram/) as HTMLTextAreaElement;
+    await salvarRascunho(campo, "rascunho meu");
+    fireEvent.click(screen.getByRole("button", { name: "Salvar o meu por cima" }));
+    await avancar(0);
+    const ultimo = puts()[puts().length - 1];
+    expect(ultimo.corpo.versao).toBe("v9");
+    expect(ultimo.corpo.campos.instagram).toBe("rascunho meu");
+    expect(screen.getByText("Salvo.")).toBeTruthy();
+    expect(screen.queryByText("No arquivo agora:")).toBeNull();
+    expect(screen.queryByText("O post.md mudou desde que você abriu.")).toBeNull();
+    expect(campo.value).toBe("rascunho meu");
+  });
+
+  it("usar a versão do arquivo pede confirmação antes de trocar", async () => {
+    conflitoComDisco({ instagram: "do disco" });
+    const confirmar = vi.spyOn(window, "confirm").mockReturnValueOnce(false).mockReturnValueOnce(true);
+    await montar();
+    const campo = screen.getByLabelText(/Instagram/) as HTMLTextAreaElement;
+    await salvarRascunho(campo, "rascunho meu");
+
+    fireEvent.click(screen.getByRole("button", { name: "Usar a versão do arquivo" }));
+    await avancar(0);
+    expect(confirmar).toHaveBeenCalledWith("Descartar o que você escreveu e usar a versão do arquivo?");
+    expect(campo.value).toBe("rascunho meu");
+    expect(screen.getByText("No arquivo agora:")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Usar a versão do arquivo" }));
+    await avancar(0);
+    expect(campo.value).toBe("do disco");
+    expect(screen.queryByText("No arquivo agora:")).toBeNull();
+    expect(screen.queryByText("O post.md mudou desde que você abriu.")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Salvar" }));
+    await avancar(0);
+    expect(puts()[puts().length - 1].corpo.versao).toBe("v9");
   });
 
   it("post quebrado desabilita", async () => {
@@ -132,7 +187,6 @@ describe("EditorPost", () => {
     fireEvent.change(screen.getByLabelText(/Instagram/), { target: { value: "novo" } });
     fireEvent.click(screen.getByRole("button", { name: "Salvar" }));
     await avancar(0);
-    const puts = () => chamadas.filter((c) => c.metodo === "PUT");
     expect(puts()[0].corpo.versao).toBe("v1");
     expect(puts()[0].corpo.campos.instagram).toBe("novo");
     expect(screen.getByText("Salvo.")).toBeTruthy();
@@ -156,24 +210,4 @@ describe("EditorPost", () => {
     expect(campo.value).toBe("meu texto");
   });
 
-  it("carregar a versão nova refaz o GET e troca os campos", async () => {
-    let gets = 0;
-    manipulador = (_url, metodo) => {
-      if (metodo === "PUT")
-        return resposta({ detail: "O post.md mudou desde que você abriu.", versao_atual: "v9" }, 409);
-      gets += 1;
-      return resposta(
-        gets === 1 ? postOk() : postOk({ versao: "v9", campos: { ...CAMPOS, instagram: "do disco" } }),
-      );
-    };
-    await montar();
-    const campo = screen.getByLabelText(/Instagram/) as HTMLTextAreaElement;
-    fireEvent.change(campo, { target: { value: "rascunho" } });
-    fireEvent.click(screen.getByRole("button", { name: "Salvar" }));
-    await avancar(0);
-    fireEvent.click(screen.getByRole("button", { name: "Carregar a versão nova" }));
-    await avancar(0);
-    expect(campo.value).toBe("do disco");
-    expect(screen.queryByText("O post.md mudou desde que você abriu.")).toBeNull();
-  });
 });
