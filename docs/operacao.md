@@ -279,6 +279,12 @@ Gravar a data de cada corte no campo `data` de `aprovados.json`.
 
 ## 10. Revisão
 
+Antes de rodar, gravar em `nomes-suspeitos.json`, na pasta do episódio, os
+nomes que podem ter saído errados na legenda, comparando com
+`Contexto/glossario.md`. Formato: `{"4": ["Massa: conferir 'Felipe Massa'"]}`,
+com o número do corte como chave. O `revisao` e o painel mostram esses nomes
+nos alertas. Não editar o `revisao.md` à mão.
+
 ```bash
 .venv\Scripts\python.exe -m esteira revisao "<pasta do episódio>"
 ```
@@ -287,12 +293,6 @@ Gera `revisao.md` na pasta do episódio, com um bloco por corte: links do
 `corte.mp4` e do `guia.md`, título, redes, data, música, frase anterior e
 posterior ao trecho, alertas de quem fala e se `video-final/` está vazia. No
 fim, os descartados e o motivo.
-
-O comando `revisao` regrava o arquivo; por isso, rodá-lo antes de acrescentar
-à mão qualquer alerta.
-
-Antes de parar, acrescentar aos alertas de cada corte os nomes que podem ter
-saído errados na legenda, comparando com `Contexto/glossario.md`.
 
 Parar e esperar o dono do canal. Ele coloca as imagens no CapCut e salva o
 vídeo em `video-final/`. Corte sem vídeo ali não foi aprovado. Não existe

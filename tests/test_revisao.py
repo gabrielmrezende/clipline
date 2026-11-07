@@ -4,7 +4,7 @@ from pathlib import Path
 from esteira.cortar import pasta_do_corte
 from esteira.modelos import Corte, Palavra
 from esteira.receita import Musica, Receita, gravar_receita
-from esteira.revisao import contexto_do_trecho, escrever_revisao
+from esteira.revisao import contexto_do_trecho, dados_revisao, escrever_revisao, ler_nomes_suspeitos
 
 PALAVRAS = [{"texto": f"p{i}", "inicio": i - 0.4, "fim": i + 0.4} for i in range(30)]
 
@@ -170,3 +170,78 @@ def test_revisao_corte_nao_montado(tmp_path):
     texto = escrever_revisao(pasta).read_text("utf-8")
 
     assert "Erro: corte não montado" in texto
+
+
+def test_dados_revisao_campos(tmp_path):
+    a = Corte(1, "Primeiro Corte", 10, 20, "tenso", instagram=True, data="2026-11-04 18:00")
+    pasta = _episodio(tmp_path, [a])
+    _montado(pasta, a, musica=Musica("m.mp3", titulo="Ice Flow"))
+
+    (bloco,) = dados_revisao(pasta)
+
+    assert bloco.numero == 1
+    assert bloco.titulo == "Primeiro Corte"
+    assert bloco.pasta == "01-primeiro-corte"
+    assert bloco.redes == ["youtube", "tiktok", "instagram"]
+    assert bloco.musica == "Ice Flow"
+    assert bloco.antes == "p0 p1 p2 p3 p4 p5 p6 p7 p8 p9"
+    assert bloco.video_final == []
+    assert bloco.tem_guia is False
+    assert bloco.erro is None
+
+
+def test_dados_revisao_nao_montado(tmp_path):
+    a = Corte(1, "Sem Corte", 10, 20, "tenso")
+    pasta = _episodio(tmp_path, [a])
+
+    (bloco,) = dados_revisao(pasta)
+
+    assert bloco.erro == "corte não montado"
+
+
+def test_dados_revisao_video_final_ordenado(tmp_path):
+    a = Corte(1, "Um", 10, 20, "tenso")
+    pasta = _episodio(tmp_path, [a])
+    _montado(pasta, a)
+    final = pasta_do_corte(pasta, a) / "video-final"
+    final.mkdir()
+    (final / "b.MOV").write_bytes(b"x")
+    (final / "A.mp4").write_bytes(b"x")
+
+    (bloco,) = dados_revisao(pasta)
+
+    assert bloco.video_final == ["A.mp4", "b.MOV"]
+
+
+def test_nomes_suspeitos_entram_nos_alertas(tmp_path):
+    a = Corte(1, "Um", 10, 20, "tenso")
+    pasta = _episodio(tmp_path, [a])
+    _montado(pasta, a, alertas=["fora de quadro"])
+    (pasta / "nomes-suspeitos.json").write_text(
+        json.dumps({"1": ["Massa: conferir 'Felipe Massa'"]}), "utf-8"
+    )
+
+    (bloco,) = dados_revisao(pasta)
+    texto = escrever_revisao(pasta).read_text("utf-8")
+
+    assert bloco.alertas == ["fora de quadro", "Massa: conferir 'Felipe Massa'"]
+    assert "Alertas: fora de quadro; Massa: conferir 'Felipe Massa'" in texto
+
+
+def test_nomes_suspeitos_ilegivel(tmp_path):
+    a = Corte(1, "Um", 10, 20, "tenso")
+    b = Corte(2, "Dois", 10, 20, "tenso")
+    pasta = _episodio(tmp_path, [a, b])
+    _montado(pasta, a)
+    _montado(pasta, b)
+    (pasta / "nomes-suspeitos.json").write_text("{quebrado", "utf-8")
+
+    blocos = dados_revisao(pasta)
+
+    assert len(blocos) == 2
+    assert all("nomes-suspeitos.json ilegível" in b.alertas for b in blocos)
+
+
+def test_nomes_suspeitos_ausente(tmp_path):
+    pasta = _episodio(tmp_path, [])
+    assert ler_nomes_suspeitos(pasta) == ({}, None)
