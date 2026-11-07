@@ -71,7 +71,7 @@ def test_resolver_arquivo_extensao(tmp_path):
 
 
 def test_selo_prioridade():
-    assert selo(_bloco(erro="x", alertas=["a"], video_final=["v.mp4"]), []) == "com erro"
+    assert selo(_bloco(erro="x", alertas=["a"], video_final=["v.mp4"]), []) == "erro"
     assert selo(_bloco(alertas=["a"]), []) == "com alerta"
     assert selo(_bloco(video_final=["v.mp4"]), ["post: x"]) == "com alerta"
     assert selo(_bloco(), []) == "sem vídeo final"
