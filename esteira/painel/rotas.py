@@ -1,17 +1,28 @@
 from pathlib import Path
 
-from fastapi import APIRouter, Request
-from fastapi.responses import FileResponse
+from fastapi import APIRouter, HTTPException, Request
+from fastapi.responses import FileResponse, JSONResponse
+from pydantic import BaseModel
 
 from esteira.cortar import CORTE_MP4, IMAGENS_SUGERIDAS, VIDEO_FINAL, ler_aprovados
 from esteira.painel.leitura import (
     NaoEncontrado,
+    _credito,
     avisos_post,
     bloco_json,
     listar_episodios,
     resolver_arquivo,
     resolver_episodio,
     resumo_episodio,
+)
+from esteira.publicar.post import (
+    ErroPost,
+    Textos,
+    conferir_textos,
+    gravar_textos,
+    ler_post,
+    secoes_somente_leitura,
+    versao_post,
 )
 from esteira.revisao import BlocoRevisao, dados_revisao
 
@@ -132,3 +143,92 @@ def video_final(ep: str, n: int, arquivo: str, requisicao: Request) -> FileRespo
 def imagem(ep: str, n: int, arquivo: str, requisicao: Request) -> FileResponse:
     pasta, bloco = _pasta_do_corte(requisicao, ep, n)
     return _arquivo(pasta / bloco.pasta / IMAGENS_SUGERIDAS, arquivo, EXT_IMAGEM)
+
+
+class CamposPost(BaseModel):
+    youtube_titulo: str
+    youtube_descricao: str
+    instagram: str
+    tiktok: str
+
+
+class ConferirPost(BaseModel):
+    campos: CamposPost
+
+
+class GravarPost(BaseModel):
+    versao: str
+    campos: CamposPost
+
+
+def _avisos_de_formato(campos: CamposPost) -> list[str]:
+    avisos = []
+    if "\n" in campos.youtube_titulo or "\r" in campos.youtube_titulo:
+        avisos.append("O título do YouTube não pode ter quebra de linha.")
+    textos = (campos.youtube_titulo, campos.youtube_descricao, campos.instagram, campos.tiktok)
+    if any(linha.startswith("## ") for texto in textos for linha in texto.splitlines()):
+        avisos.append("Nenhum texto pode ter linha começando com '## '.")
+    return avisos
+
+
+def _avisos_do_post(campos: CamposPost, pasta_corte: Path, bloco: BlocoRevisao) -> list[str]:
+    textos = Textos(**campos.model_dump())
+    return _avisos_de_formato(campos) + conferir_textos(
+        textos, _credito(pasta_corte), set(bloco.redes)
+    )
+
+
+@roteador.get("/episodios/{ep}/cortes/{n}/post")
+def post_do_corte(ep: str, n: int, requisicao: Request) -> dict:
+    pasta, bloco = _pasta_do_corte(requisicao, ep, n)
+    caminho = pasta / bloco.pasta / "post.md"
+    try:
+        textos = ler_post(caminho)
+        somente_leitura = secoes_somente_leitura(caminho)
+        versao = versao_post(caminho)
+    except (ErroPost, OSError, UnicodeDecodeError) as erro:
+        return {
+            "campos": None, "somente_leitura": None, "credito": None,
+            "redes": None, "versao": None, "avisos": None, "erro": str(erro),
+        }
+    return {
+        "campos": textos.__dict__,
+        "somente_leitura": somente_leitura,
+        "credito": _credito(pasta / bloco.pasta),
+        "redes": bloco.redes,
+        "versao": versao,
+        "avisos": avisos_post(pasta / bloco.pasta, bloco.redes),
+        "erro": None,
+    }
+
+
+@roteador.post("/episodios/{ep}/cortes/{n}/post/conferir")
+def conferir_post(ep: str, n: int, corpo: ConferirPost, requisicao: Request) -> dict:
+    pasta, bloco = _pasta_do_corte(requisicao, ep, n)
+    return {"avisos": _avisos_do_post(corpo.campos, pasta / bloco.pasta, bloco)}
+
+
+@roteador.put("/episodios/{ep}/cortes/{n}/post")
+def gravar_post(ep: str, n: int, corpo: GravarPost, requisicao: Request):
+    pasta, bloco = _pasta_do_corte(requisicao, ep, n)
+    pasta_corte = pasta / bloco.pasta
+    caminho = pasta_corte / "post.md"
+    if not caminho.is_file():
+        raise HTTPException(404, "post.md não encontrado.")
+    formato = _avisos_de_formato(corpo.campos)
+    if formato:
+        raise HTTPException(422, formato[0])
+    try:
+        # versão e gravação ficam juntas para reduzir a janela de corrida
+        atual = versao_post(caminho)
+        if atual != corpo.versao:
+            return JSONResponse(
+                {"detail": "O post.md mudou desde que você abriu.", "versao_atual": atual},
+                status_code=409,
+            )
+        nova = gravar_textos(
+            caminho, Textos(**corpo.campos.model_dump()), base=requisicao.app.state.cortes
+        )
+    except (ErroPost, OSError, UnicodeDecodeError) as erro:
+        raise HTTPException(422, str(erro)) from erro
+    return {"versao": nova, "avisos": _avisos_do_post(corpo.campos, pasta_corte, bloco)}
