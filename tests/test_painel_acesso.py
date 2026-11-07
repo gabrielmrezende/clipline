@@ -152,3 +152,31 @@ def test_novo_codigo_derruba_sessoes(tmp_path):
     assert cliente.get("/api/episodios").status_code == 200
     gerar_codigo(cofre)
     assert cliente.get("/api/episodios").status_code == 401
+
+
+def test_trava_resiste_a_tentativas_simultaneas():
+    import threading
+
+    from esteira.painel.acesso import CodigoErrado, Porteiro, Travado
+
+    cofre = CofreFalso()
+    gerar_codigo(cofre)
+    porteiro = Porteiro(cofre, Relogio())
+    total = 20
+    barreira = threading.Barrier(total)
+    resultados = []
+
+    def tentar():
+        barreira.wait()
+        try:
+            porteiro.entrar("ERRADO00")
+        except (CodigoErrado, Travado) as erro:
+            resultados.append(type(erro))
+
+    fios = [threading.Thread(target=tentar) for _ in range(total)]
+    for fio in fios:
+        fio.start()
+    for fio in fios:
+        fio.join()
+    assert resultados.count(CodigoErrado) == 5
+    assert resultados.count(Travado) == total - 5

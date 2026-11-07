@@ -1,6 +1,7 @@
 import hashlib
 import hmac
 import secrets
+import threading
 from collections.abc import Callable
 from typing import Protocol
 
@@ -62,6 +63,7 @@ class Porteiro:
         self._relogio = relogio
         self._erros = 0
         self._travado_ate = 0.0
+        self._trava = threading.Lock()
 
     def _assinar(self, chave: str, expira: str) -> str:
         return hmac.new(chave.encode("utf-8"), expira.encode("utf-8"), hashlib.sha256).hexdigest()
@@ -78,6 +80,10 @@ class Porteiro:
         return hmac.compare_digest(_hash(codigo.strip().upper(), sal), esperado)
 
     def entrar(self, codigo: str) -> str:
+        with self._trava:  # serializa: o PBKDF2 solta o GIL e burlaria a contagem
+            return self._entrar(codigo)
+
+    def _entrar(self, codigo: str) -> str:
         agora = self._relogio()
         if agora < self._travado_ate:
             raise Travado(int(self._travado_ate - agora) + 1)
