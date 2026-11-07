@@ -56,7 +56,7 @@ def avisos_post(pasta_corte: Path, redes: list[str]) -> list[str]:
     pasta_corte = Path(pasta_corte)
     try:
         textos = ler_post(pasta_corte / "post.md")
-    except ErroPost as erro:
+    except (ErroPost, OSError, UnicodeDecodeError) as erro:
         return [f"post: {erro}"]
     return conferir_textos(textos, _credito(pasta_corte), set(redes))
 

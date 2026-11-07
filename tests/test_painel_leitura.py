@@ -143,3 +143,11 @@ def test_bloco_json(tmp_path):
     bloco = dados_revisao(pasta)[0]
     dados = bloco_json(bloco, ["post: x"])
     assert dados["numero"] == 1 and dados["avisos_post"] == ["post: x"] and dados["selo"] == "com alerta"
+
+
+def test_avisos_post_ilegivel(tmp_path):
+    a = Corte(1, "Um", 10, 20, "tenso")
+    pasta = criar_episodio(tmp_path, "ep", [a], {1})
+    (pasta_do_corte(pasta, a) / "post.md").write_bytes(b"\xff\xfe\x80 invalido")
+    avisos = avisos_post(pasta_do_corte(pasta, a), ["youtube"])
+    assert len(avisos) == 1 and avisos[0].startswith("post: ")
