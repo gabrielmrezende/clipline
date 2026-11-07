@@ -1,3 +1,4 @@
+import pytest
 from fastapi.testclient import TestClient
 
 from esteira.painel.acesso import ALFABETO, gerar_codigo
@@ -144,6 +145,23 @@ def test_cookie_adulterado_401(tmp_path):
     cliente = _app(tmp_path, cofre, Relogio())
     cliente.cookies.set("painel_sessao", f"{int(Relogio()() + DIA)}.{'0' * 64}")
     assert cliente.get("/api/episodios").status_code == 401
+
+
+@pytest.mark.parametrize("cookie", ["1800086400.é", "é.abc", "²³.abc", "١٨٠٠٠٨٦٤٠٠.abc", "1800086400.ａｂ"])
+def test_cookie_nao_ascii_e_invalido(cookie):
+    from esteira.painel.acesso import Porteiro
+
+    cofre = CofreFalso()
+    gerar_codigo(cofre)
+    assert Porteiro(cofre, Relogio()).sessao_valida(cookie) is False
+
+
+def test_cookie_nao_ascii_401_e_nao_500(tmp_path):
+    cofre = CofreFalso()
+    gerar_codigo(cofre)
+    cliente = _app(tmp_path, cofre, Relogio())
+    cabecalho = "painel_sessao=1800086400.é".encode("utf-8")
+    assert cliente.get("/api/episodios", headers={"cookie": cabecalho}).status_code == 401
 
 
 def test_reiniciar_servidor_mantem_sessao(tmp_path):

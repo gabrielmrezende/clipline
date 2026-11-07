@@ -100,10 +100,10 @@ class Porteiro:
 
     def sessao_valida(self, cookie: str | None) -> bool:
         chave = self._cofre.ler("chave_sessao")
-        if not cookie or not chave or "." not in cookie:
-            return False
+        if not cookie or not chave or "." not in cookie or not cookie.isascii():
+            return False  # compare_digest não aceita texto fora do ASCII
         expira, assinatura = cookie.split(".", 1)
-        if not expira.isdigit():
+        if not expira.isdigit():  # já é ASCII: só 0-9
             return False
         if not hmac.compare_digest(self._assinar(chave, expira), assinatura):
             return False
