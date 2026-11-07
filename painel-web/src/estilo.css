@@ -1,0 +1,215 @@
+:root {
+  color-scheme: light dark;
+  --fundo: #f6f7f9;
+  --superficie: #ffffff;
+  --texto: #1b1f24;
+  --suave: #565e69;
+  --borda: #d3d8df;
+  --destaque: #0b5cad;
+  --erro-fundo: #fde8e8;
+  --erro-texto: #9b1c1c;
+  --alerta-fundo: #fff1d6;
+  --alerta-texto: #7a4b00;
+  --cinza-fundo: #e8eaed;
+  --cinza-texto: #3c4350;
+  --pronto-fundo: #dff5e3;
+  --pronto-texto: #146c2e;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --fundo: #14171b;
+    --superficie: #1e2329;
+    --texto: #e8eaed;
+    --suave: #a6aeb9;
+    --borda: #3a424c;
+    --destaque: #6cb2ff;
+    --erro-fundo: #4a1d1d;
+    --erro-texto: #ffb4b4;
+    --alerta-fundo: #4a3511;
+    --alerta-texto: #ffd58a;
+    --cinza-fundo: #2c333b;
+    --cinza-texto: #cdd3da;
+    --pronto-fundo: #17381f;
+    --pronto-texto: #9be3ad;
+  }
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  background: var(--fundo);
+  color: var(--texto);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  line-height: 1.5;
+}
+a {
+  color: var(--destaque);
+}
+h1 {
+  font-size: 1.5rem;
+  margin: 0.5rem 0 1rem;
+  overflow-wrap: anywhere;
+}
+h2 {
+  font-size: 1.15rem;
+  margin: 0 0 0.25rem;
+}
+h3 {
+  font-size: 1.05rem;
+  margin: 0 0 0.25rem;
+}
+.coluna {
+  max-width: 72rem;
+  margin: 0 auto;
+  padding: 1rem;
+}
+.coluna.estreita {
+  max-width: 26rem;
+}
+.cartoes {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: 1fr;
+}
+.cartao {
+  background: var(--superficie);
+  border: 1px solid var(--borda);
+  border-radius: 10px;
+}
+.cartao p {
+  margin: 0.25rem 0;
+  color: var(--suave);
+}
+.alvo {
+  display: block;
+  min-height: 44px;
+  padding: 0.75rem 1rem;
+  color: inherit;
+  text-decoration: none;
+  border-radius: 10px;
+}
+.alvo:hover {
+  background: var(--cinza-fundo);
+}
+.alvo-inline {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+}
+.aviso {
+  color: var(--alerta-texto);
+  background: var(--alerta-fundo);
+  padding: 0.25rem 0.5rem;
+  border-radius: 6px;
+}
+.mensagem-erro {
+  color: var(--erro-texto);
+  background: var(--erro-fundo);
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+}
+.selo {
+  display: inline-flex;
+  gap: 0.3rem;
+  align-items: center;
+  padding: 0.1rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+.selo-erro {
+  background: var(--erro-fundo);
+  color: var(--erro-texto);
+}
+.selo-alerta {
+  background: var(--alerta-fundo);
+  color: var(--alerta-texto);
+}
+.selo-cinza {
+  background: var(--cinza-fundo);
+  color: var(--cinza-texto);
+}
+.selo-pronto {
+  background: var(--pronto-fundo);
+  color: var(--pronto-texto);
+}
+.abas {
+  display: flex;
+  gap: 0.25rem;
+  border-bottom: 1px solid var(--borda);
+  margin-bottom: 1rem;
+  overflow-x: auto;
+}
+.abas button {
+  min-height: 44px;
+  padding: 0 1rem;
+  background: none;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  color: var(--suave);
+  font: inherit;
+  cursor: pointer;
+}
+.abas button[aria-selected="true"] {
+  color: var(--texto);
+  border-bottom-color: var(--destaque);
+  font-weight: 600;
+}
+button,
+input {
+  font: inherit;
+}
+button[type="submit"] {
+  min-height: 44px;
+  padding: 0 1.25rem;
+  margin-top: 0.75rem;
+  cursor: pointer;
+}
+input {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  padding: 0 0.75rem;
+  margin-top: 0.25rem;
+}
+:focus-visible {
+  outline: 3px solid var(--destaque);
+  outline-offset: 2px;
+}
+.cal-dia {
+  background: var(--superficie);
+  border: 1px solid var(--borda);
+  border-radius: 10px;
+  padding: 0.75rem 1rem;
+  margin-bottom: 0.75rem;
+}
+.cal-linha h4 {
+  margin: 0.5rem 0 0.25rem;
+  color: var(--suave);
+}
+.cal-linha ul,
+.cal-dia > ul {
+  margin: 0;
+  padding-left: 1.25rem;
+}
+.cal-hora {
+  font-variant-numeric: tabular-nums;
+  color: var(--suave);
+}
+.markdown {
+  overflow-wrap: anywhere;
+}
+@media (min-width: 768px) {
+  .cartoes {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+@media (min-width: 1100px) {
+  .cartoes.grade {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
