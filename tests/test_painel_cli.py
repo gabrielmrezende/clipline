@@ -140,6 +140,14 @@ def test_fallback_nao_sai_da_pasta(tmp_path, estatico):
     assert cliente.get("/..%2Fsegredo.txt").text == "<html>painel</html>"
 
 
+@pytest.mark.parametrize("caminho", ["/x%00y", "/%00", "/assets%00/a.js"])
+def test_fallback_com_nulo_devolve_index(tmp_path, estatico, caminho):
+    cliente = TestClient(criar_app(tmp_path, estatico=estatico))
+    resposta = cliente.get(caminho)
+    assert resposta.status_code == 200
+    assert resposta.text == "<html>painel</html>"
+
+
 def test_extra_painel_pede_as_versoes_testadas():
     import tomllib
     from pathlib import Path

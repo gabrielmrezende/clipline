@@ -73,7 +73,10 @@ def _servir_estatico(app: FastAPI, estatico: Path) -> None:
     async def _pagina(caminho: str):
         if caminho == "api" or caminho.startswith("api/"):
             return JSONResponse({"detail": "Não encontrado."}, status_code=404)
-        candidato = (estatico / caminho).resolve()
-        if caminho and candidato.is_file() and candidato.is_relative_to(estatico):
-            return FileResponse(candidato)
+        try:
+            candidato = (estatico / caminho).resolve()
+            if caminho and candidato.is_file() and candidato.is_relative_to(estatico):
+                return FileResponse(candidato)
+        except (ValueError, OSError):  # por exemplo, %00 no caminho
+            pass
         return FileResponse(estatico / "index.html")
