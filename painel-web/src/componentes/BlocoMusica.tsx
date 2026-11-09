@@ -27,6 +27,8 @@ const VOLUME_PADRAO = -26;
 const ESPERA_MS = 2000;
 const CONFIRMACAO =
   "Este corte já tem vídeo final. O vídeo final não muda; você vai precisar refazer no CapCut. Montar mesmo assim?";
+const PEDIDO_PERDIDO =
+  "O pedido se perdeu (o painel foi reiniciado?). Confira a música e monte de novo se precisar.";
 
 function mensagem(x: unknown): string {
   return x instanceof ErroApi ? x.detail : "Erro inesperado.";
@@ -143,7 +145,16 @@ export function BlocoMusica({
     const id = setTimeout(() => {
       pedir<Pedido>(`/api/tarefas/${encodeURIComponent(pedido.id)}`)
         .then((novo) => vivo && setPedido(novo))
-        .catch(() => vivo && setTick((t) => t + 1));
+        .catch((x) => {
+          if (!vivo) return;
+          if (x instanceof ErroApi && x.status === 404) {
+            setPedido(null);
+            setErroPedido(PEDIDO_PERDIDO);
+            void lerMusicaDoCorte();
+            return;
+          }
+          setTick((t) => t + 1);
+        });
     }, ESPERA_MS);
     return () => {
       vivo = false;

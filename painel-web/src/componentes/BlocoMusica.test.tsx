@@ -56,6 +56,7 @@ let tarefas: any[];
 let respostaPost: () => Promise<Response>;
 let respostaPrevia: () => Promise<Response>;
 let tempo = 0;
+let tarefaSumiu = false;
 let play: ReturnType<typeof vi.fn>;
 let pause: ReturnType<typeof vi.fn>;
 
@@ -63,6 +64,7 @@ beforeEach(() => {
   vi.useFakeTimers();
   chamadas = [];
   tempo = 0;
+  tarefaSumiu = false;
   musicaDoCorte = { atual: null, anterior: null, pedido: null };
   tarefas = [];
   respostaPost = () => resposta(pedido(), 202);
@@ -82,6 +84,8 @@ beforeEach(() => {
       if (url.endsWith("/musica/previa")) return respostaPrevia();
       if (url.endsWith("/musica") && metodo === "POST") return respostaPost();
       if (url.endsWith("/musica")) return resposta(musicaDoCorte);
+      if (url.startsWith("/api/tarefas/") && tarefaSumiu)
+        return resposta({ detail: "tarefa não encontrada" }, 404);
       if (url.startsWith("/api/tarefas/"))
         return resposta(tarefas.length > 1 ? tarefas.shift() : tarefas[0]);
       return resposta({ detail: "?" }, 404);
@@ -314,6 +318,30 @@ describe("BlocoMusica", () => {
     fireEvent.click(botaoMontar());
     await avancar(0);
     expect(soltarVideo).not.toHaveBeenCalled();
+  });
+
+  it("404 no acompanhamento para de consultar e libera os controles", async () => {
+    const aoMudarAndamento = vi.fn();
+    tarefas = [pedido({ estado: "montando" })];
+    await montar({ aoMudarAndamento });
+    escolher("Brisa");
+    fireEvent.click(botaoMontar());
+    await avancar(0);
+    await avancar(2000);
+    expect(screen.getByText("Montando…")).toBeTruthy();
+    tarefaSumiu = true;
+    await avancar(2000);
+    expect(
+      screen.getByText(
+        "O pedido se perdeu (o painel foi reiniciado?). Confira a música e monte de novo se precisar.",
+      ),
+    ).toBeTruthy();
+    expect(screen.queryByText("Montando…")).toBeNull();
+    expect((botaoMontar() as HTMLButtonElement).disabled).toBe(false);
+    expect(aoMudarAndamento).toHaveBeenLastCalledWith(false);
+    const consultas = chamadas.filter((c) => c.url.startsWith("/api/tarefas/")).length;
+    await avancar(6000);
+    expect(chamadas.filter((c) => c.url.startsWith("/api/tarefas/")).length).toBe(consultas);
   });
 
   it("mostra o detail do 409", async () => {
