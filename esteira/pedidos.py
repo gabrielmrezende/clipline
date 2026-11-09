@@ -37,7 +37,11 @@ class Momento:
 
 
 def ler_pedidos(pasta: Path) -> list[Momento]:
-    dados = json.loads((Path(pasta) / ARQUIVO).read_text("utf-8"))
+    return pedidos_dos_bytes((Path(pasta) / ARQUIVO).read_bytes())
+
+
+def pedidos_dos_bytes(conteudo: bytes) -> list[Momento]:
+    dados = json.loads(conteudo.decode("utf-8"))
     return [Momento(**_atualizar(item)) for item in dados["momentos"]]
 
 
@@ -53,9 +57,12 @@ def _atualizar(item: dict) -> dict:
     return item
 
 
+def texto_dos_pedidos(momentos: list[Momento]) -> str:
+    return json.dumps({"momentos": [asdict(m) for m in momentos]}, ensure_ascii=False, indent=2)
+
+
 def gravar_pedidos(pasta: Path, momentos: list[Momento]) -> None:
-    texto = json.dumps({"momentos": [asdict(m) for m in momentos]}, ensure_ascii=False, indent=2)
-    (Path(pasta) / ARQUIVO).write_text(texto, "utf-8")
+    (Path(pasta) / ARQUIVO).write_text(texto_dos_pedidos(momentos), "utf-8")
 
 
 def pessoas_do_glossario(caminho: Path) -> list[str]:

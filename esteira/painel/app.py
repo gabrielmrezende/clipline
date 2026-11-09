@@ -11,13 +11,15 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
-from esteira import render
-from esteira.caminhos import MUSICAS, EscritaProibida
+from esteira import render, wikimedia
+from esteira.caminhos import CONTEXTO, MUSICAS, EscritaProibida
 from esteira.montar import montar_episodio
+from esteira.pedidos import pessoas_do_glossario
 from esteira.painel.acesso import COOKIE, Cofre, Porteiro
 from esteira.painel.leitura import CaminhoProibido, NaoEncontrado
 from esteira.painel.fila import Fila
 from esteira.painel.rotas import _TRAVA_GRAVACAO, roteador
+from esteira.painel.rotas_imagens import roteador as roteador_imagens
 from esteira.painel.rotas_musica import roteador as roteador_musica
 from esteira.painel.troca_musica import recuperar_trocas_interrompidas, trocar_musica
 
@@ -26,6 +28,13 @@ ESPERA_AO_DESLIGAR = 120  # segundos esperando a montagem atual quando o painel 
 
 def _montar_real(pasta: Path, numero: int) -> str:
     return montar_episodio(pasta, numeros={numero}, forcar=True).get(numero, f"erro: corte {numero} não montado")
+
+
+def _pessoas_do_glossario() -> list[str]:
+    try:
+        return pessoas_do_glossario(CONTEXTO / "glossario.md")
+    except (OSError, UnicodeDecodeError):
+        return []
 
 
 def criar_app(
@@ -40,6 +49,8 @@ def criar_app(
     gerar_previa: Callable = render.gerar_previa,
     pasta_musicas: Path = MUSICAS,
     montar: Callable[[Path, int], str] = _montar_real,
+    buscar_candidatas: Callable[[str], list[wikimedia.Candidata]] = wikimedia.buscar_candidatas,
+    pessoas: Callable[[], list[str]] = _pessoas_do_glossario,
 ) -> FastAPI:
     for corte in recuperar_trocas_interrompidas(cortes):
         print(f"Troca de música interrompida desfeita: {corte}")
@@ -60,6 +71,8 @@ def criar_app(
     app.state.porteiro = None
     app.state.pasta_musicas = Path(pasta_musicas)
     app.state.gerar_previa = gerar_previa
+    app.state.buscar_candidatas = buscar_candidatas
+    app.state.pessoas = pessoas
     if fila is None:
         fila = Fila(executar=functools.partial(
             trocar_musica, montar=montar, base=app.state.cortes,
@@ -93,6 +106,7 @@ def criar_app(
 
     app.include_router(roteador)
     app.include_router(roteador_musica)
+    app.include_router(roteador_imagens)
 
     if estatico is not None and (Path(estatico) / "index.html").is_file():
         _servir_estatico(app, Path(estatico).resolve())
