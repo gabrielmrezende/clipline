@@ -153,7 +153,9 @@ def previa(ep: str, n: int, corpo: PedidoPrevia, requisicao: Request):
         )
         video = Path(json.loads((pasta / "episodio.json").read_text("utf-8"))["video"])
         receita = ler_receita(trabalho)
-        requisicao.app.state.gerar_previa(receita, video, musica, corpo.inicio, saida)
+        requisicao.app.state.gerar_previa(
+            receita, video, musica, corpo.inicio, saida, duracao_musica=escolhida.duracao
+        )
     except HTTPException as erro:
         if erro.status_code == 422 and erro.detail == "Catálogo de músicas ilegível.":
             return _falha_previa(erro.detail)

@@ -262,3 +262,26 @@ def test_gerar_previa_erro_do_ffmpeg(tmp_path):
         render.gerar_previa(
             _receita_previa(), tmp_path / "ep.mp4", Musica(arquivo="m.mp3"), 0, tmp_path / "p.m4a", executar=falso
         )
+
+
+def _entrada_da_musica(args):
+    i = args.index("-stream_loop")
+    return args[i: args.index("-i", i) + 2]
+
+
+@pytest.mark.parametrize(
+    ("inicio", "duracao_musica", "esperado"),
+    [(5, 120.0, "5.000"), (25, 20.0, "5.000"), (40, 120.0, "0.000"), (12.5, None, "12.500")],
+)
+def test_previa_musica_comeca_no_mesmo_ponto_do_corte(tmp_path, inicio, duracao_musica, esperado):
+    chamadas = []
+    musica = Musica(arquivo=str(tmp_path / "m.mp3"), volume_db=-22)
+    render.gerar_previa(
+        _receita_previa(), tmp_path / "ep.mp4", musica, inicio, tmp_path / "p.m4a",
+        duracao_musica=duracao_musica, executar=lambda args, cwd=None, **kw: chamadas.append(args),
+    )
+    args = chamadas[0]
+    assert _entrada_da_musica(args) == ["-stream_loop", "-1", "-ss", esperado, "-i", str((tmp_path / "m.mp3").resolve())]
+    filtro = args[args.index("-filter_complex") + 1]
+    duracao = sum(b - a for a, b in render.trechos_da_previa(FAIXAS_PREVIA, inicio, 15.0))
+    assert ";".join(render._filtro_musica(1, musica, duracao)) in filtro  # mesmo filtro do corte, com os fades

@@ -210,8 +210,16 @@ def gerar_previa(
     saida: Path,
     duracao: float = 15.0,
     executar: Callable[..., None] = executar_ffmpeg,
+    duracao_musica: float | None = None,
 ) -> Path:
+    """Prévia só de áudio: a voz de `inicio` em diante com a música no mesmo ponto em que toca no corte.
+
+    No corte, a música (em loop) começa no segundo 0; aqui ela começa no segundo `inicio` do corte
+    (módulo `duracao_musica`, a duração da faixa, quando conhecida).
+    """
     trechos = trechos_da_previa(receita.faixas, inicio, duracao)
+    inicio_no_corte = inicio if inicio < sum(ate - de for de, ate in receita.faixas) else 0.0
+    ponto_da_musica = inicio_no_corte % duracao_musica if duracao_musica else inicio_no_corte
     duracao_real = sum(ate - de for de, ate in trechos)
     deslocamento = max(0.0, trechos[0][0] - FOLGA_BUSCA)
     partes: list[str] = []
@@ -228,7 +236,7 @@ def gerar_previa(
         "-y",
         "-ss", f"{deslocamento:.3f}", "-t", f"{trechos[-1][1] - deslocamento + FOLGA_BUSCA:.3f}",
         "-i", str(Path(video).resolve()),
-        "-stream_loop", "-1", "-i", str(Path(musica.arquivo).resolve()),
+        "-stream_loop", "-1", "-ss", f"{ponto_da_musica:.3f}", "-i", str(Path(musica.arquivo).resolve()),
         "-filter_complex", ";".join(partes), "-map", "[amix]",
         "-vn", "-c:a", "aac", "-b:a", "192k", "-ar", "44100", "-ac", "2",
         str(saida),

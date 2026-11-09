@@ -232,7 +232,7 @@ def test_previa_ok(ambiente):
     recebido = {}
 
     def gerador(receita, video, musica, inicio, saida, **kw):
-        recebido.update(receita=receita, video=video, musica=musica, inicio=inicio, saida=saida)
+        recebido.update(receita=receita, video=video, musica=musica, inicio=inicio, saida=saida, **kw)
         Path(saida).write_bytes(b"m4a-falso")
         return saida
 
@@ -246,6 +246,7 @@ def test_previa_ok(ambiente):
     assert recebido["musica"].arquivo.replace("\\", "/").endswith("musicas/tenso/Tensa C.mp3")
     assert recebido["saida"].name == "previa-musica.m4a" and recebido["saida"].parent.name == "trabalho"
     assert recebido["video"].name == "ep.mp4"
+    assert recebido["duracao_musica"] == 90.0  # a duração da faixa no catálogo
 
 
 def test_previa_422(ambiente):
@@ -388,3 +389,4 @@ def test_desligar_o_painel_espera_a_montagem_atual(tmp_path):
     with TestClient(criar_app(tmp_path / "cortes", fila=fila, pasta_musicas=tmp_path)):
         assert fila.paradas == []
     assert fila.paradas == [120]
+
