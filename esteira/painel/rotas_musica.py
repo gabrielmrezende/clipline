@@ -5,7 +5,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field
 
-from esteira.caminhos import garantir_escrita
+from esteira.caminhos import EscritaProibida, garantir_escrita
 from esteira.cortar import TRABALHO
 from esteira.musica import CLIMAS_VALIDOS, Faixa, ler_catalogo, ler_musicas_do_episodio
 from esteira.painel.fila import PedidoAtivo
@@ -160,6 +160,8 @@ def previa(ep: str, n: int, corpo: PedidoPrevia, requisicao: Request):
         if erro.status_code == 422 and erro.detail == "Catálogo de músicas ilegível.":
             return _falha_previa(erro.detail)
         raise
+    except EscritaProibida:
+        raise  # 403, pelo tratador do app
     except Exception as erro:  # nunca 500: qualquer falha vira 422 com o motivo
         return _falha_previa(str(erro) or type(erro).__name__)
     return FileResponse(saida, media_type="audio/mp4", headers={"Cache-Control": "no-store"})

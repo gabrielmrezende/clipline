@@ -400,3 +400,17 @@ def test_get_musica_sem_titulo_usa_nome_do_arquivo(ambiente, tmp_path):
     cliente.post(_url(""), json=CORPO)
     dados = _esperar(lambda: (d := cliente.get(_url("")).json())["anterior"] and d)
     assert dados["anterior"]["titulo"] == "Velha.mp3"
+
+
+def test_previa_escrita_proibida_403(ambiente, monkeypatch):
+    from esteira.caminhos import EscritaProibida
+
+    def proibida(caminho, base_extra=None):
+        raise EscritaProibida(f"Escrita fora de 2 - Cortes/ e Automacao/: {caminho}")
+
+    construir, _ = ambiente
+    cliente, *_ = construir(gerar_previa=lambda *a, **kw: pytest.fail("não devia gerar"))
+    monkeypatch.setattr("esteira.painel.rotas_musica.garantir_escrita", proibida)
+    resposta = cliente.post(_url("/previa"), json={**CORPO, "inicio": 0})
+    assert resposta.status_code == 403
+    assert resposta.json()["detail"].startswith("Escrita não permitida: ")
