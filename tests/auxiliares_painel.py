@@ -17,6 +17,7 @@ def criar_episodio(
     montados: set[int],
     post: bool = True,
     credito: str = "",
+    musica: Musica | None = None,
 ) -> Path:
     pasta = Path(cortes) / nome
     (pasta / "transcricao").mkdir(parents=True)
@@ -30,7 +31,8 @@ def criar_episodio(
         destino = pasta_do_corte(pasta, corte)
         (destino / "trabalho").mkdir(parents=True)
         (destino / "corte.mp4").write_bytes(b"")
-        musica = Musica("m.mp3", credito=credito) if credito else None
+        if musica is None and credito:
+            musica = Musica("m.mp3", credito=credito)
         gravar_receita(destino / "trabalho", Receita([(corte.inicio, corte.fim)], [], [], musica=musica))
         (destino / "trabalho" / "registro.json").write_text(
             json.dumps({"resultado": "ok", "alertas": []}), "utf-8"
