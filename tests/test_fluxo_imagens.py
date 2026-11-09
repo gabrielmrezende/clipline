@@ -158,6 +158,14 @@ def test_resumo_nao_baixa(tmp_path):
     assert not (corte / "imagens-sugeridas").exists()
 
 
+def test_resumo_sem_gravar_nao_muda_o_pedidos(tmp_path):
+    ep, corte = _sugeridos(tmp_path)
+    antes = (corte / "trabalho" / "pedidos.json").read_bytes()
+    fotos, total, resultados = resumir_episodio(ep, None, falso, lambda u: 10, gravar=False)
+    assert (fotos, total, resultados) == (2, 20, {1: "ok"})
+    assert (corte / "trabalho" / "pedidos.json").read_bytes() == antes
+
+
 def test_resumo_escolhas_invalidas_isola_corte(tmp_path):
     ep, corte = _sugeridos(tmp_path)
     momentos = ler_pedidos(corte / "trabalho")

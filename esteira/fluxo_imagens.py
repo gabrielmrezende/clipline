@@ -147,8 +147,12 @@ def resumir_episodio(
     consultar: Consulta = wikimedia.consultar,
     medir: Callable[[str], int | None] = wikimedia.tamanho,
     pessoas: list[str] | None = None,
+    gravar: bool = True,
 ) -> tuple[int, int, dict[int, str]]:
-    """Resolve o link de cada foto escolhida e soma os tamanhos. Não baixa nada."""
+    """Resolve o link de cada foto escolhida e soma os tamanhos. Não baixa nada.
+
+    Com `gravar=False` o pedidos.json não muda (o painel só mostra o resumo).
+    """
     fotos, total = 0, 0
     resultados: dict[int, str] = {}
     for corte, destino in cortes_com_pedidos(Path(pasta), numeros):
@@ -180,7 +184,8 @@ def resumir_episodio(
             original.url, original.bytes, original.resumidas = urls, tamanhos, list(original.escolhas)
             fotos += sum(1 for u in urls if u)
             total += sum(t or 0 for t in tamanhos)
-        gravar_pedidos(pasta_de_trabalho(destino), momentos)
+        if gravar:
+            gravar_pedidos(pasta_de_trabalho(destino), momentos)
         resultados[corte.numero] = _resultado(alertas)
     return fotos, total, resultados
 

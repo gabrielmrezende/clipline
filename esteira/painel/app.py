@@ -12,7 +12,11 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from esteira import render, wikimedia
+from esteira import rede as modulo_rede
 from esteira.caminhos import CONTEXTO, MUSICAS, EscritaProibida
+from esteira.imagens_ia import chaves
+from esteira.imagens_ia import config as config_imagens
+from esteira.imagens_ia.provedor import Provedor
 from esteira.montar import montar_episodio
 from esteira.pedidos import pessoas_do_glossario
 from esteira.painel.acesso import COOKIE, Cofre, Porteiro
@@ -51,6 +55,12 @@ def criar_app(
     montar: Callable[[Path, int], str] = _montar_real,
     buscar_candidatas: Callable[[str], list[wikimedia.Candidata]] = wikimedia.buscar_candidatas,
     pessoas: Callable[[], list[str]] = _pessoas_do_glossario,
+    consultar: wikimedia.Consulta = wikimedia.consultar,
+    medir: Callable[[str], int | None] = wikimedia.tamanho,
+    baixar: Callable[[str, Path], None] = modulo_rede.baixar_url,
+    provedores: dict[str, Callable[[dict], Provedor]] | None = None,
+    tem_chave: Callable[[str], bool] = chaves.tem_chave,
+    config_ia: Path = config_imagens.ARQUIVO,
 ) -> FastAPI:
     for corte in recuperar_trocas_interrompidas(cortes):
         print(f"Troca de música interrompida desfeita: {corte}")
@@ -73,6 +83,12 @@ def criar_app(
     app.state.gerar_previa = gerar_previa
     app.state.buscar_candidatas = buscar_candidatas
     app.state.pessoas = pessoas
+    app.state.consultar = consultar
+    app.state.medir = medir
+    app.state.baixar = baixar
+    app.state.provedores = provedores
+    app.state.tem_chave = tem_chave
+    app.state.config_ia = Path(config_ia)
     if fila is None:
         fila = Fila(executar=functools.partial(
             trocar_musica, montar=montar, base=app.state.cortes,

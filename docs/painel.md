@@ -88,6 +88,36 @@ Com `--cortes` apontando para uma cópia de teste, use também
 `ESTEIRA_PAINEL_PASTA_MUSICAS` com uma cópia da biblioteca, senão o
 `uso.json` real é alterado.
 
+## Imagens
+
+Na tela do corte, o bloco **Imagens** lista os momentos em que aparece uma
+imagem sobre o vídeo (foto, notícia ou imagem de IA).
+
+1. **Revisar.** Para cada momento de foto, escolha até 3 candidatas do
+   Wikimedia Commons ou refaça a busca. Para IA, ajuste o prompt e clique em
+   aprovar. Prompt que cita pessoa real não pode ser aprovado. Momentos podem
+   ser descartados ou trocar entre foto e IA (notícia não troca).
+2. **Baixar as fotos.** O painel mostra quantas fotos e quantos MB serão
+   baixados (origem: Wikimedia Commons) e só baixa depois do seu clique. Durante
+   o download, as escolhas do corte ficam travadas.
+3. **Gerar as imagens de IA.** O painel mostra o custo estimado (quantidade de
+   imagens aprovadas sem versão x preço do provedor) antes de gerar. Cada
+   momento guarda até 3 versões; `Gerar de novo` cria a próxima. Se faltar a
+   chave, o pedido termina com o aviso do que fazer.
+4. **Chave do provedor.** Rode uma vez, no terminal, `python -m esteira imagens
+   conectar openai` (ou `google`). A chave fica no cofre do Windows e nunca
+   aparece no painel.
+5. **Configurações.** Em Configurações, escolha o provedor e ajuste o preço por
+   imagem usado na estimativa. O painel só mostra se há chave conectada.
+
+O aviso de IA continua entrando na publicação: o `post.md` sai sem ele, e o
+aviso de imagens de IA é acrescentado ao post quando a publicação é feita.
+
+A variável de ambiente `ESTEIRA_PAINEL_IMAGEM_FALSA=1` troca os provedores de
+IA por um de mentira (devolve uma imagem cinza 1024x1536, sem rede e sem
+chave) e faz o painel dizer que há chave conectada. Existe só para os testes
+automáticos; não use no dia a dia.
+
 ## Cuidados
 
 - Use `--rede` só na Wi-Fi de casa. Nunca em Wi-Fi pública.

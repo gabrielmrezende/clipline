@@ -244,3 +244,35 @@ def test_painel_sem_variavel_usa_a_pasta_de_musicas_real(estatico, tmp_path, mon
         assert app.state.pasta_musicas == cli.MUSICAS
     finally:
         app.state.fila.parar(2)
+
+
+def test_painel_imagem_falsa_por_ambiente(estatico, tmp_path, monkeypatch):
+    import io
+
+    from PIL import Image
+
+    monkeypatch.setenv("ESTEIRA_PAINEL_IMAGEM_FALSA", "1")
+    servidor = Servidor()
+    assert cli._painel(_args(tmp_path=tmp_path), servidor, CofreFalso()) == 0
+    app = servidor.chamadas[0][0]
+    try:
+        assert app.state.tem_chave("openai") is True and app.state.tem_chave("google") is True
+        assert set(app.state.provedores) == {"openai", "google"}
+        for nome, fabrica in app.state.provedores.items():
+            provedor = fabrica({})
+            assert provedor.nome == nome
+            imagem = Image.open(io.BytesIO(provedor.gerar("qualquer coisa")))
+            assert imagem.size == (1024, 1536)
+    finally:
+        app.state.fila.parar(2)
+
+
+def test_painel_sem_variavel_usa_os_provedores_reais(estatico, tmp_path, monkeypatch):
+    monkeypatch.delenv("ESTEIRA_PAINEL_IMAGEM_FALSA", raising=False)
+    servidor = Servidor()
+    cli._painel(_args(tmp_path=tmp_path), servidor, CofreFalso())
+    app = servidor.chamadas[0][0]
+    try:
+        assert app.state.provedores is None
+    finally:
+        app.state.fila.parar(2)
