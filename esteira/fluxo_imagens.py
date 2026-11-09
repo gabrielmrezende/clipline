@@ -40,7 +40,7 @@ class ErroBusca(Exception):
     pass
 
 
-def _cortes_com_pedidos(pasta: Path, numeros: set[int] | None) -> list[tuple[Corte, Path]]:
+def cortes_com_pedidos(pasta: Path, numeros: set[int] | None) -> list[tuple[Corte, Path]]:
     cortes = []
     for corte in ler_aprovados(pasta):
         if numeros is not None and corte.numero not in numeros:
@@ -79,7 +79,7 @@ def buscar_episodio(
 ) -> dict[int, str]:
     resultados: dict[int, str] = {}
     achadas: list[tuple[Corte, Path, list[Momento], dict[int, list]]] = []
-    for corte, destino in _cortes_com_pedidos(Path(pasta), numeros):
+    for corte, destino in cortes_com_pedidos(Path(pasta), numeros):
         carregado = _carregar(destino, pessoas)
         if isinstance(carregado, str):
             resultados[corte.numero] = carregado
@@ -151,7 +151,7 @@ def resumir_episodio(
     """Resolve o link de cada foto escolhida e soma os tamanhos. Não baixa nada."""
     fotos, total = 0, 0
     resultados: dict[int, str] = {}
-    for corte, destino in _cortes_com_pedidos(Path(pasta), numeros):
+    for corte, destino in cortes_com_pedidos(Path(pasta), numeros):
         carregado = _carregar_escolhas(destino, pessoas or [])
         if isinstance(carregado, str):
             resultados[corte.numero] = carregado
@@ -354,7 +354,7 @@ def sugerir_episodio(
     Os links vêm do `imagens resumo`; `consultar` fica na assinatura do contrato, sem uso aqui.
     """
     resultados: dict[int, str] = {}
-    for corte, destino in _cortes_com_pedidos(Path(pasta), numeros):
+    for corte, destino in cortes_com_pedidos(Path(pasta), numeros):
         carregado = _carregar_escolhas(destino, pessoas)
         if isinstance(carregado, str):
             resultados[corte.numero] = carregado

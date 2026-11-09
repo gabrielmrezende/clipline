@@ -1,3 +1,5 @@
+import json
+
 import pytest
 
 from esteira import cli
@@ -159,3 +161,59 @@ def test_escrita_proibida_vira_erro(tmp_path, capsys):
     saida = capsys.readouterr()
     assert saida.err.startswith("Erro: Escrita fora de 2 - Cortes/ e Automacao/")
     assert "Traceback" not in saida.err
+
+
+def _episodio_com_ia(tmp_path):
+    from esteira.pedidos import Momento, gravar_pedidos
+
+    ep = tmp_path / "ep"
+    corte = ep / "01-bom-corte"
+    (corte / "trabalho").mkdir(parents=True)
+    (ep / "aprovados.json").write_text(json.dumps({"cortes": [BOM]}), "utf-8")
+    gravar_pedidos(corte / "trabalho", [Momento(52.0, 55.0, "f", "ia", "Turistas", prompt="praia", aprovado=True)])
+    return ep, corte
+
+
+class _ProvedorFalso:
+    nome = "openai"
+
+    def __init__(self):
+        self.chamadas = 0
+
+    def gerar(self, prompt, proporcao="9:16"):
+        import io
+
+        from PIL import Image
+
+        self.chamadas += 1
+        buffer = io.BytesIO()
+        Image.new("RGB", (64, 96), (10, 10, 200)).save(buffer, "PNG")
+        return buffer.getvalue()
+
+
+def test_imagens_gerar_sem_confirmar_so_mostra_orcamento(tmp_path, monkeypatch, capsys):
+    from esteira.imagens_ia.config import padrao
+
+    ep, corte = _episodio_com_ia(tmp_path)
+    monkeypatch.setattr(cli, "garantir_escrita", lambda caminho: caminho)
+    monkeypatch.setattr(cli, "ler_config", padrao)
+    monkeypatch.setattr(cli, "provedor_atual", lambda config: pytest.fail("não deve construir o provedor"))
+    assert cli.principal(["imagens", "gerar", str(ep)]) == 0
+    assert "1 imagens, provedor openai, modelo gpt-image-2, custo estimado ~US$ 0.04" in capsys.readouterr().out
+    assert not (corte / "imagens-sugeridas").exists()
+
+
+def test_imagens_gerar_confirmar_gera(tmp_path, monkeypatch, capsys):
+    from esteira.imagens_ia.config import padrao
+
+    ep, corte = _episodio_com_ia(tmp_path)
+    falso = _ProvedorFalso()
+    monkeypatch.setattr(cli, "garantir_escrita", lambda caminho: caminho)
+    monkeypatch.setattr("esteira.caminhos.garantir_escrita", lambda caminho, base_extra=None: caminho)
+    monkeypatch.setattr(cli, "ler_config", padrao)
+    monkeypatch.setattr(cli, "provedor_atual", lambda config: falso)
+    assert cli.principal(["imagens", "gerar", str(ep), "--confirmar"]) == 0
+    saida = capsys.readouterr().out
+    assert "Gerando 1 de 1…" in saida and "0052-turistas-ia-1.jpg" in saida
+    assert falso.chamadas == 1
+    assert (corte / "imagens-sugeridas" / "0052-turistas-ia-1.jpg").exists()

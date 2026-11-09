@@ -161,6 +161,22 @@ def test_resumo(episodio):
     assert pedido.textos.instagram in texto and pedido.textos.youtube_descricao in texto
 
 
+def test_resumo_lembra_das_imagens_de_ia(episodio):
+    pasta, corte, _ = episodio
+    pedido = preparar_pedido(pasta, 1, "2026-11-08 18:00", TODAS, AGORA)
+    assert pedido.imagens_ia == 0
+    assert "imagem de IA" not in resumo(pedido, MODOS) and "imagens de IA" not in resumo(pedido, MODOS)
+    ia = [{"arquivo": "a-ia-1.jpg", "momento": "a"}]
+    (corte / "trabalho" / "ia.json").write_text(json.dumps(ia), "utf-8")
+    texto = resumo(preparar_pedido(pasta, 1, "2026-11-08 18:00", TODAS, AGORA), MODOS)
+    linhas = texto.splitlines()
+    lembrete = "Este corte tem 1 imagem de IA gerada: confira se o vídeo final usa alguma e inclua o aviso."
+    assert linhas[3] == lembrete and linhas[2].startswith("Data:")
+    (corte / "trabalho" / "ia.json").write_text(json.dumps(ia * 2), "utf-8")
+    texto = resumo(preparar_pedido(pasta, 1, "2026-11-08 18:00", TODAS, AGORA), MODOS)
+    assert "Este corte tem 2 imagens de IA geradas: confira se o vídeo final usa alguma e inclua o aviso." in texto
+
+
 def test_confirmar_envia_youtube_e_agenda_resto(episodio):
     pasta, _, _ = episodio
     pedido = preparar_pedido(pasta, 1, "2026-11-08 18:00", TODAS, AGORA)

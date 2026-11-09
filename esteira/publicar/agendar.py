@@ -3,6 +3,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from esteira.cortar import TRABALHO, ler_aprovados, pasta_do_corte
+from esteira.fluxo_imagens import ler_ia
 from esteira.midia import ErroMidia, sondar
 from esteira.publicar.envio import assinatura, enviar
 from esteira.publicar.fila import Item, gravar_fila, ler_fila
@@ -39,6 +40,7 @@ class Pedido:
     textos: Textos
     data: datetime
     redes: list[str]
+    imagens_ia: int = 0
 
 
 def ler_data(texto: str, agora: datetime) -> datetime:
@@ -118,7 +120,7 @@ def preparar_pedido(pasta_episodio: Path, numero: int, data: str, redes: list[st
 
     if problemas:
         raise ErroAgendar("\n".join(problemas))
-    return Pedido(pasta_episodio, numero, corte.titulo, video, duracao, textos, quando, redes)
+    return Pedido(pasta_episodio, numero, corte.titulo, video, duracao, textos, quando, redes, len(ler_ia(pasta_corte / TRABALHO)))
 
 
 def _data_por_extenso(data: datetime) -> str:
@@ -131,6 +133,10 @@ def resumo(pedido: Pedido, modos: dict) -> str:
         f"Vídeo: {pedido.video.name} ({_minutos(pedido.duracao)}, 1080x1920)",
         f"Data: {_data_por_extenso(pedido.data)}",
     ]
+    if pedido.imagens_ia:
+        n = pedido.imagens_ia
+        gerada = "imagem de IA gerada" if n == 1 else "imagens de IA geradas"
+        linhas.append(f"Este corte tem {n} {gerada}: confira se o vídeo final usa alguma e inclua o aviso.")
     t = pedido.textos
     corpos = {
         "youtube": f"Título: {t.youtube_titulo}\n\n{t.youtube_descricao}",

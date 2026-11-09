@@ -9,10 +9,11 @@ from esteira.caminhos import CONTEXTO, CORTES, MUSICAS, EscritaProibida, garanti
 from esteira.cartao import gerar_cartao
 from esteira.cortar import CORTE_MP4, TRABALHO, ler_aprovados, pasta_de_trabalho, pasta_do_corte, preparar_episodio
 from esteira.episodio import criar_episodio
-from esteira.fluxo_imagens import ErroBusca, buscar_episodio, resumir_episodio, sugerir_episodio
+from esteira.fluxo_imagens import ErroBusca, buscar_episodio, cortes_com_pedidos, resumir_episodio, sugerir_episodio
 from esteira.fluxo_planos import planejar_episodio
 from esteira.imagens_ia.chaves import gravar_chave
-from esteira.imagens_ia.config import PROVEDORES
+from esteira.imagens_ia.config import PROVEDORES, ler_config, provedor_atual
+from esteira.imagens_ia.gerar import gerar_cortes, orcamento
 from esteira.imagens_ia.provedor import ErroImagem
 from esteira.midia import ErroMidia
 from esteira.montar import montar_episodio
@@ -103,12 +104,31 @@ def _imagens_conectar(provedor: str) -> int:
     return 0
 
 
+def _imagens_gerar(args, pasta: Path, numeros: set[int] | None, pessoas: list[str]) -> int:
+    config = ler_config()
+    cortes = [destino for _, destino in cortes_com_pedidos(pasta, numeros)]
+    previsto = orcamento(cortes, config)
+    if not args.confirmar:
+        custo = f"{previsto['custo_usd']:.2f}"
+        print(f"{previsto['imagens']} imagens, provedor {previsto['provedor']}, modelo {previsto['modelo']}, "
+              f"custo estimado ~US$ {custo}")
+        return 0
+    arquivos, avisos = gerar_cortes(cortes, provedor_atual(config), config, pessoas, progresso=print)
+    for arquivo in arquivos:
+        print(f"Gerada: {arquivo}")
+    for aviso in avisos:
+        print(f"Aviso: {aviso}")
+    return 1 if avisos else 0
+
+
 def _imagens(args) -> int:
     if args.acao == "conectar":
         return _imagens_conectar(args.pasta)
     pasta = garantir_escrita(Path(args.pasta))
     numeros = set(args.numero) if args.numero else None
     pessoas = pessoas_do_glossario(CONTEXTO / "glossario.md")
+    if args.acao == "gerar":
+        return _imagens_gerar(args, pasta, numeros, pessoas)
     if args.acao == "resumo":
         fotos, total, resultados = resumir_episodio(pasta, numeros, pessoas=pessoas)
         codigo = _imprimir(resultados)
@@ -288,9 +308,10 @@ def principal(argv: list[str] | None = None) -> int:
     c.set_defaults(funcao=_preparar)
 
     c = comandos.add_parser("imagens")
-    c.add_argument("acao", choices=["buscar", "resumo", "sugerir", "conectar"])
+    c.add_argument("acao", choices=["buscar", "resumo", "sugerir", "conectar", "gerar"])
     c.add_argument("pasta")
     c.add_argument("--numero", type=int, action="append")
+    c.add_argument("--confirmar", action="store_true")
     c.set_defaults(funcao=_imagens)
 
     c = comandos.add_parser("montar")
