@@ -123,19 +123,31 @@ def test_nao_e_ia_e_nao_encontrado(tmp_path):
         _gerar(corte, tmp_path, chave="9999-x")
 
 
+def _perto(pixel, alvo, tolerancia=40):
+    return all(abs(a - b) <= tolerancia for a, b in zip(pixel, alvo))
+
+
 def test_imagem_horizontal_fica_na_faixa_central(tmp_path):
-    corte = _corte(tmp_path, [_ia()])
-    horizontal = Image.new("RGB", (1536, 1024), (250, 0, 0))
-    horizontal.paste(Image.new("RGB", (200, 200), (0, 250, 0)), (668, 412))
+    azul, amarelo, verde = (0, 0, 250), (250, 250, 0), (0, 200, 0)
+    horizontal = Image.new("RGB", (1536, 1024), verde)
+    horizontal.paste(Image.new("RGB", (60, 1024), azul), (0, 0))
+    horizontal.paste(Image.new("RGB", (60, 1024), amarelo), (1476, 0))
     buffer = io.BytesIO()
     horizontal.save(buffer, "PNG")
+    corte = _corte(tmp_path, [_ia()])
     nome = _gerar(corte, tmp_path, Falso(buffer.getvalue()))
     with Image.open(corte / "imagens-sugeridas" / nome) as imagem:
         assert imagem.size == (1080, 1920)
-        centro = imagem.getpixel((540, 960))
-        topo = imagem.getpixel((540, 20))
-    assert centro[1] > 200 and centro[0] < 60  # o quadrado verde ao centro, sem desfoque
-    assert topo[0] > 200 and topo[1] < 60  # o topo é o fundo desfocado
+        # a imagem inteira cabe na largura: as bordas continuam visíveis (um recorte as perderia)
+        assert _perto(imagem.getpixel((2, 960)), azul)
+        assert _perto(imagem.getpixel((1077, 960)), amarelo)
+        assert _perto(imagem.getpixel((540, 960)), verde)
+        # a faixa tem 720 px de altura (y 600 a 1320)
+        assert _perto(imagem.getpixel((2, 620)), azul) and _perto(imagem.getpixel((2, 1300)), azul)
+        # fora da faixa é o fundo desfocado, sem as bordas
+        for y in (560, 1360, 20, 1900):
+            assert not _perto(imagem.getpixel((2, y)), azul, 80)
+            assert not _perto(imagem.getpixel((1077, y)), amarelo, 80)
 
 
 def test_bytes_que_nao_sao_imagem(tmp_path):
