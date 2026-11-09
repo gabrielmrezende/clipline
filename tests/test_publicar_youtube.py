@@ -1,4 +1,5 @@
 import json
+from datetime import datetime
 
 import pytest
 
@@ -6,7 +7,7 @@ from esteira.publicar import credenciais, http, youtube
 from esteira.publicar.credenciais import ErroConexao
 from esteira.publicar.http import ErroRede, Resultado
 from esteira.publicar.youtube import YouTube
-from tests.auxiliares_publicar import DATA, TEXTOS, Cofre, Resposta, Servidor, erro_http
+from tests.auxiliares_publicar import DATA, FUSO, TEXTOS, Cofre, Resposta, Servidor, erro_http
 
 TOKEN = {"access_token": "SEGREDO-ACESSO"}
 CHEIO = {"youtube:client_id": "cid", "youtube:client_secret": "csec", "youtube:refresh_token": "rt"}
@@ -47,9 +48,10 @@ def test_envio_privado(monkeypatch, video):
 
 def test_envio_agendado_tem_publish_at(monkeypatch, video):
     servidor = _preparar(monkeypatch, _envio_ok())
-    r = YouTube().publicar(video, TEXTOS, DATA, "agendado")
+    futura = datetime(2099, 11, 8, 18, 0, tzinfo=FUSO)  # o YouTube não agenda data passada
+    r = YouTube().publicar(video, TEXTOS, futura, "agendado")
     assert r.estado == "publicado"
-    assert json.loads(servidor.pedidos[1].data)["status"]["publishAt"] == "2026-11-08T21:00:00Z"
+    assert json.loads(servidor.pedidos[1].data)["status"]["publishAt"] == "2099-11-08T21:00:00Z"
 
 
 def test_sem_refresh_token_pede_reconexao(monkeypatch, video):
