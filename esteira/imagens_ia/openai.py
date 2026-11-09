@@ -29,7 +29,12 @@ class OpenAI:
             "quality": self.config["qualidade"],
             "n": 1,
         }
-        dados = _comum.chamar(self.nome, self._pedir, self._ler_chave, URL, "Authorization", "Bearer ", corpo, recusa=_recusa)
+        return _comum.chamar(
+            self.nome, self._pedir, self._ler_chave, URL, "Authorization", "Bearer ", corpo,
+            interpretar=self._imagem, recusa=_recusa,
+        )
+
+    def _imagem(self, dados: dict) -> bytes:
         lista = dados.get("data")
         primeiro = lista[0] if isinstance(lista, list) and lista and isinstance(lista[0], dict) else {}
         return _comum.decodificar_imagem(self.nome, primeiro.get("b64_json"))

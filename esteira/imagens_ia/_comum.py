@@ -30,9 +30,13 @@ def chamar(
     prefixo_chave: str,
     corpo: dict,
     extras: dict | None = None,
+    interpretar: Callable[[dict], bytes] = lambda dados: b"",
     recusa: Callable[[ErroRede], str | None] = lambda erro: None,
-) -> dict:
-    """Faz o POST autenticado e devolve o JSON da resposta, ou levanta o erro certo."""
+    chave_invalida: Callable[[ErroRede], bool] = lambda erro: False,
+) -> bytes:
+    """Faz o POST autenticado e devolve os bytes da imagem, ou levanta o erro certo.
+
+    Toda mensagem de erro levantada passa por `limpar`."""
     chave = ler_chave(nome)
     if not chave:
         raise SemChave(nome)
@@ -40,7 +44,7 @@ def chamar(
     try:
         _, _, resposta = pedir("POST", url, json.dumps(corpo).encode("utf-8"), cabecalhos)
     except ErroRede as erro:
-        if erro.codigo in (401, 403):
+        if erro.codigo in (401, 403) or chave_invalida(erro):
             raise ChaveRecusada(nome) from None
         if erro.codigo is None or erro.codigo == 429 or erro.codigo >= 500:
             raise ErroTemporario(nome, limpar(str(erro), chave)) from None
@@ -48,4 +52,7 @@ def chamar(
         if motivo is not None:
             raise ConteudoRecusado(f"{nome} recusou o conteúdo: {limpar(motivo, chave)}") from None
         raise ErroImagem(f"{nome} recusou o pedido: {limpar(_motivo(erro.dados), chave)}") from None
-    return json_de(resposta)
+    try:
+        return interpretar(json_de(resposta))
+    except (ConteudoRecusado, ErroImagem) as erro:
+        raise type(erro)(limpar(str(erro), chave)) from None

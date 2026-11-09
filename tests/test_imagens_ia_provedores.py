@@ -162,13 +162,42 @@ def test_google_recusa_em_200_com_erro_da_interacao():
         FABRICAS["google"](PedirFalso(resposta)).gerar("x")
 
 
-def test_google_recusa_em_200_com_so_texto():
+def test_google_so_texto_em_200_vira_erro_imagem_com_o_texto_limpo():
     resposta = {
         "status": "completed",
-        "steps": [{"type": "model_output", "content": [{"type": "text", "text": "Não posso criar essa imagem."}]}],
+        "steps": [{"type": "model_output", "content": [{"type": "text", "text": f"Não consegui gerar. {CHAVE}"}]}],
     }
-    with pytest.raises(ConteudoRecusado, match="Não posso criar"):
+    with pytest.raises(ErroImagem, match="texto em vez de imagem") as e:
         FABRICAS["google"](PedirFalso(resposta)).gerar("x")
+    assert not isinstance(e.value, ConteudoRecusado)
+    assert "Não consegui gerar" in str(e.value)
+    assert CHAVE not in str(e.value)
+
+
+def test_google_recusa_em_200_nao_vaza_a_chave():
+    resposta = {"status": "failed", "steps": [], "errors": [{"message": f"bloqueado {CHAVE}"}]}
+    with pytest.raises(ConteudoRecusado) as e:
+        FABRICAS["google"](PedirFalso(resposta)).gerar("x")
+    assert CHAVE not in str(e.value)
+
+
+def test_google_chave_invalida_vem_como_400():
+    dados = {
+        "error": {
+            "code": 400,
+            "message": "API key not valid. Please pass a valid API key.",
+            "status": "INVALID_ARGUMENT",
+            "details": [{"@type": "type.googleapis.com/google.rpc.ErrorInfo", "reason": "API_KEY_INVALID", "domain": "googleapis.com"}],
+        }
+    }
+    with pytest.raises(ChaveRecusada):
+        FABRICAS["google"](PedirFalso(erro=erro_http(400, dados))).gerar("x")
+
+
+def test_google_chave_invalida_so_pela_mensagem():
+    dados = {"error": {"code": 400, "message": "API key not valid. Please pass a valid API key.", "status": "INVALID_ARGUMENT"}}
+    with pytest.raises(ChaveRecusada):
+        FABRICAS["google"](PedirFalso(erro=erro_http(400, dados))).gerar("x")
 
 
 @pytest.mark.parametrize(
