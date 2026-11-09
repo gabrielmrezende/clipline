@@ -17,6 +17,10 @@ interface Props {
   videoFinal: string[];
   tempoDoPlayer: () => number;
   aoTerminar: () => void;
+  /** Descarrega o <video> do corte antes do pedido, para o Windows soltar o corte.mp4. */
+  soltarVideo?: () => void;
+  /** Avisa quando há (ou deixa de haver) troca de música em andamento neste corte. */
+  aoMudarAndamento?: (ativo: boolean) => void;
 }
 
 const VOLUME_PADRAO = -26;
@@ -48,7 +52,15 @@ interface FaixaLinha {
   motivo?: string;
 }
 
-export function BlocoMusica({ ep, n, videoFinal, tempoDoPlayer, aoTerminar }: Props) {
+export function BlocoMusica({
+  ep,
+  n,
+  videoFinal,
+  tempoDoPlayer,
+  aoTerminar,
+  soltarVideo,
+  aoMudarAndamento,
+}: Props) {
   const base = caminhoCorte(ep, n);
   const [lista, setLista] = useState<ListaMusicas | null>(null);
   const [musica, setMusica] = useState<MusicaDoCorte | null>(null);
@@ -69,6 +81,8 @@ export function BlocoMusica({ ep, n, videoFinal, tempoDoPlayer, aoTerminar }: Pr
   const terminados = useRef<Set<string>>(new Set());
   const aoTerminarRef = useRef(aoTerminar);
   aoTerminarRef.current = aoTerminar;
+  const aoMudarAndamentoRef = useRef(aoMudarAndamento);
+  aoMudarAndamentoRef.current = aoMudarAndamento;
 
   const atual = musica?.atual ?? null;
   const arquivoEscolhido = escolhida ?? atual?.arquivo ?? null;
@@ -109,6 +123,10 @@ export function BlocoMusica({ ep, n, videoFinal, tempoDoPlayer, aoTerminar }: Pr
     },
     [],
   );
+
+  useEffect(() => {
+    aoMudarAndamentoRef.current?.(ocupado);
+  }, [ocupado]);
 
   // Consulta o pedido a cada 2 s até ele terminar.
   useEffect(() => {
@@ -176,6 +194,7 @@ export function BlocoMusica({ ep, n, videoFinal, tempoDoPlayer, aoTerminar }: Pr
   }
 
   async function enviar(arquivo: string, volume_db: number) {
+    soltarVideo?.();
     setEnviando(true);
     setErroPedido(null);
     try {
@@ -183,6 +202,7 @@ export function BlocoMusica({ ep, n, videoFinal, tempoDoPlayer, aoTerminar }: Pr
       setPedido(novo);
     } catch (x) {
       setErroPedido(mensagem(x));
+      aoMudarAndamentoRef.current?.(false);
     } finally {
       setEnviando(false);
     }

@@ -13,12 +13,14 @@ export function Corte() {
   const [erro, setErro] = useState<string | null>(null);
   const [versaoVideo, setVersaoVideo] = useState<string | null>(null);
   const [sinalPost, setSinalPost] = useState(0);
+  const [montando, setMontando] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
     setDados(null);
     setErro(null);
     setVersaoVideo(null);
+    setMontando(false);
     pedir<CorteDetalhe>(caminhoCorte(ep, n))
       .then(setDados)
       .catch((x) => setErro(x instanceof ErroApi ? x.detail : "Erro inesperado."));
@@ -53,6 +55,17 @@ export function Corte() {
 
   const { bloco, guia, imagens } = dados;
   const base = caminhoCorte(ep, n);
+
+  /** Solta o corte.mp4 antes da troca: no Windows, arquivo aberto no player não pode ser trocado. */
+  function soltarVideo() {
+    const video = videoRef.current;
+    if (video) {
+      video.pause();
+      video.removeAttribute("src");
+      video.load();
+    }
+    setMontando(true);
+  }
   return (
     <main className="coluna">
       {voltar}
@@ -70,12 +83,15 @@ export function Corte() {
             videoFinal={bloco.video_final}
             videoRef={videoRef}
             versao={versaoVideo}
+            montando={montando}
           />
           <BlocoMusica
             ep={ep}
             n={n}
             videoFinal={bloco.video_final}
             tempoDoPlayer={() => videoRef.current?.currentTime ?? 0}
+            soltarVideo={soltarVideo}
+            aoMudarAndamento={setMontando}
             aoTerminar={() => {
               setVersaoVideo(String(Date.now()));
               setSinalPost((s) => s + 1);

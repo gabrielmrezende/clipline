@@ -9,9 +9,11 @@ interface Props {
   videoRef?: RefObject<HTMLVideoElement>;
   /** Muda quando o corte.mp4 foi refeito, para o navegador não usar o cache. */
   versao?: string | null;
+  /** Há troca de música em andamento: o <video> do corte sai da tela para soltar o arquivo. */
+  montando?: boolean;
 }
 
-export function Players({ ep, n, videoFinal, videoRef, versao }: Props) {
+export function Players({ ep, n, videoFinal, videoRef, versao, montando = false }: Props) {
   const [atual, setAtual] = useState<string | null>(null);
   const base = caminhoCorte(ep, n);
   const escolhido = atual !== null && videoFinal.includes(atual) ? atual : null;
@@ -36,7 +38,13 @@ export function Players({ ep, n, videoFinal, videoRef, versao }: Props) {
           </button>
         ))}
       </div>
-      <video key={src} ref={videoRef} src={src} controls playsInline preload="metadata" />
+      {montando && escolhido === null ? (
+        <p role="status" className="montando-corte">
+          Montando o corte…
+        </p>
+      ) : (
+        <video key={src} ref={videoRef} src={src} controls playsInline preload="metadata" />
+      )}
     </section>
   );
 }

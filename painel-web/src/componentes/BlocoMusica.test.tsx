@@ -101,7 +101,14 @@ async function avancar(ms: number) {
   });
 }
 
-async function montar(props: { videoFinal?: string[]; aoTerminar?: () => void } = {}) {
+interface PropsTeste {
+  videoFinal?: string[];
+  aoTerminar?: () => void;
+  soltarVideo?: () => void;
+  aoMudarAndamento?: (ativo: boolean) => void;
+}
+
+async function montar(props: PropsTeste = {}) {
   const aoTerminar = props.aoTerminar ?? vi.fn();
   const r = render(
     <BlocoMusica
@@ -110,6 +117,8 @@ async function montar(props: { videoFinal?: string[]; aoTerminar?: () => void } 
       videoFinal={props.videoFinal ?? []}
       tempoDoPlayer={() => tempo}
       aoTerminar={aoTerminar}
+      soltarVideo={props.soltarVideo}
+      aoMudarAndamento={props.aoMudarAndamento}
     />,
   );
   await avancar(0);
@@ -261,6 +270,50 @@ describe("BlocoMusica", () => {
     const posts = chamadas.filter((c) => c.metodo === "POST");
     expect(posts).toHaveLength(2);
     expect(posts[1].corpo).toEqual({ arquivo: "leve/Brisa.mp3", volume_db: -22 });
+  });
+
+  it("solta o vídeo do corte antes do POST e avisa o andamento", async () => {
+    const postsAoSoltar: number[] = [];
+    const soltarVideo = vi.fn(() => {
+      postsAoSoltar.push(chamadas.filter((c) => c.metodo === "POST").length);
+    });
+    const aoMudarAndamento = vi.fn();
+    tarefas = [pedido({ estado: "montando" }), pedido({ estado: "pronto", terminado: 2 })];
+    await montar({ soltarVideo, aoMudarAndamento });
+    expect(aoMudarAndamento).toHaveBeenLastCalledWith(false);
+    escolher("Brisa");
+    fireEvent.click(botaoMontar());
+    expect(soltarVideo).toHaveBeenCalledTimes(1);
+    expect(postsAoSoltar).toEqual([0]);
+    expect(chamadas.filter((c) => c.metodo === "POST")).toHaveLength(1);
+    await avancar(0);
+    expect(aoMudarAndamento).toHaveBeenLastCalledWith(true);
+    await avancar(2000);
+    expect(aoMudarAndamento).toHaveBeenLastCalledWith(true);
+    await avancar(2000);
+    expect(screen.getByText("Pronto: o corte.mp4 foi atualizado.")).toBeTruthy();
+    expect(aoMudarAndamento).toHaveBeenLastCalledWith(false);
+  });
+
+  it("POST recusado devolve o vídeo do corte", async () => {
+    respostaPost = () => resposta({ detail: "Este corte já está sendo montado." }, 409);
+    const aoMudarAndamento = vi.fn();
+    await montar({ soltarVideo: vi.fn(), aoMudarAndamento });
+    escolher("Brisa");
+    fireEvent.click(botaoMontar());
+    await avancar(0);
+    expect(screen.getByText("Este corte já está sendo montado.")).toBeTruthy();
+    expect(aoMudarAndamento).toHaveBeenLastCalledWith(false);
+  });
+
+  it("cancelar a confirmação não solta o vídeo", async () => {
+    vi.stubGlobal("confirm", vi.fn(() => false));
+    const soltarVideo = vi.fn();
+    await montar({ videoFinal: ["a.mp4"], soltarVideo });
+    escolher("Brisa");
+    fireEvent.click(botaoMontar());
+    await avancar(0);
+    expect(soltarVideo).not.toHaveBeenCalled();
   });
 
   it("mostra o detail do 409", async () => {
