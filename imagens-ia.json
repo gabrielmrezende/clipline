@@ -1,0 +1,15 @@
+{
+  "provedor": "openai",
+  "provedores": {
+    "openai": {
+      "modelo": "gpt-image-2",
+      "qualidade": "medium",
+      "preco_usd": 0.041
+    },
+    "google": {
+      "modelo": "gemini-nano-banana-2.1",
+      "qualidade": "1K",
+      "preco_usd": 0.0336
+    }
+  }
+}

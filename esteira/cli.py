@@ -1,4 +1,5 @@
 import argparse
+import getpass
 import json
 import os
 import sys
@@ -10,6 +11,9 @@ from esteira.cortar import CORTE_MP4, TRABALHO, ler_aprovados, pasta_de_trabalho
 from esteira.episodio import criar_episodio
 from esteira.fluxo_imagens import ErroBusca, buscar_episodio, resumir_episodio, sugerir_episodio
 from esteira.fluxo_planos import planejar_episodio
+from esteira.imagens_ia.chaves import gravar_chave
+from esteira.imagens_ia.config import PROVEDORES
+from esteira.imagens_ia.provedor import ErroImagem
 from esteira.midia import ErroMidia
 from esteira.montar import montar_episodio
 from esteira.musica import (
@@ -87,7 +91,21 @@ def _montar(args) -> int:
     return _imprimir(montar_episodio(pasta, numeros, args.forcar))
 
 
+def _imagens_conectar(provedor: str) -> int:
+    if provedor not in PROVEDORES:
+        print(f"Provedor desconhecido: {provedor}. Use um destes: {', '.join(PROVEDORES)}.", file=sys.stderr)
+        return 2
+    chave = getpass.getpass(f"Chave da API ({provedor}): ").strip()
+    if not chave:
+        raise ErroImagem("Chave da API vazia; nada foi guardado.")
+    gravar_chave(provedor, chave)
+    print(f"Chave da {provedor} guardada no Windows.")
+    return 0
+
+
 def _imagens(args) -> int:
+    if args.acao == "conectar":
+        return _imagens_conectar(args.pasta)
     pasta = garantir_escrita(Path(args.pasta))
     numeros = set(args.numero) if args.numero else None
     pessoas = pessoas_do_glossario(CONTEXTO / "glossario.md")
@@ -270,7 +288,7 @@ def principal(argv: list[str] | None = None) -> int:
     c.set_defaults(funcao=_preparar)
 
     c = comandos.add_parser("imagens")
-    c.add_argument("acao", choices=["buscar", "resumo", "sugerir"])
+    c.add_argument("acao", choices=["buscar", "resumo", "sugerir", "conectar"])
     c.add_argument("pasta")
     c.add_argument("--numero", type=int, action="append")
     c.set_defaults(funcao=_imagens)
@@ -321,6 +339,6 @@ def principal(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         return args.funcao(args)
-    except (ErroMidia, ErroBusca, FileExistsError, EscritaProibida, ErroAgendar, ErroPost, ErroConexao, ErroRede) as erro:
+    except (ErroMidia, ErroBusca, FileExistsError, EscritaProibida, ErroAgendar, ErroPost, ErroConexao, ErroRede, ErroImagem) as erro:
         print(f"Erro: {erro}", file=sys.stderr)
         return 1
