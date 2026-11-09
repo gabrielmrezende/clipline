@@ -1,4 +1,5 @@
 import json
+import os
 from datetime import datetime
 
 import pytest
@@ -236,3 +237,33 @@ def test_confirmar_grava_assinatura(episodio):
     pedido = preparar_pedido(pasta, 1, "2026-11-08 18:00", ["instagram"], AGORA)
     item = confirmar(pedido, MODOS, {})[0]
     assert item.assinatura == assinatura(pedido.video, pedido.textos, "instagram") != ""
+
+
+DESATUALIZADO = "vídeo final mais antigo que o corte.mp4: refaça no CapCut"
+
+
+def _datas(corte, video_final, corte_mp4):
+    os.utime(corte / "video-final" / "Corte 1.mp4", (video_final, video_final))
+    (corte / "corte.mp4").write_bytes(b"CORTE")
+    os.utime(corte / "corte.mp4", (corte_mp4, corte_mp4))
+
+
+def test_recusa_video_final_mais_antigo_que_o_corte(episodio):
+    pasta, corte, _ = episodio
+    _datas(corte, video_final=1_000_000, corte_mp4=2_000_000)
+    with pytest.raises(ErroAgendar) as erro:
+        preparar_pedido(pasta, 1, "2026-11-08 18:00", TODAS, AGORA)
+    assert DESATUALIZADO in str(erro.value).splitlines()
+
+
+def test_aceita_video_final_mais_novo_que_o_corte(episodio):
+    pasta, corte, _ = episodio
+    _datas(corte, video_final=2_000_000, corte_mp4=1_000_000)
+    assert preparar_pedido(pasta, 1, "2026-11-08 18:00", TODAS, AGORA).video == corte / "video-final" / "Corte 1.mp4"
+
+
+def test_sem_corte_mp4_nao_recusa_por_data(episodio):
+    pasta, corte, _ = episodio
+    os.utime(corte / "video-final" / "Corte 1.mp4", (1_000_000, 1_000_000))
+    assert not (corte / "corte.mp4").exists()
+    assert preparar_pedido(pasta, 1, "2026-11-08 18:00", TODAS, AGORA)

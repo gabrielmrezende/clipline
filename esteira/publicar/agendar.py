@@ -8,11 +8,13 @@ from esteira.publicar.envio import assinatura, enviar
 from esteira.publicar.fila import Item, gravar_fila, ler_fila
 from esteira.publicar.post import ErroPost, Textos, conferir_textos, ler_post
 from esteira.receita import ler_receita
+from esteira.revisao import video_final_desatualizado
 
 FUSO = timezone(timedelta(hours=-3))
 REDES = ("youtube", "instagram", "tiktok")
 INATIVOS = ("cancelado", "erro")
 LIMITE_SHORTS = 180
+VIDEO_FINAL_DESATUALIZADO = "vídeo final mais antigo que o corte.mp4: refaça no CapCut"
 DIAS = ("segunda-feira", "terça-feira", "quarta-feira", "quinta-feira", "sexta-feira", "sábado", "domingo")
 NOMES = {"youtube": "YouTube", "instagram": "Instagram", "tiktok": "TikTok"}
 MODOS_TEXTO = {
@@ -93,6 +95,8 @@ def preparar_pedido(pasta_episodio: Path, numero: int, data: str, redes: list[st
                 problemas.append(f"vídeo {midia.largura}x{midia.altura}, esperado 1080x1920")
             if "youtube" in redes and midia.duracao > LIMITE_SHORTS:
                 problemas.append(f"youtube: vídeo com {_minutos(midia.duracao)}; o Shorts aceita até 3:00")
+        if video_final_desatualizado(pasta_corte, video):
+            problemas.append(VIDEO_FINAL_DESATUALIZADO)
 
     textos = None
     try:

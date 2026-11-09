@@ -61,14 +61,25 @@ def _nomes_video_final(destino: Path) -> list[str]:
     )
 
 
-def _video_final_desatualizado(destino: Path) -> bool:
-    pasta = destino / VIDEO_FINAL
-    if not pasta.is_dir():
+def video_final_desatualizado(destino: Path, video: Path | None = None) -> bool:
+    """O vídeo final é mais antigo que o corte.mp4 (st_mtime)?
+
+    Sem `video`, compara o arquivo mais novo de video-final/. Sem corte.mp4, nunca está desatualizado.
+    """
+    destino = Path(destino)
+    corte = destino / CORTE_MP4
+    if not corte.exists():
         return False
-    datas = [
-        a.stat().st_mtime for a in pasta.iterdir() if a.is_file() and a.suffix.lower() in (".mp4", ".mov")
-    ]
-    return bool(datas) and max(datas) < (destino / CORTE_MP4).stat().st_mtime
+    if video is not None:
+        datas = [Path(video).stat().st_mtime]
+    else:
+        pasta = destino / VIDEO_FINAL
+        if not pasta.is_dir():
+            return False
+        datas = [
+            a.stat().st_mtime for a in pasta.iterdir() if a.is_file() and a.suffix.lower() in (".mp4", ".mov")
+        ]
+    return bool(datas) and max(datas) < corte.stat().st_mtime
 
 
 def ler_nomes_suspeitos(pasta: Path) -> tuple[dict[int, list[str]], str | None]:
@@ -113,7 +124,7 @@ def _bloco(pasta: Path, corte: Corte, palavras: list[Palavra], nomes: dict[int, 
         receita = ler_receita(destino / TRABALHO) if (destino / TRABALHO / NOME_ARQUIVO).exists() else None
         alertas = _alertas(registro)
         video_final = _nomes_video_final(destino)
-        desatualizado = _video_final_desatualizado(destino)
+        desatualizado = video_final_desatualizado(destino)
     except (OSError, ValueError, KeyError, TypeError):
         bloco.erro = "montagem ilegível"
         return bloco
