@@ -1,4 +1,5 @@
 import json
+import os
 from pathlib import Path
 
 import pytest
@@ -184,3 +185,57 @@ def test_uso_fora_da_base(cenario):
     assert resultado.estado == "pronto"
     assert any(a.startswith("uso da música não registrado:") for a in resultado.avisos)
     assert not (musicas / "uso.json").exists()
+
+
+VIDEO_ABERTO = "O vídeo do corte está aberto num player (talvez em outro aparelho). Feche o vídeo e tente de novo."
+
+
+class ReplacePreso:
+    """os.replace falso: dá PermissionError (WinError 32) nas primeiras `falhas` vezes."""
+
+    def __init__(self, falhas):
+        self.falhas = falhas
+        self.chamadas = 0
+
+    def __call__(self, origem, destino):
+        self.chamadas += 1
+        if self.chamadas <= self.falhas:
+            raise PermissionError(13, "O arquivo já está sendo usado por outro processo")
+        os.replace(origem, destino)
+
+
+def test_video_aberto_espera_e_tenta_de_novo(cenario):
+    _, corte, _, _, _ = cenario
+    video = corte / "corte.mp4"
+    video.write_bytes(b"velho")
+    esperas = []
+    substituir = ReplacePreso(falhas=2)
+
+    def montar(p, n):
+        assert not video.exists() and (corte / TRABALHO / "corte-anterior.mp4").read_bytes() == b"velho"
+        video.write_bytes(b"novo")
+        return "ok"
+
+    resultado = _chamar(cenario, montar, substituir=substituir, dormir=esperas.append)
+    assert resultado.estado == "pronto"
+    assert esperas == [0.25, 0.25]
+    assert video.read_bytes() == b"novo"
+
+
+def test_video_aberto_sempre_vira_erro_sem_tocar_na_montagem(cenario):
+    _, corte, _, _, _ = cenario
+    video = corte / "corte.mp4"
+    video.write_bytes(b"velho")
+    montagem = corte / TRABALHO / NOME_ARQUIVO
+    original, data = montagem.read_bytes(), montagem.stat().st_mtime_ns
+    post = (corte / "post.md").read_bytes()
+    esperas = []
+
+    resultado = _chamar(
+        cenario, lambda p, n: pytest.fail("não devia montar"), substituir=ReplacePreso(falhas=10**6), dormir=esperas.append
+    )
+    assert resultado.estado == "erro" and resultado.mensagem == VIDEO_ABERTO
+    assert sum(esperas) == pytest.approx(5.0) and set(esperas) == {0.25}
+    assert montagem.read_bytes() == original and montagem.stat().st_mtime_ns == data
+    assert video.read_bytes() == b"velho" and (corte / "post.md").read_bytes() == post
+    assert not (corte / TRABALHO / "corte-anterior.mp4").exists()
