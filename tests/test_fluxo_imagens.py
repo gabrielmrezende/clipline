@@ -323,9 +323,9 @@ def test_sugerir_recusa_prompt_com_pessoa(tmp_path):
 
 # --- imagens de IA no ia.json e no guia ---
 
-def _item_ia(versao, momento="0061-chuva-na-pista", provedor="openai", criado="2026-11-09T10:30:00"):
+def _item_ia(versao, momento="0061-chuva-na-pista", provedor="openai", data="2026-11-09T10:30:00"):
     return {"momento": momento, "arquivo": f"{momento.split('-', 1)[0]}-{momento.split('-', 1)[1]}-ia-{versao}.jpg",
-            "versao": versao, "provedor": provedor, "criado": criado}
+            "versao": versao, "provedor": provedor, "modelo": "m", "prompt": "p", "data": data}
 
 
 def _com_ia(tmp_path, nomes_presentes):
@@ -369,7 +369,7 @@ def test_guia_lista_versoes_de_ia(tmp_path):
     pasta.mkdir()
     for v in (1, 2):
         registrar_ia(corte / "trabalho", {"momento": chave, "arquivo": f"{chave}-ia-{v}.jpg", "versao": v,
-                                          "provedor": "openai", "criado": f"2026-11-0{v + 7}T10:00:00"}, tmp_path)
+                                          "provedor": "openai", "modelo": "m", "prompt": "p", "data": f"2026-11-0{v + 7}T10:00:00"}, tmp_path)
         Image.new("RGB", (10, 10)).save(pasta / f"{chave}-ia-{v}.jpg")
     escrever_guia(corte, ler_pedidos(corte / "trabalho"))
     guia = (pasta / "guia.md").read_text("utf-8")

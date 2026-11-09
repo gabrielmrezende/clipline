@@ -221,7 +221,7 @@ def _linha_ia(pasta: Path, m: Momento, ia: list[dict]) -> str:
         return ""
     itens.sort(key=lambda i: i.get("versao") if isinstance(i.get("versao"), int) else 0)
     ultimo = itens[-1]
-    data = str(ultimo.get("criado", ""))[:10]
+    data = str(ultimo.get("data", ""))[:10]
     return f"Imagem de IA: {', '.join(i['arquivo'] for i in itens)} ({ultimo.get('provedor', '')}, {data})"
 
 
