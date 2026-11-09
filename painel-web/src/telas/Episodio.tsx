@@ -41,10 +41,7 @@ function Cortes({ ep, cortes }: { ep: string; cortes: Bloco[] }) {
             <h3>
               {c.numero}. {c.titulo}
             </h3>
-            <p>
-              <Selo valor={c.selo} />
-              {c.montando ? <span className="suave">montando…</span> : null}
-            </p>
+            <p>{c.montando ? <span className="suave">montando…</span> : <Selo valor={c.selo} />}</p>
             <p>{c.data ? `Publica em ${c.data}` : "Sem data"}</p>
             <p className="redes">{c.redes.join(", ")}</p>
           </Link>

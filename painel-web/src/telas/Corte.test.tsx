@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, vi } from "vitest";
 import { Corte } from "./Corte";
@@ -144,5 +144,48 @@ describe("Corte", () => {
     await avancar(0);
     expect(container.querySelector("video")).toBeNull();
     expect(screen.getByText("Montando o corte…")).toBeTruthy();
+  });
+
+  it("ao terminar, busca o corte de novo: selo e Música das Informações atualizados", async () => {
+    detalhes = [
+      { bloco: bloco(), guia: null, imagens: [] },
+      {
+        bloco: bloco({ musica: "Brisa", selo: "vídeo final desatualizado", video_final_desatualizado: true }),
+        guia: null,
+        imagens: [],
+      },
+    ];
+    tarefas = [pedido(), pedido({ estado: "pronto", terminado: 2 })];
+    const { container } = await abrir();
+    const info = () => within(screen.getByRole("region", { name: "Informações" }));
+    expect(info().getByText("Velha")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Escolher Brisa" }));
+    fireEvent.click(screen.getByRole("button", { name: "Montar com esta música" }));
+    await avancar(0);
+    await avancar(2000);
+    await avancar(2000);
+    await avancar(0);
+    expect(screen.getByText("Pronto: o corte.mp4 foi atualizado.")).toBeTruthy();
+    expect(urls.filter((u) => u === `GET ${BASE}`)).toHaveLength(2);
+    expect(info().getByText("Brisa")).toBeTruthy();
+    expect(screen.getByText("vídeo final desatualizado")).toBeTruthy();
+    expect(container.querySelector("video")!.getAttribute("src")).toMatch(/\/video\?v=/);
+  });
+
+  it("com pedido ativo, corte não montado não aparece como erro e o selo vira montando…", async () => {
+    detalhes = [{ bloco: bloco({ erro: "corte não montado", selo: "erro", musica: null }), guia: null, imagens: [] }];
+    musicaDoCorte = { ...musicaDoCorte, pedido: pedido() };
+    tarefas = [pedido()];
+    await abrir();
+    expect(screen.queryByText("corte não montado")).toBeNull();
+    expect(screen.queryByText("erro")).toBeNull();
+    expect(screen.getByText("montando…")).toBeTruthy();
+  });
+
+  it("sem pedido ativo, corte não montado continua como erro", async () => {
+    detalhes = [{ bloco: bloco({ erro: "corte não montado", selo: "erro", musica: null }), guia: null, imagens: [] }];
+    await abrir();
+    expect(screen.getByRole("alert").textContent).toBe("corte não montado");
+    expect(screen.getByText("erro")).toBeTruthy();
   });
 });

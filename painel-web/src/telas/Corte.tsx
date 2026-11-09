@@ -7,6 +7,8 @@ import { Markdown } from "../componentes/Markdown";
 import { Players } from "../componentes/Players";
 import { Selo } from "../componentes/Selo";
 
+const CORTE_NAO_MONTADO = "corte não montado";
+
 export function Corte() {
   const { ep = "", n = "" } = useParams();
   const [dados, setDados] = useState<CorteDetalhe | null>(null);
@@ -56,6 +58,17 @@ export function Corte() {
   const { bloco, guia, imagens } = dados;
   const base = caminhoCorte(ep, n);
 
+  /** Depois da troca: selo, "Música" das Informações, vídeo e editor do post de novo. */
+  function aoTerminarTroca() {
+    setVersaoVideo(String(Date.now()));
+    setSinalPost((s) => s + 1);
+    pedir<CorteDetalhe>(caminhoCorte(ep, n))
+      .then(setDados)
+      .catch(() => {
+        /* fica o que já estava na tela */
+      });
+  }
+
   /** Solta o corte.mp4 antes da troca: no Windows, arquivo aberto no player não pode ser trocado. */
   function soltarVideo() {
     const video = videoRef.current;
@@ -72,9 +85,7 @@ export function Corte() {
       <h1>
         {bloco.numero}. {bloco.titulo}
       </h1>
-      <p>
-        <Selo valor={bloco.selo} />
-      </p>
+      <p>{montando ? <span className="suave">montando…</span> : <Selo valor={bloco.selo} />}</p>
       <div className="corte-layout">
         <div className="corte-esquerda">
           <Players
@@ -92,10 +103,7 @@ export function Corte() {
             tempoDoPlayer={() => videoRef.current?.currentTime ?? 0}
             soltarVideo={soltarVideo}
             aoMudarAndamento={setMontando}
-            aoTerminar={() => {
-              setVersaoVideo(String(Date.now()));
-              setSinalPost((s) => s + 1);
-            }}
+            aoTerminar={aoTerminarTroca}
           />
           <section aria-labelledby="titulo-info" className="info-corte">
             <h2 id="titulo-info">Informações</h2>
@@ -111,7 +119,7 @@ export function Corte() {
               <dt>Depois</dt>
               <dd>{bloco.depois || "—"}</dd>
             </dl>
-            {bloco.erro ? (
+            {bloco.erro && !(montando && bloco.erro === CORTE_NAO_MONTADO) ? (
               <p role="alert" className="mensagem-erro">
                 {bloco.erro}
               </p>
