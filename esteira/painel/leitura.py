@@ -75,6 +75,8 @@ def avisos_post(pasta_corte: Path, redes: list[str]) -> list[str]:
 def selo(bloco: BlocoRevisao, avisos: list[str]) -> str:
     if bloco.erro:
         return "erro"
+    if bloco.video_final_desatualizado:
+        return "vídeo final desatualizado"
     if bloco.alertas or avisos:
         return "com alerta"
     if not bloco.video_final:

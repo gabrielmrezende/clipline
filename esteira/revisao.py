@@ -34,6 +34,7 @@ class BlocoRevisao:
     video_final: list[str] = field(default_factory=list)
     tem_guia: bool = False
     erro: str | None = None
+    video_final_desatualizado: bool = False
 
 
 def contexto_do_trecho(palavras: list[Palavra], inicio: float, fim: float, n: int = 15) -> tuple[str, str]:
@@ -58,6 +59,16 @@ def _nomes_video_final(destino: Path) -> list[str]:
         (a.name for a in pasta.iterdir() if a.is_file() and a.suffix.lower() in (".mp4", ".mov")),
         key=str.lower,
     )
+
+
+def _video_final_desatualizado(destino: Path) -> bool:
+    pasta = destino / VIDEO_FINAL
+    if not pasta.is_dir():
+        return False
+    datas = [
+        a.stat().st_mtime for a in pasta.iterdir() if a.is_file() and a.suffix.lower() in (".mp4", ".mov")
+    ]
+    return bool(datas) and max(datas) < (destino / CORTE_MP4).stat().st_mtime
 
 
 def ler_nomes_suspeitos(pasta: Path) -> tuple[dict[int, list[str]], str | None]:
@@ -102,6 +113,7 @@ def _bloco(pasta: Path, corte: Corte, palavras: list[Palavra], nomes: dict[int, 
         receita = ler_receita(destino / TRABALHO) if (destino / TRABALHO / NOME_ARQUIVO).exists() else None
         alertas = _alertas(registro)
         video_final = _nomes_video_final(destino)
+        desatualizado = _video_final_desatualizado(destino)
     except (OSError, ValueError, KeyError, TypeError):
         bloco.erro = "montagem ilegível"
         return bloco
@@ -109,6 +121,7 @@ def _bloco(pasta: Path, corte: Corte, palavras: list[Palavra], nomes: dict[int, 
     bloco.musica = (musica.titulo or Path(musica.arquivo).name) if musica else None
     bloco.alertas = alertas + ([alerta_geral] if alerta_geral else []) + nomes.get(corte.numero, [])
     bloco.video_final = video_final
+    bloco.video_final_desatualizado = desatualizado
     bloco.tem_guia = _tem_guia(destino)
     return bloco
 

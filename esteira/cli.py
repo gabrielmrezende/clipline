@@ -1,11 +1,12 @@
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 
 from esteira.caminhos import CONTEXTO, CORTES, MUSICAS, EscritaProibida, garantir_escrita
 from esteira.cartao import gerar_cartao
-from esteira.cortar import TRABALHO, ler_aprovados, pasta_de_trabalho, pasta_do_corte, preparar_episodio
+from esteira.cortar import CORTE_MP4, TRABALHO, ler_aprovados, pasta_de_trabalho, pasta_do_corte, preparar_episodio
 from esteira.episodio import criar_episodio
 from esteira.fluxo_imagens import ErroBusca, buscar_episodio, resumir_episodio, sugerir_episodio
 from esteira.fluxo_planos import planejar_episodio
@@ -180,6 +181,14 @@ def _tem_dependencias_do_painel() -> bool:
     return True
 
 
+def _montagem_falsa(pasta: Path, numero: int) -> str:
+    """Montagem de mentira: regrava o corte.mp4 com os mesmos bytes (ou vazio, se não existir)."""
+    corte = next(c for c in ler_aprovados(pasta) if c.numero == numero)
+    video = pasta_do_corte(pasta, corte) / CORTE_MP4
+    video.write_bytes(video.read_bytes() if video.exists() else b"")
+    return "ok"
+
+
 def _painel(args, servir=None, cofre=None) -> int:
     if args.acao == "codigo":
         codigo = gerar_codigo(cofre or CofreKeyring())
@@ -205,7 +214,12 @@ def _painel(args, servir=None, cofre=None) -> int:
         ip = _ip_local()
         hosts.append(ip)
     cortes = Path(args.cortes).resolve() if args.cortes else CORTES
-    app = criar_app(cortes, rede=args.rede, cofre=cofre if args.rede else None, estatico=ESTATICO, hosts=hosts)
+    extra = {}
+    if os.environ.get("ESTEIRA_PAINEL_MONTAGEM_FALSA") == "1":  # só para os testes de ponta a ponta
+        extra["montar"] = _montagem_falsa
+    app = criar_app(
+        cortes, rede=args.rede, cofre=cofre if args.rede else None, estatico=ESTATICO, hosts=hosts, **extra
+    )
     if args.rede:
         print(f"Painel na rede: http://{ip}:{args.porta}")
         print("Use só na Wi-Fi de casa. Não use em rede pública.")

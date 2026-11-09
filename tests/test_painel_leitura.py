@@ -75,6 +75,11 @@ def test_selo_prioridade():
     assert selo(_bloco(alertas=["a"]), []) == "com alerta"
     assert selo(_bloco(video_final=["v.mp4"]), ["post: x"]) == "com alerta"
     assert selo(_bloco(), []) == "sem vídeo final"
+    assert selo(_bloco(video_final=["v.mp4"], video_final_desatualizado=True), []) == "vídeo final desatualizado"
+    assert selo(_bloco(alertas=["a"], video_final=["v.mp4"], video_final_desatualizado=True), ["post: x"]) == (
+        "vídeo final desatualizado"
+    )
+    assert selo(_bloco(erro="x", video_final=["v.mp4"], video_final_desatualizado=True), []) == "erro"
     assert selo(_bloco(video_final=["v.mp4"]), []) == "pronto"
 
 
@@ -167,3 +172,43 @@ def test_avisos_post_secao_faltando_sem_caminho(tmp_path):
     post = pasta_do_corte(pasta, a) / "post.md"
     post.write_text(post.read_text("utf-8").split("## TikTok")[0], "utf-8")
     assert avisos_post(pasta_do_corte(pasta, a), ["youtube"]) == ["post: post.md sem a seção ## TikTok"]
+
+
+def _com_video_final(tmp_path, corte_mp4_em, final_em):
+    b = Corte(2, "Dois", 10, 20, "tenso")
+    pasta = criar_episodio(tmp_path, "ep", [b], {2})
+    destino = pasta_do_corte(pasta, b)
+    final = destino / VIDEO_FINAL
+    final.mkdir()
+    velho, novo = final / "a.mp4", final / "b.mov"
+    velho.write_bytes(b"")
+    novo.write_bytes(b"")
+    (final / "nota.txt").write_text("x", "utf-8")
+    os.utime(velho, (final_em - 500, final_em - 500))
+    os.utime(novo, (final_em, final_em))
+    os.utime(final / "nota.txt", (final_em + 9000, final_em + 9000))  # outras extensões não contam
+    os.utime(destino / "corte.mp4", (corte_mp4_em, corte_mp4_em))
+    return pasta
+
+
+def test_selo_video_final_desatualizado(tmp_path):
+    pasta = _com_video_final(tmp_path, corte_mp4_em=2_000_000_000, final_em=1_900_000_000)
+    [bloco] = dados_revisao(pasta)
+    assert bloco.video_final_desatualizado is True
+    assert bloco_json(bloco, [])["selo"] == "vídeo final desatualizado"
+    assert bloco_json(bloco, [])["video_final_desatualizado"] is True
+
+
+def test_selo_video_final_em_dia(tmp_path):
+    pasta = _com_video_final(tmp_path, corte_mp4_em=1_900_000_000, final_em=2_000_000_000)
+    [bloco] = dados_revisao(pasta)
+    assert bloco.video_final_desatualizado is False
+    assert bloco_json(bloco, [])["selo"] == "pronto"
+
+
+def test_revisao_md_nao_muda_com_o_selo_novo(tmp_path):
+    from esteira.revisao import escrever_revisao
+
+    pasta = _com_video_final(tmp_path, corte_mp4_em=2_000_000_000, final_em=1_900_000_000)
+    texto = escrever_revisao(pasta).read_text("utf-8")
+    assert "desatualizado" not in texto

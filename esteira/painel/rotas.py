@@ -93,7 +93,14 @@ def episodios(requisicao: Request) -> list[dict]:
 def episodio(ep: str, requisicao: Request) -> dict:
     pasta = resolver_episodio(requisicao.app.state.cortes, ep)
     resumo = resumo_episodio(pasta, requisicao.app.state.agora())
-    return {"resumo": resumo, "cortes": [_bloco_com_avisos(pasta, b) for b in _blocos(pasta)]}
+    fila = requisicao.app.state.fila
+    return {
+        "resumo": resumo,
+        "cortes": [
+            {**_bloco_com_avisos(pasta, b), "montando": fila.ativo(pasta.name, b.numero) is not None}
+            for b in _blocos(pasta)
+        ],
+    }
 
 
 @roteador.get("/episodios/{ep}/calendario")

@@ -1,8 +1,9 @@
 # Painel de revisão
 
 Página local para revisar os cortes de um episódio no navegador: vídeo final,
-informações, calendário e edição do `post.md`. O painel **só grava o
-`post.md`** de cada corte. Nada mais é alterado, e nada é publicado.
+informações, calendário e edição do `post.md`. O painel grava o
+`post.md` de cada corte e, quando você troca a música, remonta o `corte.mp4`
+(ver "Música"). Nada é publicado.
 
 ## Instalar o FastAPI e o uvicorn
 
@@ -54,6 +55,28 @@ erro 400. Use sempre o IP mostrado no terminal.
 
 Com VPN ligada, o endereço mostrado pode ser o da VPN, e o celular não abre.
 Desligue a VPN antes de rodar `painel --rede`.
+
+## Música
+
+Na tela do corte, o bloco **Música** mostra a música de agora e deixa trocar:
+
+1. Escolha a faixa (primeiro as do episódio, depois a biblioteca por clima) e
+   o volume (de -30 a -18 dB). O botão de ouvir toca a faixa sozinha; `Ouvir
+   prévia (15 s)` mistura a faixa com a voz do corte a partir do ponto em que o
+   player está.
+2. Clique em `Montar com esta música`. O painel monta o `corte.mp4` de novo; o
+   andamento aparece no bloco e o cartão do episódio mostra `montando…`.
+3. Se o corte já tem vídeo final, o painel pede confirmação antes: o vídeo
+   final **não muda** e você vai precisar refazer no CapCut. Enquanto isso, o
+   corte fica com o selo `vídeo final desatualizado`.
+4. O crédito da música no `post.md` é atualizado sozinho. Se não der, o painel
+   avisa e o editor do post mostra o aviso de crédito.
+
+Se a montagem falhar, o corte volta ao que era antes.
+
+A variável de ambiente `ESTEIRA_PAINEL_MONTAGEM_FALSA=1` troca a montagem por
+uma de mentira (não roda o ffmpeg). Existe só para os testes automáticos; não
+use no dia a dia.
 
 ## Cuidados
 

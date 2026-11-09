@@ -1,3 +1,4 @@
+import functools
 import time
 from collections.abc import Callable
 from datetime import datetime
@@ -8,10 +9,19 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
-from esteira.caminhos import EscritaProibida
+from esteira import render
+from esteira.caminhos import MUSICAS, EscritaProibida
+from esteira.montar import montar_episodio
 from esteira.painel.acesso import COOKIE, Cofre, Porteiro
 from esteira.painel.leitura import CaminhoProibido, NaoEncontrado
-from esteira.painel.rotas import roteador
+from esteira.painel.fila import Fila
+from esteira.painel.rotas import _TRAVA_GRAVACAO, roteador
+from esteira.painel.rotas_musica import roteador as roteador_musica
+from esteira.painel.troca_musica import trocar_musica
+
+
+def _montar_real(pasta: Path, numero: int) -> str:
+    return montar_episodio(pasta, numeros={numero}, forcar=True).get(numero, f"erro: corte {numero} não montado")
 
 
 def criar_app(
@@ -22,6 +32,10 @@ def criar_app(
     agora: Callable[[], datetime] = datetime.now,
     estatico: Path | None = None,
     hosts: list[str] | None = None,
+    fila: Fila | None = None,
+    gerar_previa: Callable = render.gerar_previa,
+    pasta_musicas: Path = MUSICAS,
+    montar: Callable[[Path, int], str] = _montar_real,
 ) -> FastAPI:
     app = FastAPI(title="Painel de revisão", docs_url=None, redoc_url=None, openapi_url=None)
     app.state.cortes = Path(cortes)
@@ -30,6 +44,14 @@ def criar_app(
     app.state.cofre = cofre
     app.state.rede = rede
     app.state.porteiro = None
+    app.state.pasta_musicas = Path(pasta_musicas)
+    app.state.gerar_previa = gerar_previa
+    if fila is None:
+        fila = Fila(executar=functools.partial(
+            trocar_musica, montar=montar, base=app.state.cortes,
+            pasta_musicas=app.state.pasta_musicas, trava=_TRAVA_GRAVACAO,
+        ))
+    app.state.fila = fila
     if rede:
         if cofre is None:
             raise ValueError("O painel na rede precisa de um cofre para o código de acesso.")
@@ -56,6 +78,7 @@ def criar_app(
         return JSONResponse({"detail": f"Escrita não permitida: {erro}"}, status_code=403)
 
     app.include_router(roteador)
+    app.include_router(roteador_musica)
 
     if estatico is not None and (Path(estatico) / "index.html").is_file():
         _servir_estatico(app, Path(estatico).resolve())

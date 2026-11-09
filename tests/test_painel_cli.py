@@ -182,3 +182,42 @@ def test_cli_funciona_sem_fastapi():
     )
     resultado = subprocess.run([sys.executable, "-c", codigo], capture_output=True, text=True)
     assert resultado.returncode == 0, resultado.stderr
+
+
+def test_painel_montagem_falsa_por_ambiente(estatico, tmp_path, monkeypatch):
+    import time
+
+    from esteira.cortar import pasta_do_corte
+    from esteira.modelos import Corte
+    from tests.auxiliares_painel import criar_episodio
+
+    monkeypatch.setenv("ESTEIRA_PAINEL_MONTAGEM_FALSA", "1")
+    musicas = tmp_path / "musicas-reais-nao"
+    corte = Corte(1, "Um", 10, 20, "tenso")
+    pasta = criar_episodio(tmp_path, "ep", [corte], {1})
+    mp4 = pasta_do_corte(pasta, corte) / "corte.mp4"
+    mp4.write_bytes(b"bytes-do-corte")
+    servidor = Servidor()
+    assert cli._painel(_args(tmp_path=tmp_path), servidor, CofreFalso()) == 0
+    app = servidor.chamadas[0][0]
+    try:
+        fila = app.state.fila
+        montar = fila._executar.keywords["montar"]
+        assert montar(pasta, 1) == "ok"
+        assert mp4.read_bytes() == b"bytes-do-corte"
+        mp4.unlink()
+        assert montar(pasta, 1) == "ok"
+        assert mp4.read_bytes() == b""
+    finally:
+        fila.parar(2)
+
+
+def test_painel_sem_variavel_usa_a_montagem_real(estatico, tmp_path, monkeypatch):
+    monkeypatch.delenv("ESTEIRA_PAINEL_MONTAGEM_FALSA", raising=False)
+    servidor = Servidor()
+    cli._painel(_args(tmp_path=tmp_path), servidor, CofreFalso())
+    app = servidor.chamadas[0][0]
+    try:
+        assert app.state.fila._executar.keywords["montar"].__name__ != "_montagem_falsa"
+    finally:
+        app.state.fila.parar(2)
