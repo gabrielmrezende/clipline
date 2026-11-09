@@ -19,6 +19,7 @@ INTERVALO_VIDEO_ABERTO = 0.25
 TENTATIVAS_VIDEO_ABERTO = 20  # 20 x 0,25 s = 5 s de espera
 MARCADOR = "troca-em-andamento.json"
 CORTE_ANTERIOR = "corte-anterior.mp4"
+LIMITE_MENSAGEM = 300
 
 
 @dataclass
@@ -84,9 +85,9 @@ def trocar_musica(
             )
             marcador.unlink(missing_ok=True)
     if not resultado.startswith("ok"):
-        return Resultado("erro", resultado, [], anterior)
+        return Resultado("erro", resumir_erro(resultado), [], anterior)
 
-    avisos: list[str] = []
+    avisos: list[str] = _alertas_da_montagem(resultado)
     post = pasta_corte / "post.md"
     if not post.exists():
         avisos.append("post.md não encontrado: crédito não atualizado")
@@ -108,6 +109,22 @@ def trocar_musica(
         except Exception as erro:
             avisos.append(f"uso da música não registrado: {erro}")
     return Resultado("pronto", resultado, avisos, anterior)
+
+
+def resumir_erro(texto: str) -> str:
+    """Mensagem de erro para a tela: sem o prefixo "erro:" (a tela já diz "Erro:") e com até 300 caracteres."""
+    texto = str(texto).strip()
+    if texto.lower().startswith("erro:"):
+        texto = texto[len("erro:"):].strip()
+    texto = texto or "erro desconhecido"
+    return texto if len(texto) <= LIMITE_MENSAGEM else texto[: LIMITE_MENSAGEM - 1] + "…"
+
+
+def _alertas_da_montagem(resultado: str) -> list[str]:
+    prefixo = "ok com alertas:"
+    if not resultado.startswith(prefixo):
+        return []
+    return [a.strip() for a in resultado[len(prefixo):].split("; ") if a.strip()]  # o montar junta com "; "
 
 
 def recuperar_trocas_interrompidas(

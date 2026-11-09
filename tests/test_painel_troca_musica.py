@@ -56,7 +56,7 @@ def test_troca_erro_restaura(cenario):
     montagem = corte / TRABALHO / NOME_ARQUIVO
     original, post = montagem.read_bytes(), (corte / "post.md").read_bytes()
     resultado = _chamar(cenario, lambda p, n: "erro: ffmpeg falhou")
-    assert resultado.estado == "erro" and resultado.mensagem == "erro: ffmpeg falhou"
+    assert resultado.estado == "erro" and resultado.mensagem == "ffmpeg falhou"  # a tela já põe "Erro: "
     assert montagem.read_bytes() == original
     assert (corte / "post.md").read_bytes() == post
     assert not (musicas / "uso.json").exists()
@@ -348,3 +348,23 @@ def test_sem_queda_nao_sobra_marcador(cenario):
     assert not (corte / TRABALHO / MARCADOR).exists()
     _chamar(cenario, lambda p, n: "ok", substituir=ReplacePreso(falhas=10**6), dormir=lambda s: None)
     assert not (corte / TRABALHO / MARCADOR).exists()
+
+
+def test_mensagem_de_erro_cortada_em_300(cenario):
+    resultado = _chamar(cenario, lambda p, n: "erro: ffmpeg falhou: " + "x" * 1000)
+    assert resultado.estado == "erro"
+    assert resultado.mensagem.startswith("ffmpeg falhou: xxx") and len(resultado.mensagem) == 300
+    assert resultado.mensagem.endswith("…")
+
+
+def test_excecao_na_montagem_sem_prefixo(cenario):
+    def montar(p, n):
+        raise RuntimeError("disco cheio")
+
+    assert _chamar(cenario, montar).mensagem == "disco cheio"
+
+
+def test_ok_com_alertas_vira_avisos(cenario):
+    resultado = _chamar(cenario, lambda p, n: "ok com alertas: sem música; áudio perto de saturar: -0.2 dB")
+    assert resultado.estado == "pronto"
+    assert resultado.avisos[:2] == ["sem música", "áudio perto de saturar: -0.2 dB"]

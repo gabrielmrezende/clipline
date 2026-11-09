@@ -191,3 +191,12 @@ def test_parar_espera_o_atual_e_descarta_os_da_fila(controle, fabrica):
     assert descartado.estado == "erro"
     assert descartado.mensagem == "o painel foi fechado antes de montar este pedido"
     assert [c[1] for c in controle.chamadas] == [1]
+
+
+def test_excecao_longa_vira_erro_cortado(controle, fabrica):
+    controle.excecoes[1] = RuntimeError("erro: " + "y" * 1000)
+    fila = fabrica()
+    p = fila.pedir(Path("ep1"), 1, FAIXA, -18.0)
+    assert esperar(lambda: fila.pedido(p.id).estado == "erro")
+    mensagem = fila.pedido(p.id).mensagem
+    assert len(mensagem) == 300 and mensagem.startswith("yyy")

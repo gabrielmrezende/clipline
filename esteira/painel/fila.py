@@ -7,7 +7,7 @@ from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 
 from esteira.musica import Faixa
-from esteira.painel.troca_musica import Resultado
+from esteira.painel.troca_musica import Resultado, resumir_erro
 
 ATIVOS = ("na fila", "montando")
 LIMITE_LISTA = 50
@@ -121,7 +121,7 @@ class Fila:
             try:
                 resultado = self._executar(pasta, numero, faixa, volume_db)
             except Exception as erro:
-                resultado = Resultado("erro", str(erro) or type(erro).__name__, [], None)
+                resultado = Resultado("erro", resumir_erro(str(erro) or type(erro).__name__), [], None)
             self._concluir(id, resultado)
 
     def _concluir(self, id: str, resultado: Resultado) -> None:
