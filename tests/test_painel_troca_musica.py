@@ -116,3 +116,71 @@ def test_corte_inexistente(cenario):
     pasta, _, musicas, _, tmp = cenario
     resultado = trocar_musica(pasta, 9, NOVA, -20.0, lambda p, n: "ok", base=tmp, pasta_musicas=musicas)
     assert resultado == Resultado("erro", "corte 9 não encontrado", [], None)
+
+
+def test_erro_preserva_video_e_registro(cenario):
+    _, corte, _, _, _ = cenario
+    video, registro = corte / "corte.mp4", corte / TRABALHO / "registro.json"
+    video.write_bytes(b"velho")
+    original = registro.read_bytes()
+
+    def montar(p, n):
+        video.unlink()
+        registro.write_text('{"resultado": "erro: x"}', "utf-8")
+        return "erro: x"
+
+    resultado = _chamar(cenario, montar)
+    assert resultado.estado == "erro"
+    assert video.read_bytes() == b"velho" and registro.read_bytes() == original
+    assert not (corte / TRABALHO / "corte-anterior.mp4").exists()
+
+
+def test_ok_mantem_video_novo(cenario):
+    _, corte, _, _, _ = cenario
+    video = corte / "corte.mp4"
+    video.write_bytes(b"velho")
+
+    def montar(p, n):
+        video.write_bytes(b"novo")
+        return "ok"
+
+    assert _chamar(cenario, montar).estado == "pronto"
+    assert video.read_bytes() == b"novo"
+    assert not (corte / TRABALHO / "corte-anterior.mp4").exists()
+
+
+def test_resultado_nao_str_restaura(cenario):
+    _, corte, _, _, _ = cenario
+    original = (corte / TRABALHO / NOME_ARQUIVO).read_bytes()
+    assert _chamar(cenario, lambda p, n: None).estado == "erro"
+    assert (corte / TRABALHO / NOME_ARQUIVO).read_bytes() == original
+
+
+def test_credito_oserror_vira_aviso(cenario, monkeypatch):
+    def falha(*a, **k):
+        raise OSError("arquivo aberto")
+
+    monkeypatch.setattr("esteira.painel.troca_musica.trocar_credito", falha)
+    resultado = _chamar(cenario, lambda p, n: "ok")
+    assert resultado.estado == "pronto"
+    assert "crédito não atualizado: arquivo aberto" in resultado.avisos
+
+
+def test_uso_falha_vira_aviso(cenario, monkeypatch):
+    def falha(*a, **k):
+        raise OSError("disco cheio")
+
+    monkeypatch.setattr("esteira.painel.troca_musica.registrar_uso", falha)
+    resultado = _chamar(cenario, lambda p, n: "ok")
+    assert resultado.estado == "pronto"
+    assert "uso da música não registrado: disco cheio" in resultado.avisos
+
+
+def test_uso_fora_da_base(cenario):
+    pasta, _, musicas, _, tmp = cenario
+    resultado = trocar_musica(
+        pasta, 1, NOVA, -20.0, lambda p, n: "ok", base=tmp / "cortes", pasta_musicas=musicas
+    )
+    assert resultado.estado == "pronto"
+    assert any(a.startswith("uso da música não registrado:") for a in resultado.avisos)
+    assert not (musicas / "uso.json").exists()
