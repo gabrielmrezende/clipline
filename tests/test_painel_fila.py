@@ -171,3 +171,23 @@ def test_parar_encerra_o_trabalhador(controle, fabrica):
     fila = fabrica()
     fila.parar()
     assert not fila._trabalhador.is_alive()
+
+
+def test_parar_espera_o_atual_e_descarta_os_da_fila(controle, fabrica):
+    controle.preparar(1)
+    fila = fabrica()
+    atual = fila.pedir(Path("ep1"), 1, FAIXA, -18.0)
+    assert controle.iniciou[1].wait(LIMITE)
+    esperando = fila.pedir(Path("ep1"), 2, FAIXA, -18.0)
+    parada = threading.Thread(target=fila.parar, kwargs={"timeout": LIMITE})
+    parada.start()
+    time.sleep(0.05)
+    assert parada.is_alive()  # espera a montagem atual
+    controle.liberar[1].set()
+    parada.join(LIMITE)
+    assert not parada.is_alive() and not fila._trabalhador.is_alive()
+    assert fila.pedido(atual.id).estado == "pronto"
+    descartado = fila.pedido(esperando.id)
+    assert descartado.estado == "erro"
+    assert descartado.mensagem == "o painel foi fechado antes de montar este pedido"
+    assert [c[1] for c in controle.chamadas] == [1]

@@ -348,3 +348,43 @@ def test_post_musica_com_catalogo_ilegivel_422(ambiente):
     assert resposta.status_code == 422
     assert resposta.json() == {"detail": "Catálogo de músicas ilegível."}
     assert fila.pedidos() == []
+
+
+def test_criar_app_desfaz_troca_interrompida(tmp_path, capsys):
+    from esteira.cortar import TRABALHO, pasta_do_corte
+    from esteira.painel.troca_musica import MARCADOR
+    from tests.test_painel_troca_musica import CORTE as CORTE_TROCA, NOVA, _cair_no_meio
+
+    musicas = tmp_path / "musicas"
+    musicas.mkdir()
+    antiga = Musica(str(musicas / "ice.mp3"), -24.0, "Ice Flow", "Música: Ice Flow")
+    pasta = criar_episodio(tmp_path / "cortes", "ep1", [CORTE_TROCA], {1}, musica=antiga)
+    corte = pasta_do_corte(pasta, CORTE_TROCA)
+    montagem = (corte / TRABALHO / "montagem.json").read_bytes()
+    _cair_no_meio(pasta, musicas, tmp_path, faixa=NOVA)
+    assert (corte / TRABALHO / MARCADOR).exists()
+    fila = Fila(lambda *a: Resultado("pronto", "ok", [], None))
+    try:
+        criar_app(tmp_path / "cortes", fila=fila, pasta_musicas=musicas)
+    finally:
+        fila.parar(2)
+    assert not (corte / TRABALHO / MARCADOR).exists()
+    assert (corte / TRABALHO / "montagem.json").read_bytes() == montagem
+    assert (corte / "corte.mp4").exists()
+    assert f"ep1/{corte.name}" in capsys.readouterr().out
+
+
+class FilaParada:
+    def __init__(self):
+        self.paradas = []
+
+    def parar(self, timeout=5):
+        self.paradas.append(timeout)
+
+
+def test_desligar_o_painel_espera_a_montagem_atual(tmp_path):
+    (tmp_path / "cortes").mkdir()
+    fila = FilaParada()
+    with TestClient(criar_app(tmp_path / "cortes", fila=fila, pasta_musicas=tmp_path)):
+        assert fila.paradas == []
+    assert fila.paradas == [120]

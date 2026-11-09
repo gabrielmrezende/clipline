@@ -1,6 +1,8 @@
+import asyncio
 import functools
 import time
 from collections.abc import Callable
+from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
 
@@ -17,7 +19,9 @@ from esteira.painel.leitura import CaminhoProibido, NaoEncontrado
 from esteira.painel.fila import Fila
 from esteira.painel.rotas import _TRAVA_GRAVACAO, roteador
 from esteira.painel.rotas_musica import roteador as roteador_musica
-from esteira.painel.troca_musica import trocar_musica
+from esteira.painel.troca_musica import recuperar_trocas_interrompidas, trocar_musica
+
+ESPERA_AO_DESLIGAR = 120  # segundos esperando a montagem atual quando o painel fecha
 
 
 def _montar_real(pasta: Path, numero: int) -> str:
@@ -37,7 +41,17 @@ def criar_app(
     pasta_musicas: Path = MUSICAS,
     montar: Callable[[Path, int], str] = _montar_real,
 ) -> FastAPI:
-    app = FastAPI(title="Painel de revisão", docs_url=None, redoc_url=None, openapi_url=None)
+    for corte in recuperar_trocas_interrompidas(cortes):
+        print(f"Troca de música interrompida desfeita: {corte}")
+
+    @asynccontextmanager
+    async def _vida(app: FastAPI):
+        yield
+        if getattr(app.state.fila, "montando", lambda: False)():
+            print("Esperando a montagem em andamento terminar (até 2 min)...")
+        await asyncio.to_thread(app.state.fila.parar, ESPERA_AO_DESLIGAR)
+
+    app = FastAPI(title="Painel de revisão", docs_url=None, redoc_url=None, openapi_url=None, lifespan=_vida)
     app.state.cortes = Path(cortes)
     app.state.agora = agora
     app.state.relogio = relogio

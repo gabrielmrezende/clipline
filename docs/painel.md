@@ -74,6 +74,8 @@ Na tela do corte, o bloco **Música** mostra a música de agora e deixa trocar:
 
 Se a montagem falhar, o corte volta ao que era antes.
 
+Não feche o painel enquanto aparece "Montando…". Se fechar, o painel desfaz a troca incompleta na próxima vez que abrir.
+
 A variável de ambiente `ESTEIRA_PAINEL_MONTAGEM_FALSA=1` troca a montagem por
 uma de mentira (não roda o ffmpeg). Existe só para os testes automáticos; não
 use no dia a dia.

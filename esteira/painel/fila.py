@@ -11,6 +11,7 @@ from esteira.painel.troca_musica import Resultado
 
 ATIVOS = ("na fila", "montando")
 LIMITE_LISTA = 50
+FECHADO_ANTES = "o painel foi fechado antes de montar este pedido"
 
 
 class PedidoAtivo(Exception):
@@ -46,6 +47,7 @@ class Fila:
         self._trava = threading.Lock()
         self._pedidos: dict[str, Pedido] = {}
         self._fila: queue.Queue = queue.Queue()
+        self._parando = threading.Event()
         self._trabalhador = threading.Thread(target=self._trabalhar, name="fila-de-montagem", daemon=True)
         self._trabalhador.start()
 
@@ -89,7 +91,13 @@ class Fila:
                     return _copiar(p)
         return None
 
+    def montando(self) -> bool:
+        with self._trava:
+            return any(p.estado == "montando" for p in self._pedidos.values())
+
     def parar(self, timeout: float = 5) -> None:
+        """Espera só a montagem atual (até `timeout`); os pedidos ainda na fila terminam em erro."""
+        self._parando.set()
         self._fila.put(None)
         self._trabalhador.join(timeout)
 
@@ -105,6 +113,9 @@ class Fila:
             if item is None:
                 return
             id, pasta, numero, faixa, volume_db = item
+            if self._parando.is_set():
+                self._concluir(id, Resultado("erro", FECHADO_ANTES, [], None))
+                continue
             with self._trava:
                 self._pedidos[id].estado = "montando"
             try:
