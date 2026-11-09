@@ -84,6 +84,10 @@ A variável `ESTEIRA_PAINEL_PASTA_MUSICAS` aponta o painel para outra pasta de
 músicas (com `catalogo.json` e `uso.json`). Também existe só para os testes
 automáticos, para não mexer no `uso.json` real; não use no dia a dia.
 
+Com `--cortes` apontando para uma cópia de teste, use também
+`ESTEIRA_PAINEL_PASTA_MUSICAS` com uma cópia da biblioteca, senão o
+`uso.json` real é alterado.
+
 ## Cuidados
 
 - Use `--rede` só na Wi-Fi de casa. Nunca em Wi-Fi pública.
