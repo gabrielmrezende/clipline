@@ -121,7 +121,7 @@ def musica_do_corte(ep: str, n: int, requisicao: Request) -> dict:
     fila = requisicao.app.state.fila
     pronto = fila.ultimo_pronto(pasta.name, n)
     pedido = fila.ativo(pasta.name, n) or next(
-        (p for p in fila.pedidos() if p.episodio == pasta.name and p.numero == n), None
+        (p for p in fila.pedidos() if p.episodio == pasta.name and p.numero == n and p.tipo == "musica"), None
     )
     return {
         "atual": _atual(pasta / bloco.pasta, requisicao.app.state.pasta_musicas),

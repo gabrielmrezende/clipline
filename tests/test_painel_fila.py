@@ -212,3 +212,74 @@ def test_base_exception_nao_deixa_pedido_montando(controle, fabrica):
     assert fila.ativo("ep1", 1) is None
     seguinte = fila.pedir(Path("ep1"), 2, FAIXA, -18.0)  # o trabalhador continua vivo
     assert esperar(lambda: fila.pedido(seguinte.id).estado == "pronto")
+
+
+def tarefa(liberar=None, iniciou=None, texto=None, resultado=None):
+    """Executar genérico falso: opcionalmente avisa que iniciou, informa progresso e espera a liberação."""
+
+    def executar(progresso):
+        if texto:
+            progresso(texto)
+        if iniciou:
+            iniciou.set()
+        if liberar:
+            assert liberar.wait(LIMITE)
+        return resultado or Resultado("pronto", "ok", [], None)
+
+    return executar
+
+
+def test_tarefa_de_episodio_bloqueia_so_o_mesmo_tipo(controle, fabrica):
+    liberar, iniciou = threading.Event(), threading.Event()
+    fila = fabrica()
+    try:
+        ia = fila.pedir_tarefa("ia", Path("x/ep1"), [1, 2], tarefa(liberar, iniciou))
+        assert (ia.tipo, ia.numero, ia.cortes, ia.arquivo, ia.volume_db, ia.estado) == ("ia", 0, [1, 2], "", 0.0, "na fila")
+        assert iniciou.wait(LIMITE)
+        with pytest.raises(PedidoAtivo):
+            fila.pedir_tarefa("ia", Path("x/ep1"), [2], tarefa())
+        outro_episodio = fila.pedir_tarefa("ia", Path("x/ep2"), [2], tarefa())
+        fotos = fila.pedir_tarefa("fotos", Path("x/ep1"), [2], tarefa())
+        musica = fila.pedir(Path("x/ep1"), 2, FAIXA, -18.0)
+        assert {fotos.tipo, musica.tipo} == {"fotos", "musica"} and musica.cortes == [2]
+        assert fila.ativo("ep1", 2).id == musica.id  # o padrão de ativo é só música
+        assert fila.ativo("ep1", 2, "ia").id == ia.id
+        assert fila.ativo("ep1", 2, "fotos").id == fotos.id
+        assert outro_episodio.id != ia.id
+    finally:
+        liberar.set()
+
+
+def test_tarefa_sem_cortes_e_erro(fabrica):
+    with pytest.raises(ValueError):
+        fabrica().pedir_tarefa("ia", Path("ep1"), [], tarefa())
+
+
+def test_progresso_aparece_enquanto_roda(fabrica):
+    liberar, iniciou = threading.Event(), threading.Event()
+    fila = fabrica()
+    try:
+        p = fila.pedir_tarefa("ia", Path("ep1"), [3], tarefa(liberar, iniciou, "Gerando 2 de 5…"))
+        assert p.numero == 3 and p.progresso == ""
+        assert iniciou.wait(LIMITE)
+        vivo = fila.pedido(p.id)
+        assert vivo.estado == "montando" and vivo.progresso == "Gerando 2 de 5…"
+        assert fila.montando()
+    finally:
+        liberar.set()
+    assert esperar(lambda: fila.pedido(p.id).estado == "pronto")
+    assert fila.ultimo_pronto("ep1", 3) is None  # padrão: só música
+    assert fila.ultimo_pronto("ep1", 3, "ia").id == p.id
+
+
+def test_tarefa_com_excecao_vira_erro_e_a_fila_segue(fabrica):
+    def quebra(progresso):
+        raise RuntimeError("falhou a geração")
+
+    fila = fabrica()
+    a = fila.pedir_tarefa("ia", Path("ep1"), [1], quebra)
+    assert esperar(lambda: fila.pedido(a.id).estado == "erro")
+    assert fila.pedido(a.id).mensagem == "falhou a geração"
+    b = fila.pedir_tarefa("ia", Path("ep1"), [1], tarefa(resultado=Resultado("pronto", "feito", ["a"], None)))
+    assert esperar(lambda: fila.pedido(b.id).estado == "pronto")
+    assert (fila.pedido(b.id).mensagem, fila.pedido(b.id).avisos) == ("feito", ["a"])

@@ -414,3 +414,24 @@ def test_previa_escrita_proibida_403(ambiente, monkeypatch):
     resposta = cliente.post(_url("/previa"), json={**CORPO, "inicio": 0})
     assert resposta.status_code == 403
     assert resposta.json()["detail"].startswith("Escrita não permitida: ")
+
+
+def test_tarefa_de_ia_nao_aparece_como_troca_de_musica(ambiente):
+    construir, _ = ambiente
+    cliente, pasta, fila, _ = construir()
+    solto, entrou = threading.Event(), threading.Event()
+
+    def gerar(progresso):
+        entrou.set()
+        solto.wait(5)
+        return Resultado("pronto", "ok", [], None)
+
+    try:
+        fila.pedir_tarefa("ia", pasta, [1], gerar)
+        assert entrou.wait(5)
+        assert cliente.get(_url("")).json()["pedido"] is None
+    finally:
+        solto.set()
+    assert _esperar(lambda: fila.pedidos()[0].estado == "pronto")
+    dados = cliente.get(_url("")).json()
+    assert dados["pedido"] is None and dados["anterior"] is None

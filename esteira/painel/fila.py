@@ -31,6 +31,9 @@ class Pedido:
     avisos: list[str] = field(default_factory=list)
     anterior: dict | None = None
     terminado: float | None = None
+    tipo: str = "musica"
+    cortes: list[int] = field(default_factory=list)
+    progresso: str = ""
 
     def como_dict(self) -> dict:
         return asdict(self)
@@ -64,10 +67,43 @@ class Fila:
                 volume_db=volume_db,
                 estado="na fila",
                 criado=self._relogio(),
+                cortes=[numero],
             )
             self._pedidos[pedido.id] = pedido
             copia = _copiar(pedido)
-        self._fila.put((pedido.id, pasta_episodio, numero, faixa, volume_db))
+        self._fila.put((pedido.id, lambda progresso: self._executar(pasta_episodio, numero, faixa, volume_db)))
+        return copia
+
+    def pedir_tarefa(
+        self,
+        tipo: str,
+        pasta_episodio: Path,
+        cortes: list[int],
+        executar: Callable[[Callable[[str], None]], Resultado],
+    ) -> Pedido:
+        """Pedido genérico (fotos, IA…) na mesma fila; `executar` recebe a função que atualiza o progresso."""
+        pasta_episodio = Path(pasta_episodio)
+        cortes = list(cortes)
+        if not cortes:
+            raise ValueError("o pedido precisa de ao menos um corte")
+        with self._trava:
+            for n in cortes:
+                if self._achar_ativo(pasta_episodio.name, n, tipo) is not None:
+                    raise PedidoAtivo(f"o corte {n} já tem um pedido de {tipo} em andamento")
+            pedido = Pedido(
+                id=secrets.token_hex(4),
+                episodio=pasta_episodio.name,
+                numero=cortes[0] if len(cortes) == 1 else 0,
+                arquivo="",
+                volume_db=0.0,
+                estado="na fila",
+                criado=self._relogio(),
+                tipo=tipo,
+                cortes=cortes,
+            )
+            self._pedidos[pedido.id] = pedido
+            copia = _copiar(pedido)
+        self._fila.put((pedido.id, executar))
         return copia
 
     def pedidos(self) -> list[Pedido]:
@@ -79,15 +115,15 @@ class Fila:
             achado = self._pedidos.get(id)
             return _copiar(achado) if achado is not None else None
 
-    def ativo(self, episodio: str, numero: int) -> Pedido | None:
+    def ativo(self, episodio: str, numero: int, tipo: str = "musica") -> Pedido | None:
         with self._trava:
-            achado = self._achar_ativo(episodio, numero)
+            achado = self._achar_ativo(episodio, numero, tipo)
             return _copiar(achado) if achado is not None else None
 
-    def ultimo_pronto(self, episodio: str, numero: int) -> Pedido | None:
+    def ultimo_pronto(self, episodio: str, numero: int, tipo: str = "musica") -> Pedido | None:
         with self._trava:
             for p in reversed(list(self._pedidos.values())):
-                if p.episodio == episodio and p.numero == numero and p.estado == "pronto":
+                if p.episodio == episodio and p.numero == numero and p.tipo == tipo and p.estado == "pronto":
                     return _copiar(p)
         return None
 
@@ -101,9 +137,9 @@ class Fila:
         self._fila.put(None)
         self._trabalhador.join(timeout)
 
-    def _achar_ativo(self, episodio: str, numero: int) -> Pedido | None:
+    def _achar_ativo(self, episodio: str, numero: int, tipo: str = "musica") -> Pedido | None:
         for p in self._pedidos.values():
-            if p.episodio == episodio and p.numero == numero and p.estado in ATIVOS:
+            if p.episodio == episodio and p.tipo == tipo and numero in p.cortes and p.estado in ATIVOS:
                 return p
         return None
 
@@ -112,15 +148,20 @@ class Fila:
             item = self._fila.get()
             if item is None:
                 return
-            id, pasta, numero, faixa, volume_db = item
+            id, executar = item
             if self._parando.is_set():
                 self._concluir(id, Resultado("erro", FECHADO_ANTES, [], None))
                 continue
             with self._trava:
                 self._pedidos[id].estado = "montando"
+
+            def progresso(texto: str, id: str = id) -> None:
+                with self._trava:
+                    self._pedidos[id].progresso = texto
+
             resultado = Resultado("erro", "a montagem parou sem resposta", [], None)
             try:
-                resultado = self._executar(pasta, numero, faixa, volume_db)
+                resultado = executar(progresso)
             except Exception as erro:
                 resultado = Resultado("erro", resumir_erro(str(erro) or type(erro).__name__), [], None)
             except BaseException as erro:  # SystemExit e afins: o pedido não fica "montando" e a fila segue
@@ -145,4 +186,4 @@ class Fila:
 
 
 def _copiar(pedido: Pedido) -> Pedido:
-    return replace(pedido, avisos=list(pedido.avisos), anterior=dict(pedido.anterior) if pedido.anterior else None)
+    return replace(pedido, avisos=list(pedido.avisos), cortes=list(pedido.cortes), anterior=dict(pedido.anterior) if pedido.anterior else None)
