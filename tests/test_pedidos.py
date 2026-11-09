@@ -1,3 +1,5 @@
+import json
+
 from esteira.pedidos import (
     Momento,
     ajustar_tempos,
@@ -120,3 +122,15 @@ def test_le_pedido_antigo_com_escolha(tmp_path):
         '"numero": 1, "url": "https://u/x.jpg", "bytes": 10}]}', "utf-8")
     m = ler_pedidos(tmp_path)[0]
     assert (m.escolhas, m.url, m.bytes) == ([2], [], [])
+
+
+def test_momento_aprovado_default_e_ida_e_volta(tmp_path):
+    assert Momento(1.0, 2.0, "f", "ia", "n", prompt="p").aprovado is False
+    (tmp_path / "pedidos.json").write_text(
+        json.dumps({"momentos": [{"inicio": 1.0, "fim": 2.0, "fala": "f", "tipo": "ia", "nome": "n", "prompt": "p"}]}), "utf-8")
+    antigo = ler_pedidos(tmp_path)
+    assert antigo[0].aprovado is False
+    antigo[0].aprovado = True
+    gravar_pedidos(tmp_path, antigo)
+    assert json.loads((tmp_path / "pedidos.json").read_text("utf-8"))["momentos"][0]["aprovado"] is True
+    assert ler_pedidos(tmp_path)[0].aprovado is True

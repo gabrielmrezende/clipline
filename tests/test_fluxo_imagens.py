@@ -3,7 +3,8 @@ import json
 import pytest
 from PIL import Image
 
-from esteira.fluxo_imagens import ErroBusca, buscar_episodio, resumir_episodio, sugerir_episodio
+from esteira.fluxo_imagens import (
+    ErroBusca, buscar_episodio, chave_momento, escrever_guia, ler_ia, registrar_ia, resumir_episodio, sugerir_episodio)
 from esteira.pedidos import Momento, gravar_pedidos, ler_pedidos
 from esteira.planos import Plano
 from esteira.receita import Receita, gravar_receita
@@ -199,7 +200,7 @@ def test_sugerir_gera_arquivos_e_guia(tmp_path):
     assert "1. Beltrana, CC BY-SA 4.0, https://c/A2\n2. Fulano, CC BY-SA 4.0, https://c/A1" in guia
     assert "## 0:30 a 0:33 · Manchete (notícia)" in guia and "Opções: 0030-manchete.png" in guia
     assert "## 1:01 a 1:04 · Chuva na pista (IA)" in guia
-    assert 'Prompt (ChatGPT, 9:16): "Chuva forte numa pista vazia"' in guia
+    assert 'Prompt (9:16): "Chuva forte numa pista vazia"' in guia
     assert guia.index("0:12 a") < guia.index("0:30 a") < guia.index("1:01 a") and "\r" not in guia
     assert json.loads((corte / "trabalho" / "sugeridas.json").read_text("utf-8")) == [
         "0012-yas-marina-1.jpg", "0012-yas-marina-2.jpg", "0030-manchete.png"]
@@ -318,3 +319,76 @@ def test_sugerir_recusa_prompt_com_pessoa(tmp_path):
     resumir_episodio(ep, None, falso, lambda u: 1)
     assert sugerir_episodio(ep, None, ["Chuva"], falso, baixar_cor)[1].startswith("erro: momento 3: prompt cita")
     assert not (corte / "imagens-sugeridas").exists()
+
+
+# --- imagens de IA no ia.json e no guia ---
+
+def _item_ia(versao, momento="0061-chuva-na-pista", provedor="openai", criado="2026-11-09T10:30:00"):
+    return {"momento": momento, "arquivo": f"{momento.split('-', 1)[0]}-{momento.split('-', 1)[1]}-ia-{versao}.jpg",
+            "versao": versao, "provedor": provedor, "criado": criado}
+
+
+def _com_ia(tmp_path, nomes_presentes):
+    ep, corte = _sugeridos(tmp_path)
+    momentos = ler_pedidos(corte / "trabalho")
+    chave = chave_momento(momentos[2])
+    trabalho = corte / "trabalho"
+    pasta = corte / "imagens-sugeridas"
+    pasta.mkdir()
+    for versao in (1, 2):
+        item = _item_ia(versao, chave)
+        registrar_ia(trabalho, item, tmp_path)
+        if versao in nomes_presentes:
+            Image.new("RGB", (10, 10)).save(pasta / item["arquivo"])
+    return ep, corte, chave
+
+
+def test_chave_momento_e_ia_registrada(tmp_path):
+    m = Momento(52.0, 55.0, "f", "ia", "Turistas", prompt="p")
+    assert chave_momento(m) == "0052-turistas"
+    registrar_ia(tmp_path, {"momento": "0052-turistas", "arquivo": "0052-turistas-ia-1.jpg"}, tmp_path)
+    registrar_ia(tmp_path, {"momento": "0052-turistas", "arquivo": "0052-turistas-ia-2.jpg"}, tmp_path)
+    assert [i["arquivo"] for i in ler_ia(tmp_path)] == ["0052-turistas-ia-1.jpg", "0052-turistas-ia-2.jpg"]
+    assert not list(tmp_path.glob("*.tmp"))
+
+
+def test_ler_ia_ilegivel(tmp_path):
+    assert ler_ia(tmp_path) == []
+    (tmp_path / "ia.json").write_text("{quebrado", "utf-8")
+    assert ler_ia(tmp_path) == []
+    (tmp_path / "ia.json").write_text('{"a": 1}', "utf-8")
+    assert ler_ia(tmp_path) == []
+    (tmp_path / "ia.json").write_text('[1, {"momento": "x"}]', "utf-8")
+    assert ler_ia(tmp_path) == [{"momento": "x"}]
+
+
+def test_guia_lista_versoes_de_ia(tmp_path):
+    ep, corte = _episodio(tmp_path, [Momento(52.0, 55.0, "turistas", "ia", "Turistas", prompt="Turistas na praia")])
+    chave = "0052-turistas"
+    pasta = corte / "imagens-sugeridas"
+    pasta.mkdir()
+    for v in (1, 2):
+        registrar_ia(corte / "trabalho", {"momento": chave, "arquivo": f"{chave}-ia-{v}.jpg", "versao": v,
+                                          "provedor": "openai", "criado": f"2026-11-0{v + 7}T10:00:00"}, tmp_path)
+        Image.new("RGB", (10, 10)).save(pasta / f"{chave}-ia-{v}.jpg")
+    escrever_guia(corte, ler_pedidos(corte / "trabalho"))
+    guia = (pasta / "guia.md").read_text("utf-8")
+    assert "Imagem de IA: 0052-turistas-ia-1.jpg, 0052-turistas-ia-2.jpg (openai, 2026-11-09)" in guia
+    assert 'Prompt (9:16): "Turistas na praia"' in guia
+
+
+def test_guia_ignora_ia_sem_arquivo(tmp_path):
+    ep, corte, chave = _com_ia(tmp_path, nomes_presentes={1})
+    escrever_guia(corte, ler_pedidos(corte / "trabalho"))
+    guia = (corte / "imagens-sugeridas" / "guia.md").read_text("utf-8")
+    assert f"Imagem de IA: {chave}-ia-1.jpg (openai, 2026-11-09)" in guia
+    assert "-ia-2.jpg" not in guia
+
+
+def test_sugerir_nao_apaga_ia(tmp_path):
+    ep, corte, chave = _com_ia(tmp_path, nomes_presentes={1})
+    resumir_episodio(ep, None, falso, lambda u: 1)
+    assert sugerir_episodio(ep, None, [], falso, baixar_cor) == {1: "ok"}
+    pasta = corte / "imagens-sugeridas"
+    assert (pasta / f"{chave}-ia-1.jpg").exists()
+    assert f"Imagem de IA: {chave}-ia-1.jpg" in (pasta / "guia.md").read_text("utf-8")

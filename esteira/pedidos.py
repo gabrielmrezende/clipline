@@ -33,6 +33,7 @@ class Momento:
     url: list[str] = field(default_factory=list)  # paralela a escolhas
     bytes: list[int | None] = field(default_factory=list)  # paralela a escolhas
     resumidas: list[int] = field(default_factory=list)  # escolhas do último resumo
+    aprovado: bool = False  # IA: o dono aprovou o prompt no painel
 
 
 def ler_pedidos(pasta: Path) -> list[Momento]:

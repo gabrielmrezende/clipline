@@ -1,11 +1,12 @@
 import copy
 import json
+import os
 import tempfile
 from collections.abc import Callable
 from dataclasses import asdict
 from pathlib import Path
 
-from esteira import rede, wikimedia
+from esteira import caminhos, rede, wikimedia
 from esteira.cartao import gerar_cartao, linha_fonte
 from esteira.cortar import IMAGENS_SUGERIDAS, TRABALHO, ler_aprovados, pasta_de_trabalho, pasta_do_corte
 from esteira.episodio import slug
@@ -20,6 +21,7 @@ from esteira.wikimedia import Consulta
 
 SUGERIDAS = "sugeridas.json"
 GUIA = "guia.md"
+IA = "ia.json"
 EXTENSOES_GERADAS = {".jpg", ".png"}
 TIPOS_GUIA = {"foto": "foto", "noticia": "notícia", "ia": "IA"}
 ERRO_SEM_MONTAGEM = f"erro: {NOME_ARQUIVO} não encontrado, rode preparar"
@@ -188,8 +190,39 @@ def _minutos(segundos: float) -> str:
     return f"{minutos}:{resto:02d}"
 
 
-def _base(m: Momento) -> str:
+def chave_momento(m: Momento) -> str:
     return f"{prefixo_tempo(m.inicio)}-{slug(m.nome)}"
+
+
+_base = chave_momento
+
+
+def ler_ia(trabalho: Path) -> list[dict]:
+    """Imagens de IA geradas (ia.json); ausente, ilegível ou fora do formato vira []."""
+    try:
+        dados = json.loads((Path(trabalho) / IA).read_text("utf-8"))
+    except (OSError, ValueError):
+        return []
+    return [item for item in dados if isinstance(item, dict)] if isinstance(dados, list) else []
+
+
+def registrar_ia(trabalho: Path, item: dict, base: Path | None = None) -> None:
+    caminho = caminhos.garantir_escrita(Path(trabalho) / IA, base_extra=base)
+    texto = json.dumps(ler_ia(trabalho) + [item], ensure_ascii=False, indent=2) + "\n"
+    temporario = caminho.with_name(caminho.name + ".tmp")
+    temporario.write_text(texto, "utf-8", newline="\n")
+    os.replace(temporario, caminho)
+
+
+def _linha_ia(pasta: Path, m: Momento, ia: list[dict]) -> str:
+    itens = [i for i in ia if i.get("momento") == chave_momento(m) and isinstance(i.get("arquivo"), str)
+             and Path(i["arquivo"]).name == i["arquivo"] and (pasta / i["arquivo"]).exists()]
+    if not itens:
+        return ""
+    itens.sort(key=lambda i: i.get("versao") if isinstance(i.get("versao"), int) else 0)
+    ultimo = itens[-1]
+    data = str(ultimo.get("criado", ""))[:10]
+    return f"Imagem de IA: {', '.join(i['arquivo'] for i in itens)} ({ultimo.get('provedor', '')}, {data})"
 
 
 def _arquivos(m: Momento) -> list[str]:
@@ -198,10 +231,13 @@ def _arquivos(m: Momento) -> list[str]:
     return [f"{_base(m)}.png"] if m.tipo == "noticia" else []
 
 
-def _bloco_guia(pasta: Path, m: Momento, geradas: set[str]) -> str:
+def _bloco_guia(pasta: Path, m: Momento, geradas: set[str], ia: list[dict]) -> str:
     linhas = [f"## {_minutos(m.inicio)} a {_minutos(m.fim)} · {m.nome} ({TIPOS_GUIA[m.tipo]})", f'Fala: "{m.fala}"']
     if m.tipo == "ia":
-        linhas.append(f'Prompt (ChatGPT, 9:16): "{m.prompt}"')
+        linha = _linha_ia(pasta, m, ia)
+        if linha:
+            linhas.append(linha)
+        linhas.append(f'Prompt (9:16): "{m.prompt}"')
         return "\n".join(linhas)
     presentes = [(k, nome) for k, nome in enumerate(_arquivos(m), 1) if nome in geradas and (pasta / nome).exists()]
     if presentes:
@@ -224,7 +260,8 @@ def escrever_guia(destino: Path, momentos: list[Momento]) -> Path:
     pasta.mkdir(parents=True, exist_ok=True)
     ativos = sorted((m for m in momentos if not m.descartar), key=lambda m: m.inicio)
     geradas = set(_ler_sugeridas(Path(destino) / TRABALHO))
-    blocos = [_bloco_guia(pasta, m, geradas) for m in ativos] or ["Nenhuma imagem sugerida neste corte."]
+    ia = ler_ia(Path(destino) / TRABALHO)
+    blocos = [_bloco_guia(pasta, m, geradas, ia) for m in ativos] or ["Nenhuma imagem sugerida neste corte."]
     caminho = pasta / GUIA
     _gravar_texto(caminho, LEMBRETES + "\n" + "\n\n".join(blocos) + "\n")
     return caminho
