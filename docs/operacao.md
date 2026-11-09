@@ -222,7 +222,7 @@ Regras:
 - Pessoa real: foto livre ou oficial, depois o próprio vídeo. Agência só por decisão do canal.
 - Nunca gerar imagem de IA de pessoa real. A esteira recusa prompt com nome de pessoa do glossário.
 - Nunca gerar página imitando veículo real. Notícia: conferir a fonte original; a esteira gera o cartão do canal.
-- IA: só o prompt, que vai no `guia.md`. A esteira não recebe nem prepara imagem de IA.
+- IA: o Claude escreve o prompt. O dono aprova no painel e gera por lá, ou o Claude roda `imagens gerar` (sem `--confirmar` mostra o resumo e o custo; com `--confirmar` gera) depois do sim do dono ao resumo. A esteira recusa prompt com nome de pessoa do glossário.
 
 Passos:
 
