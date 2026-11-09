@@ -138,7 +138,7 @@ class Fila:
             if anterior is not None:
                 pedido.anterior = {
                     "arquivo": Path(anterior.arquivo).name,
-                    "titulo": anterior.titulo,
+                    "titulo": anterior.titulo or Path(anterior.arquivo).name,
                     "volume_db": anterior.volume_db,
                 }
             pedido.terminado = self._relogio()

@@ -109,7 +109,7 @@ def _atual(pasta_corte: Path, pasta_musicas: Path) -> dict | None:
         return None
     return {
         "arquivo": _nome_na_biblioteca(musica.arquivo, pasta_musicas),
-        "titulo": musica.titulo,
+        "titulo": musica.titulo or Path(musica.arquivo).name,
         "volume_db": musica.volume_db,
     }
 

@@ -390,3 +390,13 @@ def test_desligar_o_painel_espera_a_montagem_atual(tmp_path):
         assert fila.paradas == []
     assert fila.paradas == [120]
 
+
+def test_get_musica_sem_titulo_usa_nome_do_arquivo(ambiente, tmp_path):
+    construir, _ = ambiente
+    anterior = Musica("C:/x/tenso/Velha.mp3", -26.0, "", "c")
+    cliente, *_ = construir(lambda *a: Resultado("pronto", "ok", [], anterior),
+                            musica=Musica(str(tmp_path / "solta" / "x.mp3"), -24.0, "", ""))
+    assert cliente.get(_url("")).json()["atual"]["titulo"] == "x.mp3"
+    cliente.post(_url(""), json=CORPO)
+    dados = _esperar(lambda: (d := cliente.get(_url("")).json())["anterior"] and d)
+    assert dados["anterior"]["titulo"] == "Velha.mp3"
