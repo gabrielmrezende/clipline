@@ -173,3 +173,65 @@ def renderizar_final(
     if pico > LIMIAR_PICO:
         alertas.append(f"áudio perto de saturar: {pico:.1f} dB")
     return alertas
+
+
+TEMPO_LIMITE_PREVIA = 60
+
+
+def trechos_da_previa(
+    faixas: list[tuple[float, float]], inicio: float, duracao: float
+) -> list[tuple[float, float]]:
+    total = sum(fim - de for de, fim in faixas)
+    if inicio >= total:
+        inicio = 0.0
+    trechos: list[tuple[float, float]] = []
+    passado = 0.0
+    restante = duracao
+    for de, ate in faixas:
+        tamanho = ate - de
+        if restante <= 0:
+            break
+        if inicio >= passado + tamanho:
+            passado += tamanho
+            continue
+        pular = max(0.0, inicio - passado)
+        usar = min(tamanho - pular, restante)
+        trechos.append((de + pular, de + pular + usar))
+        restante -= usar
+        passado += tamanho
+    return trechos
+
+
+def gerar_previa(
+    receita: Receita,
+    video: Path,
+    musica: Musica,
+    inicio: float,
+    saida: Path,
+    duracao: float = 15.0,
+    executar: Callable[..., None] = executar_ffmpeg,
+) -> Path:
+    trechos = trechos_da_previa(receita.faixas, inicio, duracao)
+    duracao_real = sum(ate - de for de, ate in trechos)
+    deslocamento = max(0.0, trechos[0][0] - FOLGA_BUSCA)
+    partes: list[str] = []
+    rotulos = ""
+    for i, (de, ate) in enumerate(trechos):
+        partes.append(
+            f"[0:a]atrim=start={de - deslocamento:.3f}:end={ate - deslocamento:.3f},"
+            f"asetpts=PTS-STARTPTS,aresample=44100,aformat=channel_layouts=stereo[a{i}]"
+        )
+        rotulos += f"[a{i}]"
+    partes.append(f"{rotulos}concat=n={len(trechos)}:v=0:a=1[aprin]")
+    partes += _filtro_musica(1, musica, duracao_real)
+    args = [
+        "-y",
+        "-ss", f"{deslocamento:.3f}", "-t", f"{trechos[-1][1] - deslocamento + FOLGA_BUSCA:.3f}",
+        "-i", str(Path(video).resolve()),
+        "-stream_loop", "-1", "-i", str(Path(musica.arquivo).resolve()),
+        "-filter_complex", ";".join(partes), "-map", "[amix]",
+        "-vn", "-c:a", "aac", "-b:a", "192k", "-ar", "44100", "-ac", "2",
+        str(saida),
+    ]
+    executar(args, None, timeout=TEMPO_LIMITE_PREVIA)
+    return saida

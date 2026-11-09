@@ -211,3 +211,54 @@ def test_fala_termina_antes_da_transicao(tmp_path):
         return float(re.search(r"mean_volume: (-?[\d.]+) dB", log).group(1))
 
     assert volume(1.83) > volume(1.0) - 1.5
+
+
+FAIXAS_PREVIA = [(100.0, 110.0), (200.0, 220.0)]
+
+
+def test_trechos_inicio_no_meio_de_uma_faixa():
+    assert render.trechos_da_previa(FAIXAS_PREVIA, 5, 15) == [(105, 110), (200, 210)]
+
+
+def test_trechos_perto_do_fim():
+    assert render.trechos_da_previa(FAIXAS_PREVIA, 25, 15) == [(215, 220)]
+
+
+def test_trechos_alem_do_fim_recomeca():
+    assert render.trechos_da_previa(FAIXAS_PREVIA, 40, 15) == [(100, 110), (200, 205)]
+
+
+def _receita_previa():
+    return Receita(faixas=FAIXAS_PREVIA, planos=[], legenda=[])
+
+
+def test_gerar_previa_monta_comando(tmp_path):
+    chamadas = []
+
+    def falso(args, cwd=None, **kwargs):
+        chamadas.append((args, kwargs))
+
+    saida = tmp_path / "previa-musica.m4a"
+    resultado = render.gerar_previa(
+        _receita_previa(), tmp_path / "ep.mp4", Musica(arquivo=str(tmp_path / "m.mp3"), volume_db=-22),
+        5, saida, executar=falso,
+    )
+    assert resultado == saida
+    args, kwargs = chamadas[0]
+    filtro = args[args.index("-filter_complex") + 1]
+    assert "sidechaincompress" in filtro
+    assert "volume=-22.0dB" in filtro
+    assert "[aprin]" in filtro and "concat=n=2:v=0:a=1[aprin]" in filtro
+    assert "-vn" in args
+    assert args[-1].endswith("previa-musica.m4a")
+    assert kwargs.get("timeout") == 60
+
+
+def test_gerar_previa_erro_do_ffmpeg(tmp_path):
+    def falso(args, cwd=None, **kwargs):
+        raise ErroMidia("ffmpeg falhou: x")
+
+    with pytest.raises(ErroMidia, match="ffmpeg falhou"):
+        render.gerar_previa(
+            _receita_previa(), tmp_path / "ep.mp4", Musica(arquivo="m.mp3"), 0, tmp_path / "p.m4a", executar=falso
+        )

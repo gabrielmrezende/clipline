@@ -19,14 +19,22 @@ class Midia:
     tem_audio: bool
 
 
-def _rodar(comando: list[str], cwd: Path | None) -> subprocess.CompletedProcess:
-    return subprocess.run(
-        comando, cwd=cwd, capture_output=True, text=True, encoding="utf-8", errors="replace"
+def _rodar(
+    comando: list[str], cwd: Path | None, timeout: float | None = None
+) -> subprocess.CompletedProcess:
+    try:
+        return subprocess.run(
+            comando, cwd=cwd, capture_output=True, text=True, encoding="utf-8", errors="replace",
+            timeout=timeout,
+        )
+    except subprocess.TimeoutExpired:
+        raise ErroMidia(f"ffmpeg demorou mais de {timeout:g} s") from None
+
+
+def executar_ffmpeg(args: list[str], cwd: Path | None = None, timeout: float | None = None) -> None:
+    resultado = _rodar(
+        [str(BIN / "ffmpeg.exe"), "-hide_banner", "-loglevel", "error", *args], cwd, timeout
     )
-
-
-def executar_ffmpeg(args: list[str], cwd: Path | None = None) -> None:
-    resultado = _rodar([str(BIN / "ffmpeg.exe"), "-hide_banner", "-loglevel", "error", *args], cwd)
     if resultado.returncode != 0:
         raise ErroMidia(f"ffmpeg falhou: {resultado.stderr[-800:]}")
 
