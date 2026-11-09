@@ -27,6 +27,7 @@ INSTRUMENTOS_EXCLUIDOS = ("voice", "vocal", "choir")
 DURACAO_MINIMA = 90
 DURACAO_MAXIMA = 360
 RECENTES = 10
+MUSICAS_DO_EPISODIO = "musicas-do-episodio.json"
 TERMOS_LEVES = ("piano", "strings", "guitar", "synth", "pad")
 TERMOS_PESADOS = ("drums", "brass", "percussion")
 
@@ -180,6 +181,37 @@ def gravar_uso(pasta: Path, uso: dict[str, dict]) -> None:
     (pasta / "uso.json").write_text(texto, "utf-8", newline="\n")
 
 
+def registrar_uso(
+    chave: str, faixa: Faixa, pasta_musicas: Path = MUSICAS, agora: Callable[[], datetime] = datetime.now
+) -> None:
+    uso = ler_uso(pasta_musicas)
+    uso.pop(chave, None)
+    uso[chave] = {"arquivo": faixa.arquivo, "data": agora().isoformat(timespec="seconds")}
+    gravar_uso(pasta_musicas, uso)
+
+
+def ler_musicas_do_episodio(pasta: Path, catalogo: list[Faixa]) -> tuple[list[tuple[Faixa, str]], list[str]]:
+    arquivo = pasta / MUSICAS_DO_EPISODIO
+    if not arquivo.exists():
+        return [], []
+    ilegivel = f"{MUSICAS_DO_EPISODIO} ilegível"
+    try:
+        itens = json.loads(arquivo.read_text("utf-8"))["faixas"]
+        if not isinstance(itens, list):
+            return [], [ilegivel]
+        pedidas = [(str(item["arquivo"]), str(item.get("motivo") or "")) for item in itens]
+    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+        return [], [ilegivel]
+    por_arquivo = {f.arquivo: f for f in catalogo}
+    faixas, avisos = [], []
+    for nome, motivo in pedidas:
+        if nome in por_arquivo:
+            faixas.append((por_arquivo[nome], motivo))
+        else:
+            avisos.append(f"faixa fora do catálogo: {nome}")
+    return faixas, avisos
+
+
 def escolher_musica(
     clima: str, catalogo: list[Faixa], uso: dict[str, dict], duracao: float, chave: str
 ) -> Faixa | None:
@@ -199,9 +231,9 @@ def atualizar_musica(pasta_corte: Path, corte: Corte, chave: str, pasta_musicas:
     receita.musica = Musica(str(pasta_musicas / faixa.arquivo), VOLUME_PADRAO, faixa.titulo, faixa.credito) if faixa else None
     gravar_receita(pasta_corte, receita)
     if faixa:
-        uso.pop(chave, None)
-        uso[chave] = {"arquivo": faixa.arquivo, "data": datetime.now().isoformat(timespec="seconds")}
+        registrar_uso(chave, faixa, pasta_musicas)
     elif uso.pop(chave, None) is None:
         return None
-    gravar_uso(pasta_musicas, uso)
+    else:
+        gravar_uso(pasta_musicas, uso)
     return faixa.titulo if faixa else None

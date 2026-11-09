@@ -173,13 +173,17 @@ Sem faixa para o clima, o corte sai sem música e a revisão mostra
 `Música: nenhuma (sem música para o clima <clima>)`. Se a biblioteca ainda não
 existir, ver "Biblioteca de música" no fim deste roteiro.
 
+Depois de preparar, gravar `musicas-do-episodio.json` na pasta do episódio com 8
+a 12 faixas do `musicas/catalogo.json` que combinem com o tom do episódio, cada
+uma com um motivo curto. Formato: `{"faixas": [{"arquivo": "tenso/Ice Flow.mp3",
+"motivo": "tensão contida"}]}`. O painel mostra essas faixas primeiro.
+
 Volume da música: padrão -26 dB (`volume_db` no `montagem.json`), aceito de
 -30 a -18 dB. Se o dono do canal achar a música alta num corte, baixar o
 `volume_db` desse corte e remontar.
 
-O comando `musica` não serve para escolher outra faixa. Para trocar a faixa de
-um corte, editar `arquivo`, `titulo` e `credito` da `musica` no `montagem.json`
-(usando uma faixa do `musicas/catalogo.json`) e remontar o corte.
+Para trocar a faixa ou o volume de um corte, usar o painel (bloco Música na tela
+do corte). Ele monta o corte de novo e troca o crédito no `post.md`.
 
 A legenda é toda branca. Não marcar destaques.
 

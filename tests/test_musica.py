@@ -1,10 +1,11 @@
 import json
+from datetime import datetime
 
 from esteira import cli
 from esteira.midia import executar_ffmpeg, pico_de_audio
 from esteira.musica import (
     CLIMAS_VALIDOS, Faixa, baixar_musicas, clima_da_faixa, credito, escolher_musica, escrever_proposta,
-    gravar_uso, ler_catalogo, ler_uso, propor,
+    gravar_uso, ler_catalogo, ler_musicas_do_episodio, ler_uso, propor, registrar_uso,
 )
 
 PECAS = [
@@ -238,3 +239,57 @@ def test_rodizio_com_datas_iguais():
         uso[f"ep/{n:02d}"] = {"arquivo": faixa.arquivo, "data": "2026-11-02T10:00:00"}
         escolhidas.append(faixa.titulo)
     assert escolhidas == ["A", "B", "C", "D", "E", "A", "B", "C"]
+
+
+def _catalogo_dois():
+    return [_faixa("A"), _faixa("B")]
+
+
+def _gravar_episodio(pasta, conteudo):
+    (pasta / "musicas-do-episodio.json").write_text(conteudo, "utf-8", newline="\n")
+
+
+def test_musicas_do_episodio_ausente(tmp_path):
+    assert ler_musicas_do_episodio(tmp_path, _catalogo_dois()) == ([], [])
+
+
+def test_musicas_do_episodio_ordem_e_motivo(tmp_path):
+    catalogo = _catalogo_dois()
+    _gravar_episodio(tmp_path, json.dumps({"faixas": [
+        {"arquivo": catalogo[1].arquivo, "motivo": "tensão contida"},
+        {"arquivo": catalogo[0].arquivo, "motivo": "ritmo firme"},
+    ]}))
+    faixas, avisos = ler_musicas_do_episodio(tmp_path, catalogo)
+    assert faixas == [(catalogo[1], "tensão contida"), (catalogo[0], "ritmo firme")]
+    assert avisos == []
+
+
+def test_musicas_do_episodio_fora_do_catalogo(tmp_path):
+    catalogo = _catalogo_dois()
+    _gravar_episodio(tmp_path, json.dumps({"faixas": [
+        {"arquivo": "x/y.mp3", "motivo": "?"},
+        {"arquivo": catalogo[0].arquivo, "motivo": "ok"},
+    ]}))
+    faixas, avisos = ler_musicas_do_episodio(tmp_path, catalogo)
+    assert faixas == [(catalogo[0], "ok")]
+    assert avisos == ["faixa fora do catálogo: x/y.mp3"]
+
+
+def test_musicas_do_episodio_ilegivel(tmp_path):
+    for conteudo in ("{quebrado", '{"faixas": "x"}'):
+        _gravar_episodio(tmp_path, conteudo)
+        assert ler_musicas_do_episodio(tmp_path, _catalogo_dois()) == (
+            [], ["musicas-do-episodio.json ilegível"]
+        )
+
+
+def test_registrar_uso_move_para_o_fim(tmp_path):
+    faixa = _faixa("A")
+    gravar_uso(tmp_path, {
+        "ep/01": {"arquivo": "leve/velha.mp3", "data": "2026-11-01T10:00:00"},
+        "ep/02": {"arquivo": "leve/outra.mp3", "data": "2026-11-02T10:00:00"},
+    })
+    registrar_uso("ep/01", faixa, tmp_path, lambda: datetime(2026, 11, 9, 8, 30, 15, 999))
+    uso = ler_uso(tmp_path)
+    assert list(uso) == ["ep/02", "ep/01"]
+    assert uso["ep/01"] == {"arquivo": faixa.arquivo, "data": "2026-11-09T08:30:15"}
