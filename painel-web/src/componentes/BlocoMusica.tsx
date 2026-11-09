@@ -112,7 +112,10 @@ export function BlocoMusica({
       .then((d) => vivo && setLista(d))
       .catch((x) => vivo && setErroLeitura(mensagem(x)));
     void lerMusicaDoCorte().then((d) => {
-      if (vivo && d && ativo(d.pedido)) setPedido(d.pedido);
+      if (!vivo || !d || !d.pedido) return;
+      // Pedido já terminado nesta execução do painel: mostra o resultado sem recarregar nada.
+      if (!ativo(d.pedido)) terminados.current.add(d.pedido.id);
+      setPedido(d.pedido);
     });
     return () => {
       vivo = false;

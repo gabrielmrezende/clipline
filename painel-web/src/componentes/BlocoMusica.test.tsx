@@ -345,6 +345,32 @@ describe("BlocoMusica", () => {
     expect(chamadas.filter((c) => c.url.startsWith("/api/tarefas/")).length).toBe(consultas);
   });
 
+  it("ao abrir, mostra o resultado e os avisos do último pedido já terminado", async () => {
+    musicaDoCorte = {
+      atual: null,
+      anterior: null,
+      pedido: pedido({ estado: "pronto", avisos: ["tiktok: crédito antigo não encontrado"], terminado: 2 }),
+    };
+    const { aoTerminar } = await montar();
+    expect(screen.getByText("Pronto: o corte.mp4 foi atualizado.")).toBeTruthy();
+    expect(screen.getByText(/tiktok: crédito antigo não encontrado/)).toBeTruthy();
+    expect((botaoMontar() as HTMLButtonElement).disabled).toBe(true); // nenhuma faixa escolhida ainda
+    await avancar(6000);
+    expect(aoTerminar).not.toHaveBeenCalled();
+    expect(chamadas.filter((c) => c.url.startsWith("/api/tarefas/"))).toHaveLength(0);
+  });
+
+  it("ao abrir, mostra o erro do último pedido com Tentar de novo", async () => {
+    musicaDoCorte = {
+      atual: null,
+      anterior: null,
+      pedido: pedido({ estado: "erro", mensagem: "ffmpeg falhou", terminado: 2 }),
+    };
+    await montar();
+    expect(screen.getByText("Erro: ffmpeg falhou")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Tentar de novo" })).toBeTruthy();
+  });
+
   it("mostra o detail do 409", async () => {
     respostaPost = () => resposta({ detail: "Este corte já está sendo montado." }, 409);
     await montar();
