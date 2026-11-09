@@ -221,3 +221,26 @@ def test_painel_sem_variavel_usa_a_montagem_real(estatico, tmp_path, monkeypatch
         assert app.state.fila._executar.keywords["montar"].__name__ != "_montagem_falsa"
     finally:
         app.state.fila.parar(2)
+
+
+def test_painel_pasta_de_musicas_por_ambiente(estatico, tmp_path, monkeypatch):
+    outra = tmp_path / "musicas-de-teste"
+    monkeypatch.setenv("ESTEIRA_PAINEL_PASTA_MUSICAS", str(outra))
+    servidor = Servidor()
+    assert cli._painel(_args(tmp_path=tmp_path), servidor, CofreFalso()) == 0
+    app = servidor.chamadas[0][0]
+    try:
+        assert app.state.pasta_musicas == outra.resolve()
+    finally:
+        app.state.fila.parar(2)
+
+
+def test_painel_sem_variavel_usa_a_pasta_de_musicas_real(estatico, tmp_path, monkeypatch):
+    monkeypatch.delenv("ESTEIRA_PAINEL_PASTA_MUSICAS", raising=False)
+    servidor = Servidor()
+    cli._painel(_args(tmp_path=tmp_path), servidor, CofreFalso())
+    app = servidor.chamadas[0][0]
+    try:
+        assert app.state.pasta_musicas == cli.MUSICAS
+    finally:
+        app.state.fila.parar(2)

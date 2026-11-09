@@ -217,6 +217,8 @@ def _painel(args, servir=None, cofre=None) -> int:
     extra = {}
     if os.environ.get("ESTEIRA_PAINEL_MONTAGEM_FALSA") == "1":  # só para os testes de ponta a ponta
         extra["montar"] = _montagem_falsa
+    if os.environ.get("ESTEIRA_PAINEL_PASTA_MUSICAS"):  # só para os testes de ponta a ponta
+        extra["pasta_musicas"] = Path(os.environ["ESTEIRA_PAINEL_PASTA_MUSICAS"]).resolve()
     app = criar_app(
         cortes, rede=args.rede, cofre=cofre if args.rede else None, estatico=ESTATICO, hosts=hosts, **extra
     )

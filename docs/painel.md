@@ -78,6 +78,10 @@ A variável de ambiente `ESTEIRA_PAINEL_MONTAGEM_FALSA=1` troca a montagem por
 uma de mentira (não roda o ffmpeg). Existe só para os testes automáticos; não
 use no dia a dia.
 
+A variável `ESTEIRA_PAINEL_PASTA_MUSICAS` aponta o painel para outra pasta de
+músicas (com `catalogo.json` e `uso.json`). Também existe só para os testes
+automáticos, para não mexer no `uso.json` real; não use no dia a dia.
+
 ## Cuidados
 
 - Use `--rede` só na Wi-Fi de casa. Nunca em Wi-Fi pública.

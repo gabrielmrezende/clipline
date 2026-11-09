@@ -1,14 +1,29 @@
 // Cria o episódio falso usado pelo teste de fumaça em e2e/.cortes/.
-import { copyFileSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const aqui = dirname(fileURLToPath(import.meta.url));
 const raiz = join(aqui, ".cortes");
 const post = join(aqui, "..", "..", "tests", "dados_post_corte1.md");
-const credito = "Música: Ice Flow — Kevin MacLeod (incompetech.com), licença CC BY 4.0.";
+const musicasReais = join(aqui, "..", "..", "musicas");
+const musicas = join(aqui, ".musicas");
+const ICE_FLOW = "tenso/Ice Flow.mp3";
+const NO_EPISODIO = ["tenso/Pyro Flow.mp3", "tenso/Jerry Five.mp3"];
 
 const gravar = (caminho, dados) => writeFileSync(caminho, JSON.stringify(dados, null, 2), "utf-8");
+
+// Biblioteca de músicas de teste: cópia do catálogo real + mp3 vazios (o uso.json real não é tocado).
+rmSync(musicas, { recursive: true, force: true });
+mkdirSync(join(musicas, "tenso"), { recursive: true });
+copyFileSync(join(musicasReais, "catalogo.json"), join(musicas, "catalogo.json"));
+const catalogo = JSON.parse(readFileSync(join(musicas, "catalogo.json"), "utf-8"));
+const iceFlow = catalogo.find((f) => f.arquivo === ICE_FLOW);
+for (const arquivo of [ICE_FLOW, ...NO_EPISODIO]) {
+  if (!catalogo.some((f) => f.arquivo === arquivo)) throw new Error(`faixa fora do catálogo: ${arquivo}`);
+  writeFileSync(join(musicas, arquivo), "");
+}
+const credito = iceFlow.credito;
 
 rmSync(raiz, { recursive: true, force: true });
 const episodio = join(raiz, "Entre Assuntos 99 - Convidado (teste)");
@@ -22,6 +37,9 @@ const cortes = [
   { numero: 2, titulo: "Dois", inicio: 20, fim: 28, clima: "tenso", instagram: false, data: "" },
 ];
 gravar(join(episodio, "aprovados.json"), { cortes });
+gravar(join(episodio, "musicas-do-episodio.json"), {
+  faixas: NO_EPISODIO.map((arquivo) => ({ arquivo, motivo: "teste" })),
+});
 
 for (const corte of cortes) {
   const pasta = join(episodio, `${String(corte.numero).padStart(2, "0")}-${corte.titulo.toLowerCase()}`);
@@ -32,7 +50,7 @@ for (const corte of cortes) {
     faixas: [[corte.inicio, corte.fim]],
     planos: [],
     legenda: [],
-    musica: { arquivo: "m.mp3", volume_db: -26.0, titulo: "", credito },
+    musica: { arquivo: join(musicas, ICE_FLOW), volume_db: -26.0, titulo: "Ice Flow", credito },
     encerramento: true,
     versao: 1,
   });
