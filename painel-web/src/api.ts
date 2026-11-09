@@ -172,8 +172,9 @@ export interface Pedido {
   mensagem: string;
   avisos: string[];
   anterior: MusicaResumo | null;
-  criado: string;
-  terminado: string | null;
+  /** Segundos desde 1970 (time.time() do painel). */
+  criado: number;
+  terminado: number | null;
 }
 
 export interface MusicaDoCorte {

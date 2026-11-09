@@ -1,5 +1,6 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, vi } from "vitest";
+import type { Pedido } from "../api";
 import { BlocoMusica } from "./BlocoMusica";
 
 const LISTA = {
@@ -22,7 +23,7 @@ const LISTA = {
   avisos: [],
 };
 
-function pedido(extra: object = {}) {
+function pedido(extra: Partial<Pedido> = {}): Pedido {
   return {
     id: "t1",
     episodio: "Ep 1",
@@ -33,7 +34,7 @@ function pedido(extra: object = {}) {
     mensagem: "",
     avisos: [],
     anterior: null,
-    criado: "x",
+    criado: 1762700000.5,
     terminado: null,
     ...extra,
   };
@@ -225,7 +226,7 @@ describe("BlocoMusica", () => {
   it("acompanha o pedido até pronto e chama aoTerminar uma vez", async () => {
     tarefas = [
       pedido({ estado: "montando" }),
-      pedido({ estado: "pronto", avisos: ["crédito não atualizado: x"], terminado: "t" }),
+      pedido({ estado: "pronto", avisos: ["crédito não atualizado: x"], terminado: 1762700060.25 }),
     ];
     const { aoTerminar } = await montar();
     escolher("Brisa");
