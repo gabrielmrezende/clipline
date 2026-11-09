@@ -97,6 +97,7 @@ export function Corte() {
             montando={montando}
           />
           <BlocoMusica
+            key={`${ep}/${n}`}
             ep={ep}
             n={n}
             videoFinal={bloco.video_final}
