@@ -7,7 +7,6 @@ from pydantic import BaseModel, Field
 
 from esteira.caminhos import garantir_escrita
 from esteira.cortar import TRABALHO
-from esteira.midia import ErroMidia
 from esteira.musica import CLIMAS_VALIDOS, Faixa, ler_catalogo, ler_musicas_do_episodio
 from esteira.painel.fila import PedidoAtivo
 from esteira.painel.leitura import NaoEncontrado, resolver_episodio
@@ -28,15 +27,23 @@ class PedidoPrevia(PedidoMusica):
     inicio: float = Field(default=0.0, ge=0)
 
 
+class CatalogoIlegivel(Exception):
+    pass
+
+
 def _catalogo(requisicao: Request) -> list[Faixa]:
     try:
         return ler_catalogo(requisicao.app.state.pasta_musicas)
     except (OSError, ValueError, TypeError) as erro:
-        raise HTTPException(500, "Catálogo de músicas ilegível.") from erro
+        raise CatalogoIlegivel("Catálogo de músicas ilegível.") from erro
 
 
 def _faixa_valida(requisicao: Request, arquivo: str, volume_db: float) -> Faixa:
-    faixa = next((f for f in _catalogo(requisicao) if f.arquivo == arquivo), None)
+    try:
+        catalogo = _catalogo(requisicao)
+    except CatalogoIlegivel as erro:
+        raise HTTPException(422, str(erro)) from erro
+    faixa = next((f for f in catalogo if f.arquivo == arquivo), None)
     if faixa is None:
         raise HTTPException(422, "Faixa fora do catálogo.")
     if not VOLUME_MINIMO <= volume_db <= VOLUME_MAXIMO:
@@ -47,8 +54,13 @@ def _faixa_valida(requisicao: Request, arquivo: str, volume_db: float) -> Faixa:
 @roteador.get("/episodios/{ep}/musicas")
 def musicas_do_episodio(ep: str, requisicao: Request) -> dict:
     pasta = resolver_episodio(requisicao.app.state.cortes, ep)
-    catalogo = _catalogo(requisicao)
+    try:
+        catalogo = _catalogo(requisicao)
+        ilegivel = []
+    except CatalogoIlegivel:
+        catalogo, ilegivel = [], ["catalogo.json ilegível"]
     faixas, avisos = ler_musicas_do_episodio(pasta, catalogo)
+    avisos = ilegivel + avisos
     biblioteca: dict[str, list[dict]] = {clima: [] for clima in CLIMAS_VALIDOS}
     for f in catalogo:
         biblioteca.setdefault(f.clima, []).append(
@@ -66,7 +78,11 @@ def musicas_do_episodio(ep: str, requisicao: Request) -> dict:
 
 @roteador.get("/musicas/{clima}/{arquivo}")
 def faixa(clima: str, arquivo: str, requisicao: Request) -> FileResponse:
-    if not any(f.arquivo == f"{clima}/{arquivo}" for f in _catalogo(requisicao)):
+    try:
+        achada = any(f.arquivo == f"{clima}/{arquivo}" for f in _catalogo(requisicao))
+    except CatalogoIlegivel:
+        achada = False
+    if not achada:
         raise NaoEncontrado("faixa não encontrada")
     caminho = Path(requisicao.app.state.pasta_musicas) / clima / arquivo
     if not caminho.is_file():
@@ -127,22 +143,28 @@ def trocar(ep: str, n: int, corpo: PedidoMusica, requisicao: Request):
 @roteador.post("/episodios/{ep}/cortes/{n}/musica/previa")
 def previa(ep: str, n: int, corpo: PedidoPrevia, requisicao: Request):
     pasta, bloco = _pasta_do_corte(requisicao, ep, n)
-    escolhida = _faixa_valida(requisicao, corpo.arquivo, corpo.volume_db)
-    trabalho = pasta / bloco.pasta / TRABALHO
-    saida = garantir_escrita(trabalho / PREVIA, base_extra=requisicao.app.state.cortes)
-    musica = Musica(
-        str(Path(requisicao.app.state.pasta_musicas) / escolhida.arquivo),
-        corpo.volume_db, escolhida.titulo, escolhida.credito,
-    )
     try:
+        escolhida = _faixa_valida(requisicao, corpo.arquivo, corpo.volume_db)
+        trabalho = pasta / bloco.pasta / TRABALHO
+        saida = garantir_escrita(trabalho / PREVIA, base_extra=requisicao.app.state.cortes)
+        musica = Musica(
+            str(Path(requisicao.app.state.pasta_musicas) / escolhida.arquivo),
+            corpo.volume_db, escolhida.titulo, escolhida.credito,
+        )
         video = Path(json.loads((pasta / "episodio.json").read_text("utf-8"))["video"])
         receita = ler_receita(trabalho)
         requisicao.app.state.gerar_previa(receita, video, musica, corpo.inicio, saida)
-    except (ErroMidia, OSError, ValueError, KeyError, TypeError) as erro:
-        return JSONResponse(
-            {"detail": f"Não consegui gerar a prévia: {erro or type(erro).__name__}"}, status_code=422
-        )
+    except HTTPException as erro:
+        if erro.status_code == 422 and erro.detail == "Catálogo de músicas ilegível.":
+            return _falha_previa(erro.detail)
+        raise
+    except Exception as erro:  # nunca 500: qualquer falha vira 422 com o motivo
+        return _falha_previa(str(erro) or type(erro).__name__)
     return FileResponse(saida, media_type="audio/mp4", headers={"Cache-Control": "no-store"})
+
+
+def _falha_previa(motivo: str) -> JSONResponse:
+    return JSONResponse({"detail": f"Não consegui gerar a prévia: {motivo}"}, status_code=422)
 
 
 @roteador.get("/tarefas")

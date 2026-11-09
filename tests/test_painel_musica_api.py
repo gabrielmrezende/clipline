@@ -299,3 +299,52 @@ def test_rotas_novas_pedem_login_na_rede(tmp_path):
         assert cliente.get("/api/tarefas").status_code == 200
     finally:
         fila.parar(2)
+
+
+def _estragar_catalogo(musicas):
+    (musicas / "catalogo.json").write_text("{não é json", "utf-8")
+
+
+def test_previa_com_faixas_vazias_422(ambiente):
+    from esteira import render
+
+    construir, _ = ambiente
+    cliente, pasta, *_ = construir(gerar_previa=render.gerar_previa)
+    montagem = next(pasta.glob("*/trabalho/montagem.json"))
+    dados = json.loads(montagem.read_text("utf-8"))
+    dados["faixas"] = []
+    montagem.write_text(json.dumps(dados), "utf-8")
+    resposta = cliente.post(_url("/previa"), json={**CORPO, "inicio": 0})
+    assert resposta.status_code == 422
+    assert resposta.json()["detail"].startswith("Não consegui gerar a prévia: ")
+
+
+def test_previa_com_catalogo_ilegivel_422(ambiente):
+    construir, musicas = ambiente
+    cliente, *_ = construir(gerar_previa=lambda *a, **kw: pytest.fail("não devia gerar"))
+    _estragar_catalogo(musicas)
+    resposta = cliente.post(_url("/previa"), json={**CORPO, "inicio": 0})
+    assert resposta.status_code == 422
+    assert resposta.json()["detail"].startswith("Não consegui gerar a prévia: ")
+
+
+def test_lista_com_catalogo_ilegivel_200_com_aviso(ambiente):
+    construir, musicas = ambiente
+    cliente, *_ = construir()
+    _estragar_catalogo(musicas)
+    resposta = cliente.get("/api/episodios/" + quote(NOME) + "/musicas")
+    assert resposta.status_code == 200
+    dados = resposta.json()
+    assert dados["do_episodio"] == []
+    assert all(v == [] for v in dados["biblioteca"].values())
+    assert "catalogo.json ilegível" in dados["avisos"]
+
+
+def test_post_musica_com_catalogo_ilegivel_422(ambiente):
+    construir, musicas = ambiente
+    cliente, _, fila, _ = construir()
+    _estragar_catalogo(musicas)
+    resposta = cliente.post(_url(""), json=CORPO)
+    assert resposta.status_code == 422
+    assert resposta.json() == {"detail": "Catálogo de músicas ilegível."}
+    assert fila.pedidos() == []
