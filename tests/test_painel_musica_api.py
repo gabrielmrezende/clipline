@@ -326,7 +326,7 @@ def test_previa_com_catalogo_ilegivel_422(ambiente):
     _estragar_catalogo(musicas)
     resposta = cliente.post(_url("/previa"), json={**CORPO, "inicio": 0})
     assert resposta.status_code == 422
-    assert resposta.json()["detail"].startswith("Não consegui gerar a prévia: ")
+    assert resposta.json() == {"detail": "Não consegui gerar a prévia: Catálogo de músicas ilegível."}
 
 
 def test_lista_com_catalogo_ilegivel_200_com_aviso(ambiente):

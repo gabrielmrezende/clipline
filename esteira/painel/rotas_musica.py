@@ -27,6 +27,9 @@ class PedidoPrevia(PedidoMusica):
     inicio: float = Field(default=0.0, ge=0)
 
 
+CATALOGO_ILEGIVEL = "Catálogo de músicas ilegível."
+
+
 class CatalogoIlegivel(Exception):
     pass
 
@@ -35,14 +38,12 @@ def _catalogo(requisicao: Request) -> list[Faixa]:
     try:
         return ler_catalogo(requisicao.app.state.pasta_musicas)
     except (OSError, ValueError, TypeError) as erro:
-        raise CatalogoIlegivel("Catálogo de músicas ilegível.") from erro
+        raise CatalogoIlegivel(CATALOGO_ILEGIVEL) from erro
 
 
 def _faixa_valida(requisicao: Request, arquivo: str, volume_db: float) -> Faixa:
-    try:
-        catalogo = _catalogo(requisicao)
-    except CatalogoIlegivel as erro:
-        raise HTTPException(422, str(erro)) from erro
+    """Faixa do catálogo e volume dentro dos limites; HTTPException 422 se não, CatalogoIlegivel se o catálogo quebrou."""
+    catalogo = _catalogo(requisicao)
     faixa = next((f for f in catalogo if f.arquivo == arquivo), None)
     if faixa is None:
         raise HTTPException(422, "Faixa fora do catálogo.")
@@ -132,7 +133,10 @@ def musica_do_corte(ep: str, n: int, requisicao: Request) -> dict:
 @roteador.post("/episodios/{ep}/cortes/{n}/musica", status_code=202)
 def trocar(ep: str, n: int, corpo: PedidoMusica, requisicao: Request):
     pasta, _ = _pasta_do_corte(requisicao, ep, n)
-    escolhida = _faixa_valida(requisicao, corpo.arquivo, corpo.volume_db)
+    try:
+        escolhida = _faixa_valida(requisicao, corpo.arquivo, corpo.volume_db)
+    except CatalogoIlegivel as erro:
+        raise HTTPException(422, str(erro)) from erro
     try:
         pedido = requisicao.app.state.fila.pedir(pasta, n, escolhida, corpo.volume_db)
     except PedidoAtivo:
@@ -156,10 +160,10 @@ def previa(ep: str, n: int, corpo: PedidoPrevia, requisicao: Request):
         requisicao.app.state.gerar_previa(
             receita, video, musica, corpo.inicio, saida, duracao_musica=escolhida.duracao
         )
-    except HTTPException as erro:
-        if erro.status_code == 422 and erro.detail == "Catálogo de músicas ilegível.":
-            return _falha_previa(erro.detail)
-        raise
+    except HTTPException:
+        raise  # faixa fora do catálogo ou volume fora dos limites: 422 com o motivo
+    except CatalogoIlegivel as erro:
+        return _falha_previa(str(erro))
     except EscritaProibida:
         raise  # 403, pelo tratador do app
     except Exception as erro:  # nunca 500: qualquer falha vira 422 com o motivo
