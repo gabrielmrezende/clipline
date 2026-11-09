@@ -336,6 +336,7 @@ O `agendar` recusa, e diz o motivo, quando:
 - falta o crédito da música em algum texto;
 - a data já passou;
 - o corte já está agendado naquela rede.
+- o vídeo em `video-final/` é mais antigo que o `corte.mp4` (o corte foi montado de novo, por exemplo ao trocar a música no painel): refazer no CapCut e salvar o vídeo novo em `video-final/`.
 
 ### Acompanhar
 
