@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { CorteDetalhe, ErroApi, caminhoCorte, pedir } from "../api";
+import { BlocoMusica } from "../componentes/BlocoMusica";
 import { EditorPost } from "../componentes/EditorPost";
 import { Markdown } from "../componentes/Markdown";
 import { Players } from "../componentes/Players";
@@ -10,10 +11,14 @@ export function Corte() {
   const { ep = "", n = "" } = useParams();
   const [dados, setDados] = useState<CorteDetalhe | null>(null);
   const [erro, setErro] = useState<string | null>(null);
+  const [versaoVideo, setVersaoVideo] = useState<string | null>(null);
+  const [sinalPost, setSinalPost] = useState(0);
+  const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
     setDados(null);
     setErro(null);
+    setVersaoVideo(null);
     pedir<CorteDetalhe>(caminhoCorte(ep, n))
       .then(setDados)
       .catch((x) => setErro(x instanceof ErroApi ? x.detail : "Erro inesperado."));
@@ -59,7 +64,23 @@ export function Corte() {
       </p>
       <div className="corte-layout">
         <div className="corte-esquerda">
-          <Players ep={ep} n={n} videoFinal={bloco.video_final} />
+          <Players
+            ep={ep}
+            n={n}
+            videoFinal={bloco.video_final}
+            videoRef={videoRef}
+            versao={versaoVideo}
+          />
+          <BlocoMusica
+            ep={ep}
+            n={n}
+            videoFinal={bloco.video_final}
+            tempoDoPlayer={() => videoRef.current?.currentTime ?? 0}
+            aoTerminar={() => {
+              setVersaoVideo(String(Date.now()));
+              setSinalPost((s) => s + 1);
+            }}
+          />
           <section aria-labelledby="titulo-info" className="info-corte">
             <h2 id="titulo-info">Informações</h2>
             <dl>
@@ -112,7 +133,7 @@ export function Corte() {
           ) : null}
         </div>
         <div className="corte-direita">
-          <EditorPost ep={ep} n={n} />
+          <EditorPost ep={ep} n={n} recarregarSinal={sinalPost} />
         </div>
       </div>
     </main>

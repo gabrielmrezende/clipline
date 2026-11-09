@@ -353,6 +353,73 @@ input {
   color: var(--suave);
   margin-left: 0.5rem;
 }
+.bloco-musica {
+  margin: 1.5rem 0;
+}
+.bloco-musica button {
+  min-height: 44px;
+  padding: 0 1rem;
+  cursor: pointer;
+}
+.bloco-musica button[aria-pressed="true"] {
+  background: var(--destaque);
+  color: var(--superficie);
+  border-color: var(--destaque);
+  font-weight: 600;
+}
+.bloco-musica audio {
+  display: block;
+  width: 100%;
+  margin: 0.5rem 0;
+}
+.bloco-musica audio[hidden] {
+  display: none;
+}
+.faixas {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 0.5rem;
+}
+.faixa {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 44px;
+  margin-bottom: 0.25rem;
+}
+.faixa-tocar {
+  min-width: 44px;
+  padding: 0;
+}
+.faixa-nome {
+  flex: 1;
+  overflow-wrap: anywhere;
+}
+.clima summary {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  text-transform: capitalize;
+}
+.volume {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.volume input {
+  flex: 1;
+}
+.acoes-musica {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 0.75rem 0;
+}
+.andamento p {
+  margin: 0.5rem 0;
+}
 @media (min-width: 768px) {
   .corte-layout {
     grid-template-columns: 1fr 1fr;

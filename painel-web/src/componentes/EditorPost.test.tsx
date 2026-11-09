@@ -58,11 +58,12 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-async function montar() {
-  render(<EditorPost ep="Ep 1" n={2} />);
+async function montar(sinal = 0) {
+  const r = render(<EditorPost ep="Ep 1" n={2} recarregarSinal={sinal} />);
   await act(async () => {
     await vi.advanceTimersByTimeAsync(0);
   });
+  return r;
 }
 
 async function avancar(ms: number) {
@@ -210,4 +211,27 @@ describe("EditorPost", () => {
     expect(campo.value).toBe("meu texto");
   });
 
+  it("recarregarSinal sem rascunho lê o post de novo", async () => {
+    let gets = 0;
+    manipulador = () =>
+      resposta(
+        postOk(++gets === 1 ? {} : { campos: { ...CAMPOS, instagram: "Crédito novo" }, versao: "v5" }),
+      );
+    const r = await montar(0);
+    r.rerender(<EditorPost ep="Ep 1" n={2} recarregarSinal={1} />);
+    await avancar(0);
+    expect(chamadas.filter((c) => c.metodo === "GET")).toHaveLength(2);
+    expect((screen.getByLabelText(/Instagram/) as HTMLTextAreaElement).value).toBe("Crédito novo");
+  });
+
+  it("recarregarSinal com rascunho avisa e mantém o rascunho", async () => {
+    const r = await montar(0);
+    const campo = screen.getByLabelText(/Instagram/) as HTMLTextAreaElement;
+    fireEvent.change(campo, { target: { value: "meu rascunho" } });
+    r.rerender(<EditorPost ep="Ep 1" n={2} recarregarSinal={1} />);
+    await avancar(0);
+    expect(screen.getByText("O crédito da música mudou no post.md")).toBeTruthy();
+    expect(campo.value).toBe("meu rascunho");
+    expect(chamadas.filter((c) => c.metodo === "GET")).toHaveLength(1);
+  });
 });

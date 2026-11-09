@@ -4,6 +4,8 @@ import { CamposPost, ErroApi, Post, caminhoCorte, enviarJson, pedir } from "../a
 interface Props {
   ep: string;
   n: number | string;
+  /** Muda quando algo de fora (a troca de música) alterou o post.md. */
+  recarregarSinal: number;
 }
 
 const CAMPOS: { chave: keyof CamposPost; rotulo: string; limite: number; linhas: number }[] = [
@@ -20,7 +22,7 @@ function mensagem(x: unknown): string {
   return x instanceof ErroApi ? x.detail : "Erro inesperado.";
 }
 
-export function EditorPost({ ep, n }: Props) {
+export function EditorPost({ ep, n, recarregarSinal }: Props) {
   const caminho = `${caminhoCorte(ep, n)}/post`;
   const [carregando, setCarregando] = useState(true);
   const [post, setPost] = useState<Post | null>(null);
@@ -37,6 +39,11 @@ export function EditorPost({ ep, n }: Props) {
   const [copia, setCopia] = useState<string | null>(null);
   const temporizador = useRef<ReturnType<typeof setTimeout> | null>(null);
   const sequencia = useRef(0);
+  const camposRef = useRef<CamposPost>(VAZIO);
+  const carregadosRef = useRef<CamposPost>(VAZIO);
+  const sinalAnterior = useRef(recarregarSinal);
+  const [creditoMudou, setCreditoMudou] = useState(false);
+  camposRef.current = campos;
 
   const limparConflito = useCallback(() => {
     setConflito(false);
@@ -50,6 +57,8 @@ export function EditorPost({ ep, n }: Props) {
     if (temporizador.current) clearTimeout(temporizador.current);
     setPost(dados);
     setErroLeitura(null);
+    carregadosRef.current = dados.campos;
+    setCreditoMudou(false);
     setCampos(dados.campos);
     setVersao(dados.versao);
     setAvisos(dados.avisos ?? []);
@@ -84,6 +93,14 @@ export function EditorPost({ ep, n }: Props) {
       if (temporizador.current) clearTimeout(temporizador.current);
     };
   }, [carregar]);
+
+  useEffect(() => {
+    if (sinalAnterior.current === recarregarSinal) return;
+    sinalAnterior.current = recarregarSinal;
+    const sujo = CAMPOS.some(({ chave }) => camposRef.current[chave] !== carregadosRef.current[chave]);
+    if (sujo) setCreditoMudou(true);
+    else void carregar();
+  }, [recarregarSinal, carregar]);
 
   function agendarConferencia(novos: CamposPost) {
     if (temporizador.current) clearTimeout(temporizador.current);
@@ -135,6 +152,8 @@ export function EditorPost({ ep, n }: Props) {
       });
       setVersao(r.versao);
       setAvisos(r.avisos);
+      carregadosRef.current = campos;
+      setCreditoMudou(false);
       setSalvo(true);
       limparConflito();
     } catch (x) {
@@ -174,6 +193,11 @@ export function EditorPost({ ep, n }: Props) {
       {quebrado ? (
         <p role="alert" className="mensagem-erro">
           {erroLeitura}
+        </p>
+      ) : null}
+      {creditoMudou ? (
+        <p role="status" className="aviso">
+          O crédito da música mudou no post.md
         </p>
       ) : null}
       {CAMPOS.map(({ chave, rotulo, limite, linhas }) => {

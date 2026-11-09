@@ -4,6 +4,7 @@ const MAPA: Record<SeloValor, { icone: string; classe: string }> = {
   erro: { icone: "✕", classe: "selo-erro" },
   "com alerta": { icone: "⚠", classe: "selo-alerta" },
   "sem vídeo final": { icone: "○", classe: "selo-cinza" },
+  "vídeo final desatualizado": { icone: "↻", classe: "selo-alerta" },
   pronto: { icone: "✓", classe: "selo-pronto" },
 };
 
