@@ -182,7 +182,11 @@ def _tem_dependencias_do_painel() -> bool:
 
 
 def _montagem_falsa(pasta: Path, numero: int) -> str:
-    """Montagem de mentira: regrava o corte.mp4 com os mesmos bytes (ou vazio, se não existir)."""
+    """Montagem de mentira, só para os testes de ponta a ponta: não roda o ffmpeg.
+
+    Regrava o corte.mp4 com os mesmos bytes ou, se ele não existir, grava um vazio. Na troca de música
+    o corte.mp4 antigo já foi para trabalho/corte-anterior.mp4, então ali o corte.mp4 novo sai sempre vazio.
+    """
     corte = next(c for c in ler_aprovados(pasta) if c.numero == numero)
     video = pasta_do_corte(pasta, corte) / CORTE_MP4
     video.write_bytes(video.read_bytes() if video.exists() else b"")
