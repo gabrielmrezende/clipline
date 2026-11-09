@@ -259,3 +259,166 @@ def test_versao_muda_com_conteudo(tmp_path):
     b.write_text(POST_CORTE_1 + "x", "utf-8")
     assert va != versao_post(b)
     assert len(va) == 64 and int(va, 16) >= 0
+
+
+# --- trocar_credito ---
+
+import os  # noqa: E402
+
+from esteira.publicar.post import trocar_credito  # noqa: E402
+from esteira.receita import Musica  # noqa: E402
+
+NOVO = "Música: Clear Air — Kevin MacLeod (incompetech.com), licença CC BY 4.0"
+ANTIGA = Musica("musicas/tenso/Ice Flow.mp3", -26.0, "Ice Flow", CREDITO)
+NOVA = Musica("musicas/leve/Clear Air.mp3", -24.0, "Clear Air", NOVO)
+AVISOS_CREDITO = [
+    f"{rede}: crédito antigo não encontrado; confira o crédito" for rede in ("youtube", "instagram", "tiktok")
+]
+AVISO_MUSICA = "seção Música não atualizada"
+
+
+def _trocado(texto: str) -> str:
+    """O post depois da troca: Crédito: com o crédito exato, Faixa: e os textos com a faixa nova."""
+    return (
+        texto.replace(f"Crédito: {CREDITO}.", f"Crédito: {NOVO}")
+        .replace("Faixa: Ice Flow", "Faixa: Clear Air")
+        .replace(CREDITO, NOVO)
+    )
+
+
+def _so_no_instagram(texto: str, velho: str, novo: str) -> str:
+    antes, resto = texto.split("## Instagram")
+    insta, depois = resto.split("## TikTok")
+    return antes + "## Instagram" + insta.replace(velho, novo) + "## TikTok" + depois
+
+
+def test_trocar_credito_quatro_lugares(tmp_path):
+    c = _bruto(tmp_path, POST_CORTE_1)
+    assert trocar_credito(c, ANTIGA, NOVA, base=tmp_path) == []
+    textos = ler_post(c)
+    for texto in (textos.youtube_descricao, textos.instagram, textos.tiktok):
+        assert NOVO + "." in texto
+    texto = c.read_text("utf-8")
+    assert "\nFaixa: Clear Air (Kevin MacLeod, incompetech.com)\n" in texto
+    assert texto.endswith(f"\nCrédito: {NOVO}\n")
+    assert "Ice Flow" not in texto
+    assert c.read_bytes() == _trocado(POST_CORTE_1).encode("utf-8")
+    assert conferir_textos(textos, NOVO, TODAS) == []
+    assert list(tmp_path.glob("*.tmp")) == []
+
+
+def test_trocar_credito_editado_a_mao(tmp_path):
+    editado = _so_no_instagram(POST_CORTE_1, CREDITO, "Música: Ice Flow, de Kevin MacLeod")
+    c = _bruto(tmp_path, editado)
+    insta = ler_post(c).instagram
+    assert trocar_credito(c, ANTIGA, NOVA, base=tmp_path) == [
+        "instagram: crédito antigo não encontrado; confira o crédito"
+    ]
+    textos = ler_post(c)
+    assert textos.instagram == insta
+    assert NOVO in textos.youtube_descricao and NOVO in textos.tiktok
+    assert CREDITO not in textos.youtube_descricao + textos.tiktok
+    assert c.read_bytes() == _trocado(editado).encode("utf-8")
+
+
+def test_trocar_credito_crlf_e_misto(tmp_path):
+    misto = _so_no_instagram(POST_CORTE_1.replace("\n", "\r\n"), "\r\n", "\n")
+    assert "\r\n" in misto and "\n\n" in misto
+    c = _bruto(tmp_path, misto)
+    assert trocar_credito(c, ANTIGA, NOVA, base=tmp_path) == []
+    assert c.read_bytes() == _trocado(misto).encode("utf-8")
+    textos = ler_post(c)
+    assert textos.youtube_titulo == "A Fórmula 1 faz sportswashing? 🏎️🌍 #Shorts"
+    assert textos.tiktok.endswith("#política")
+    assert conferir_textos(textos, NOVO, TODAS) == []
+
+
+def test_trocar_credito_sem_secao_musica(tmp_path):
+    c = _bruto(tmp_path, POST_CORTE_1.split("## Música")[0])
+    assert trocar_credito(c, ANTIGA, NOVA, base=tmp_path) == [AVISO_MUSICA]
+    assert conferir_textos(ler_post(c), NOVO, TODAS) == []
+    assert CREDITO not in c.read_text("utf-8")
+
+
+def test_trocar_credito_sem_linha_faixa(tmp_path):
+    sem_faixa = POST_CORTE_1.replace("Faixa: Ice Flow (Kevin MacLeod, incompetech.com)\n", "")
+    c = _bruto(tmp_path, sem_faixa)
+    assert trocar_credito(c, ANTIGA, NOVA, base=tmp_path) == [AVISO_MUSICA]
+    assert c.read_bytes() == _trocado(sem_faixa).encode("utf-8")
+
+
+def test_trocar_credito_mesma_faixa(tmp_path):
+    c = _bruto(tmp_path, POST_CORTE_1)
+    os.utime(c, ns=(1_700_000_000_000_000_000, 1_700_000_000_000_000_000))
+    antes, mtime = c.read_bytes(), c.stat().st_mtime_ns
+    so_volume = Musica(ANTIGA.arquivo, -20.0, ANTIGA.titulo, ANTIGA.credito)
+    assert trocar_credito(c, ANTIGA, so_volume, base=tmp_path) == []
+    assert c.read_bytes() == antes
+    assert c.stat().st_mtime_ns == mtime
+    assert trocar_credito(tmp_path / "nao-existe" / "post.md", ANTIGA, so_volume) == []  # nem lê
+
+
+@pytest.mark.parametrize(
+    "antiga", [None, Musica("musicas/tenso/Outra.mp3")], ids=["sem_musica", "musica_sem_credito"]
+)
+def test_trocar_credito_sem_musica_antiga(tmp_path, antiga):
+    c = _bruto(tmp_path, POST_CORTE_1)
+    textos = ler_post(c)
+    assert trocar_credito(c, antiga, NOVA, base=tmp_path) == AVISOS_CREDITO
+    assert ler_post(c) == textos
+    esperado = POST_CORTE_1.replace(f"Crédito: {CREDITO}.", f"Crédito: {NOVO}")
+    assert c.read_bytes() == esperado.encode("utf-8")
+
+
+def test_trocar_credito_sem_nada_a_trocar_nao_grava(tmp_path):
+    c = _bruto(tmp_path, POST_CORTE_1.split("## Música")[0])
+    os.utime(c, ns=(1_700_000_000_000_000_000, 1_700_000_000_000_000_000))
+    antes, mtime = c.read_bytes(), c.stat().st_mtime_ns
+    assert trocar_credito(c, None, NOVA, base=tmp_path) == AVISOS_CREDITO + [AVISO_MUSICA]
+    assert c.read_bytes() == antes
+    assert c.stat().st_mtime_ns == mtime
+
+
+@pytest.mark.parametrize(
+    "nova",
+    [
+        Musica(NOVA.arquivo, -24.0, "X", "Música: X\n## Intrusa"),
+        Musica(NOVA.arquivo, -24.0, "X", "## Intrusa"),
+        Musica(NOVA.arquivo, -24.0, "Clear Air\n## Intrusa", NOVO),
+    ],
+    ids=["quebra_no_credito", "cabecalho_no_inicio_da_linha", "quebra_no_titulo"],
+)
+def test_trocar_credito_recusa_se_quebrar(tmp_path, nova):
+    c = _bruto(tmp_path, POST_CORTE_1)
+    antes = c.read_bytes()
+    with pytest.raises(ErroPost, match="não gravado"):
+        trocar_credito(c, ANTIGA, nova, base=tmp_path)
+    assert c.read_bytes() == antes
+    assert list(tmp_path.glob("*.tmp")) == []
+
+
+def test_trocar_credito_secao_obrigatoria_ausente(tmp_path):
+    c = _bruto(tmp_path, POST_CORTE_1.replace("## TikTok", "## Outra"))
+    antes = c.read_bytes()
+    with pytest.raises(ErroPost, match="post.md sem a seção ## TikTok"):
+        trocar_credito(c, ANTIGA, NOVA, base=tmp_path)
+    assert c.read_bytes() == antes
+
+
+def test_trocar_credito_fora_de_cortes_recusa(tmp_path):
+    c = _bruto(tmp_path, POST_CORTE_1)
+    antes = c.read_bytes()
+    with pytest.raises(EscritaProibida):
+        trocar_credito(c, ANTIGA, NOVA)
+    assert c.read_bytes() == antes
+    assert list(tmp_path.glob("*.tmp")) == []
+
+
+def test_trocar_credito_apaga_tmp_se_falhar(tmp_path, monkeypatch):
+    c = _bruto(tmp_path, POST_CORTE_1)
+    antes = c.read_bytes()
+    monkeypatch.setattr("esteira.publicar.post.os.replace", _falhar)
+    with pytest.raises(OSError, match="disco cheio"):
+        trocar_credito(c, ANTIGA, NOVA, base=tmp_path)
+    assert list(tmp_path.glob("*.tmp")) == []
+    assert c.read_bytes() == antes

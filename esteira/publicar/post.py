@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from esteira.caminhos import garantir_escrita
+from esteira.receita import Musica
 
 LIMITE_TITULO = 100
 LIMITE_DESCRICAO = 5000
@@ -186,17 +187,34 @@ def _trocar_faixa(linhas: list[list[str]], inicio: int, fim: int, novo: str, fim
     linhas[inicio:inicio] = novas
 
 
-def _conferir_antes_de_gravar(texto: str, pedido: Textos, somente_leitura: dict[str, str]) -> None:
-    """Relê em memória o que vai para o disco: tem de voltar igual, sem mexer no resto."""
+def _conferir_antes_de_gravar(
+    texto: str, pedido: Textos, somente_leitura: dict[str, str], livres: tuple[str, ...] = ()
+) -> None:
+    """Relê em memória o que vai para o disco: tem de voltar igual, sem mexer no resto.
+
+    As seções em livres podem mudar (trocar_credito reescreve a seção Música).
+    """
     try:
         relido = interpretar_post(texto)
     except ErroPost:
         relido = None
-    if relido != pedido or somente_leitura_do_texto(texto) != somente_leitura or _repetidas(texto):
+    antes = {nome: corpo for nome, corpo in somente_leitura.items() if nome not in livres}
+    depois = {nome: corpo for nome, corpo in somente_leitura_do_texto(texto).items() if nome not in livres}
+    if relido != pedido or depois != antes or _repetidas(texto):
         raise ErroPost(
             "post.md não gravado: o texto não seria lido de volta igual. "
             "Confira quebras de linha e linhas começando com '## '."
         )
+
+
+def _gravar_atomico(caminho: Path, dados: bytes) -> None:
+    temporario = caminho.with_name(caminho.name + ".tmp")
+    try:
+        temporario.write_bytes(dados)
+        os.replace(temporario, caminho)
+    finally:
+        with contextlib.suppress(OSError):
+            temporario.unlink(missing_ok=True)
 
 
 def gravar_textos(
@@ -250,11 +268,99 @@ def gravar_textos(
     texto = "".join(conteudo + fim for conteudo, fim in linhas)
     _conferir_antes_de_gravar(texto, pedido, somente_leitura_do_texto(bruto))
     dados = texto.encode("utf-8")
-    temporario = caminho.with_name(caminho.name + ".tmp")
-    try:
-        temporario.write_bytes(dados)
-        os.replace(temporario, caminho)
-    finally:
-        with contextlib.suppress(OSError):
-            temporario.unlink(missing_ok=True)
+    _gravar_atomico(caminho, dados)
     return versao_dos_bytes(dados)
+
+
+def _linhas_do_campo(linhas: list[list[str]], nome: str) -> tuple[int, int]:
+    """Faixa [inicio, fim) de um campo: a descrição do YouTube ou o corpo inteiro da seção."""
+    inicio, fim = _limites_secao(linhas, nome)
+    if nome != "YouTube":
+        return inicio, fim
+    for i in range(inicio, fim):
+        if re.fullmatch(r"Descrição:\s*", linhas[i][0]):
+            return i + 1, fim
+    return fim, fim
+
+
+def _trocar_nas_linhas(linhas: list[list[str]], inicio: int, fim: int, velho: str, novo: str) -> bool:
+    """Troca velho por novo dentro de cada linha de [inicio, fim); True se achou alguma."""
+    achou = False
+    for i in range(inicio, fim):
+        if velho in linhas[i][0]:
+            linhas[i][0] = linhas[i][0].replace(velho, novo)
+            achou = True
+    return achou
+
+
+def _primeira_linha(linhas: list[list[str]], inicio: int, fim: int, prefixo: str) -> int | None:
+    return next((i for i in range(inicio, fim) if linhas[i][0].startswith(prefixo)), None)
+
+
+def _trocar_secao_musica(linhas: list[list[str]], antiga: Musica | None, nova: Musica) -> bool:
+    """Troca as linhas 'Crédito:' e 'Faixa:' da seção Música; False se faltou a seção ou uma linha."""
+    try:
+        inicio, fim = _limites_secao(linhas, "Música")
+    except ErroPost:
+        return False
+    completa = True
+    credito = _primeira_linha(linhas, inicio, fim, "Crédito:")
+    if credito is None:
+        completa = False
+    else:
+        linhas[credito][0] = f"Crédito: {nova.credito}"
+    if antiga is not None and antiga.titulo:  # sem título antigo não há o que trocar na linha Faixa:
+        faixa = _primeira_linha(linhas, inicio, fim, "Faixa:")
+        valor = "" if faixa is None else linhas[faixa][0].removeprefix("Faixa:")
+        if faixa is not None and antiga.titulo in valor:  # só no valor: a linha segue começando com Faixa:
+            linhas[faixa][0] = "Faixa:" + valor.replace(antiga.titulo, nova.titulo)
+        else:
+            completa = False
+    return completa
+
+
+def trocar_credito(caminho: Path, antiga: Musica | None, nova: Musica, base: Path | None = None) -> list[str]:
+    """Troca o crédito da música nos textos e as linhas da seção Música; o resto fica igual byte a byte.
+
+    Devolve avisos do que não achou para trocar. Mesma faixa (só o volume mudou): nem lê o arquivo.
+    Nada para trocar: não grava. A seção Música fica fora da releitura, então o crédito e o título
+    novos não podem ter quebra de linha (criariam linhas, ou seções, que ninguém conferiu).
+    """
+    if antiga is not None and antiga.arquivo == nova.arquivo:
+        return []
+    caminho = Path(caminho)
+    garantir_escrita(caminho, base_extra=base)
+    if tem_quebra_de_linha(nova.credito) or tem_quebra_de_linha(nova.titulo):
+        raise ErroPost(
+            "post.md não gravado: o crédito e o título da música nova não podem ter quebra de linha."
+        )
+    bruto = caminho.read_bytes().decode("utf-8")
+    atual = interpretar_post(bruto)
+    repetidas = _repetidas(bruto)
+    if repetidas:
+        raise ErroPost(f"post.md com a seção ## {repetidas[0]} repetida")
+    linhas = _linhas(bruto)
+    velho = antiga.credito if antiga is not None else ""
+    avisos: list[str] = []
+    esperados: list[str] = []
+    for rede, nome, campo in (
+        ("youtube", "YouTube", atual.youtube_descricao),
+        ("instagram", "Instagram", atual.instagram),
+        ("tiktok", "TikTok", atual.tiktok),
+    ):
+        inicio, fim = _linhas_do_campo(linhas, nome)
+        if velho and _trocar_nas_linhas(linhas, inicio, fim, velho, nova.credito):
+            esperados.append(_normalizar(campo.replace(velho, nova.credito)))
+        else:
+            esperados.append(campo)
+            avisos.append(f"{rede}: crédito antigo não encontrado; confira o crédito")
+    if not _trocar_secao_musica(linhas, antiga, nova):
+        avisos.append("seção Música não atualizada")
+
+    texto = "".join(conteudo + fim for conteudo, fim in linhas)
+    if texto == bruto:
+        return avisos
+    esperado = Textos(atual.youtube_titulo, *esperados)
+    _conferir_antes_de_gravar(texto, esperado, somente_leitura_do_texto(bruto), livres=("Música",))
+    _gravar_atomico(caminho, texto.encode("utf-8"))
+    return avisos
