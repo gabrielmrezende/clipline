@@ -200,3 +200,15 @@ def test_excecao_longa_vira_erro_cortado(controle, fabrica):
     assert esperar(lambda: fila.pedido(p.id).estado == "erro")
     mensagem = fila.pedido(p.id).mensagem
     assert len(mensagem) == 300 and mensagem.startswith("yyy")
+
+
+def test_base_exception_nao_deixa_pedido_montando(controle, fabrica):
+    controle.excecoes[1] = SystemExit(1)
+    fila = fabrica()
+    p = fila.pedir(Path("ep1"), 1, FAIXA, -18.0)
+    assert esperar(lambda: fila.pedido(p.id).estado == "erro")
+    final = fila.pedido(p.id)
+    assert final.mensagem == "a montagem parou (SystemExit)" and final.terminado is not None
+    assert fila.ativo("ep1", 1) is None
+    seguinte = fila.pedir(Path("ep1"), 2, FAIXA, -18.0)  # o trabalhador continua vivo
+    assert esperar(lambda: fila.pedido(seguinte.id).estado == "pronto")

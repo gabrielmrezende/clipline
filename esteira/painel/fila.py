@@ -118,11 +118,15 @@ class Fila:
                 continue
             with self._trava:
                 self._pedidos[id].estado = "montando"
+            resultado = Resultado("erro", "a montagem parou sem resposta", [], None)
             try:
                 resultado = self._executar(pasta, numero, faixa, volume_db)
             except Exception as erro:
                 resultado = Resultado("erro", resumir_erro(str(erro) or type(erro).__name__), [], None)
-            self._concluir(id, resultado)
+            except BaseException as erro:  # SystemExit e afins: o pedido não fica "montando" e a fila segue
+                resultado = Resultado("erro", f"a montagem parou ({type(erro).__name__})", [], None)
+            finally:
+                self._concluir(id, resultado)
 
     def _concluir(self, id: str, resultado: Resultado) -> None:
         anterior = resultado.anterior
