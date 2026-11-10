@@ -59,7 +59,9 @@ def registrar(
     resultado: str,
     alertas: list[str] | None = None,
     alertas_preparar: list[str] | None = None,
+    imagens: list[dict] | None = None,
 ) -> None:
+    """`imagens`: as que entraram no corte.mp4 (só na montagem que deu certo)."""
     dados = {
         "video": str(video),
         "corte": asdict(corte),
@@ -71,6 +73,8 @@ def registrar(
     }
     if alertas_preparar is not None:
         dados["alertas_preparar"] = alertas_preparar
+    if imagens is not None:
+        dados["imagens"] = imagens
     (pasta_de_trabalho(destino) / "registro.json").write_text(
         json.dumps(dados, ensure_ascii=False, indent=2), "utf-8"
     )

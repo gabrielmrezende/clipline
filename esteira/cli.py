@@ -89,7 +89,7 @@ def _preparar(args) -> int:
 def _montar(args) -> int:
     pasta = garantir_escrita(Path(args.pasta))
     numeros = set(args.numero) if args.numero else None
-    return _imprimir(montar_episodio(pasta, numeros, args.forcar))
+    return _imprimir(montar_episodio(pasta, numeros, args.forcar, sem_imagens=args.sem_imagens))
 
 
 def _imagens_conectar(provedor: str) -> int:
@@ -323,6 +323,7 @@ def principal(argv: list[str] | None = None) -> int:
     c.add_argument("pasta")
     c.add_argument("--numero", type=int, action="append")
     c.add_argument("--forcar", action="store_true")
+    c.add_argument("--sem-imagens", action="store_true")
     c.set_defaults(funcao=_montar)
 
     c = comandos.add_parser("musica")

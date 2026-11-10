@@ -1,4 +1,6 @@
 import json
+from collections.abc import Sequence
+from dataclasses import asdict
 from pathlib import Path
 
 from esteira.caminhos import SOBREPOSICAO
@@ -13,9 +15,10 @@ from esteira.cortar import (
     pasta_do_corte,
     registrar,
 )
+from esteira.imagens_no_video import imagens_do_corte
 from esteira.midia import ErroMidia
 from esteira.planos import Plano, ler_planos
-from esteira.receita import NOME_ARQUIVO, Receita, ler_receita, validar_receita
+from esteira.receita import NOME_ARQUIVO, ImagemNoVideo, Receita, ler_receita, validar_receita
 from esteira.render import renderizar_final
 
 ERROS_DA_RECEITA = (ErroMidia, OSError, ValueError, KeyError, TypeError)
@@ -32,14 +35,17 @@ def _planos_do_corte(destino: Path, receita: Receita) -> list[Plano]:
     return planos
 
 
-def _renderizar(receita: Receita, destino: Path, video: Path, numero: int, cartao: Path | None) -> list[str]:
+def _renderizar(
+    receita: Receita, destino: Path, video: Path, numero: int, cartao: Path | None, imagens: Sequence[ImagemNoVideo]
+) -> list[str]:
     problemas = validar_receita(receita, destino)
     if problemas:
         raise ErroMidia("; ".join(problemas))
     if not SOBREPOSICAO.exists():
         gerar_sobreposicao(SOBREPOSICAO)
     return renderizar_final(
-        receita, video, cartao or escolher_encerramento(numero), destino, destino / CORTE_MP4, SOBREPOSICAO
+        receita, video, cartao or escolher_encerramento(numero), destino, destino / CORTE_MP4, SOBREPOSICAO,
+        imagens=imagens,
     )
 
 
@@ -61,7 +67,9 @@ def montar_episodio(
     numeros: set[int] | None = None,
     forcar: bool = False,
     cartao: Path | None = None,
+    sem_imagens: bool = False,
 ) -> dict[int, str]:
+    """Monta o corte.mp4 de cada corte, com as imagens prontas de cada momento (nenhuma com `sem_imagens`)."""
     pasta = Path(pasta)
     video = Path(json.loads((pasta / "episodio.json").read_text("utf-8"))["video"])
     resultados: dict[int, str] = {}
@@ -79,20 +87,26 @@ def montar_episodio(
         faixas: list = []
         anteriores, do_preparar = _alertas_gravados(destino)
         alertas: list[str] = anteriores
+        imagens: list[ImagemNoVideo] | None = None
         try:
             corte_mp4.unlink(missing_ok=True)
             receita = ler_receita(destino / TRABALHO)
             faixas = receita.faixas
             receita.planos = _planos_do_corte(destino, receita)
-            do_render = _renderizar(receita, destino, video, corte.numero, cartao)
+            escolhidas, das_imagens = ([], []) if sem_imagens else imagens_do_corte(destino)
+            do_render = _renderizar(receita, destino, video, corte.numero, cartao, escolhidas)
             if any(a.startswith("sem música") for a in anteriores):
                 do_render = [a for a in do_render if not a.startswith("sem música")]
-            alertas = anteriores + [a for a in do_render if a not in anteriores]
+            alertas = anteriores + [a for a in do_render + das_imagens if a not in anteriores]
+            imagens = escolhidas
             (destino / IMAGENS_SUGERIDAS).mkdir(exist_ok=True)
             (destino / VIDEO_FINAL).mkdir(exist_ok=True)
             resultado = f"ok com alertas: {'; '.join(alertas)}" if alertas else "ok"
         except ERROS_DA_RECEITA as erro:
             resultado = f"erro: {erro}"
-        registrar(destino, video, corte, faixas, resultado, alertas, alertas_preparar=do_preparar)
+        registrar(
+            destino, video, corte, faixas, resultado, alertas, alertas_preparar=do_preparar,
+            imagens=[asdict(i) for i in imagens] if imagens is not None and resultado.startswith("ok") else None,
+        )
         resultados[corte.numero] = resultado
     return resultados

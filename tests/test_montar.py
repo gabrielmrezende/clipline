@@ -81,10 +81,10 @@ def test_erro_de_sistema_nao_para_os_outros(tmp_path, monkeypatch):
     pasta, cartao = _preparado(tmp_path, [BOM, OUTRO])
     original = montar.renderizar_final
 
-    def falhar_no_primeiro(receita, video, cartao, pasta_corte, saida, sobreposicao=None):
+    def falhar_no_primeiro(receita, video, cartao, pasta_corte, saida, sobreposicao=None, imagens=()):
         if "01-" in str(saida):
             raise PermissionError("arquivo aberto")
-        return original(receita, video, cartao, pasta_corte, saida, sobreposicao)
+        return original(receita, video, cartao, pasta_corte, saida, sobreposicao, imagens=imagens)
 
     monkeypatch.setattr(montar, "renderizar_final", falhar_no_primeiro)
     r = montar_episodio(pasta, cartao=cartao)
@@ -213,3 +213,65 @@ def test_montar_recusa_zoom_fora_da_faixa(tmp_path, monkeypatch):
         resultado = montar_episodio(pasta, forcar=True, cartao=cartao)[1]
         assert resultado == "erro: enquadramento.json: zoom fora de 1,0 a 2,0 no plano 2"
     assert capturados == []
+
+
+def _com_foto_pronta(pasta, *outros):
+    """Um momento de foto de 1 a 3 s com o arquivo vermelho já baixado pela esteira (como o sugerir deixa)."""
+    from PIL import Image
+
+    from esteira.pedidos import Momento, gravar_pedidos
+
+    corte = pasta / "01-bom-corte"
+    candidata = {"titulo": "File:A1.jpg", "pagina": "https://c/A1", "autor": "Fulano", "licenca": "CC BY-SA 4.0"}
+    foto = Momento(1.0, 3.0, "a placa", "foto", "Placa", busca="placa", candidatas=[candidata], escolhas=[1])
+    gravar_pedidos(corte / "trabalho", [foto, *outros])
+    (corte / "imagens-sugeridas").mkdir(exist_ok=True)
+    Image.new("RGB", (1080, 1920), (255, 0, 0)).save(corte / "imagens-sugeridas" / "0001-placa-1.jpg")
+    (corte / "trabalho" / "sugeridas.json").write_text(json.dumps(["0001-placa-1.jpg"]), "utf-8")
+    (corte / "trabalho" / "creditos.json").write_text(json.dumps({"0001-placa-1.jpg": candidata}), "utf-8")
+    return corte
+
+
+def _vermelho_em(video, segundo, destino):
+    from PIL import Image
+
+    from esteira.midia import executar_ffmpeg
+
+    executar_ffmpeg(["-y", "-ss", f"{segundo}", "-i", str(video), "-frames:v", "1", str(destino)])
+    r, g, b = Image.open(destino).convert("RGB").getpixel((540, 960))
+    return r > 200 and g < 70 and b < 70
+
+
+def test_montar_poe_as_imagens_prontas_e_registra(tmp_path):
+    pasta, cartao = _preparado(tmp_path)
+    corte = _com_foto_pronta(pasta)
+    assert montar_episodio(pasta, cartao=cartao)[1].startswith("ok")
+    registro = json.loads((corte / "trabalho" / "registro.json").read_text("utf-8"))
+    mtime = (corte / "imagens-sugeridas" / "0001-placa-1.jpg").stat().st_mtime_ns
+    assert registro["imagens"] == [{
+        "inicio": 1.0, "fim": 3.0, "arquivo": "imagens-sugeridas/0001-placa-1.jpg", "tipo": "foto",
+        "momento": "0001-placa", "modificado_ns": mtime,
+    }]
+    assert _vermelho_em(corte / "corte.mp4", 2.0, tmp_path / "q.png")
+    assert not _vermelho_em(corte / "corte.mp4", 4.0, tmp_path / "q2.png")
+
+
+def test_montar_alerta_momento_sem_imagem(tmp_path):
+    from esteira.pedidos import Momento
+
+    pasta, cartao = _preparado(tmp_path)
+    corte = _com_foto_pronta(pasta, Momento(10.0, 13.0, "chovia", "ia", "Chuva", prompt="chuva", aprovado=True))
+    resultado = montar_episodio(pasta, cartao=cartao)[1]
+    assert "imagem 0:10 Chuva fora do vídeo: IA ainda não gerada" in resultado
+    registro = json.loads((corte / "trabalho" / "registro.json").read_text("utf-8"))
+    assert "imagem 0:10 Chuva fora do vídeo: IA ainda não gerada" in registro["alertas"]
+    assert [i["momento"] for i in registro["imagens"]] == ["0001-placa"]
+
+
+def test_montar_sem_imagens(tmp_path):
+    pasta, cartao = _preparado(tmp_path)
+    corte = _com_foto_pronta(pasta)
+    assert montar_episodio(pasta, cartao=cartao, sem_imagens=True)[1].startswith("ok")
+    registro = json.loads((corte / "trabalho" / "registro.json").read_text("utf-8"))
+    assert registro["imagens"] == []
+    assert not _vermelho_em(corte / "corte.mp4", 2.0, tmp_path / "q.png")

@@ -217,3 +217,17 @@ def test_imagens_gerar_confirmar_gera(tmp_path, monkeypatch, capsys):
     assert "Gerando 1 de 1…" in saida and "0052-turistas-ia-1.jpg" in saida
     assert falso.chamadas == 1
     assert (corte / "imagens-sugeridas" / "0052-turistas-ia-1.jpg").exists()
+
+
+def test_cli_montar_sem_imagens_repassa(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(cli, "garantir_escrita", lambda caminho: caminho)
+    chamadas = []
+
+    def falso(pasta, numeros, forcar, sem_imagens=False):
+        chamadas.append((numeros, forcar, sem_imagens))
+        return {1: "ok"}
+
+    monkeypatch.setattr(cli, "montar_episodio", falso)
+    assert cli.principal(["montar", str(tmp_path), "--numero", "1", "--forcar", "--sem-imagens"]) == 0
+    assert cli.principal(["montar", str(tmp_path)]) == 0
+    assert chamadas == [({1}, True, True), (None, False, False)]
