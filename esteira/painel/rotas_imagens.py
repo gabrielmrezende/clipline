@@ -11,11 +11,12 @@ from pydantic import BaseModel, StrictInt
 from esteira.caminhos import garantir_escrita
 from esteira.cortar import IMAGENS_SUGERIDAS, TRABALHO
 from esteira.fluxo_imagens import (
-    _arquivos, _ler_sugeridas, chave_momento, cortes_com_pedidos, ler_creditos, ler_ia, resumir_episodio,
+    _ler_sugeridas, chave_momento, cortes_com_pedidos, ler_creditos, ler_ia, resumir_episodio,
 )
 from esteira.imagens_ia.config import PROVEDORES, Config, gravar_config, ler_config, provedor_atual
-from esteira.imagens_ia.gerar import MAXIMO_VERSOES, arquivo_de_versao, orcamento_com_itens, pendentes
+from esteira.imagens_ia.gerar import orcamento_com_itens, pendentes
 from esteira.imagens_ia.provedor import ErroImagem
+from esteira.imagens_no_video import fotos_prontas, versoes_ia
 from esteira.painel.fila import PedidoAtivo
 from esteira.painel.leitura import NaoEncontrado, resolver_episodio
 from esteira.painel.rotas import _TRAVA_GRAVACAO, _pasta_do_corte
@@ -107,49 +108,6 @@ def _candidata(c) -> dict:
     return saida
 
 
-def _mesma_foto(m: Momento, k: int, nome: str, creditos: dict[str, dict]) -> bool:
-    """O arquivo da opção k é a candidata escolhida agora? Pela procedência gravada no download;
-    sem ela (corte antigo, sem creditos.json), pelo último resumo."""
-    credito = creditos.get(nome)
-    if credito is None:
-        return k <= len(m.resumidas) and m.resumidas[k - 1] == m.escolhas[k - 1]
-    escolha = m.escolhas[k - 1]
-    candidata = m.candidatas[escolha - 1] if type(escolha) is int and 1 <= escolha <= len(m.candidatas) else None
-    if not isinstance(candidata, dict):
-        return False
-    return any(credito.get(campo) and credito.get(campo) == candidata.get(campo) for campo in ("pagina", "titulo"))
-
-
-def _fotos_prontas(m: Momento, imagens: Path, sugeridas: set[str], creditos: dict[str, dict]) -> list[str]:
-    nomes = _arquivos(m)
-    if m.tipo == "foto":
-        return [
-            nome for k, nome in enumerate(nomes, 1)
-            if nome in sugeridas and (imagens / nome).is_file() and _mesma_foto(m, k, nome, creditos)
-        ]
-    return [nome for nome in nomes if nome in sugeridas and (imagens / nome).is_file()]
-
-
-def _ia_do_momento(m: Momento, imagens: Path, ia: list[dict]) -> list[dict]:
-    chave = chave_momento(m)
-    itens = [
-        i for i in ia
-        if i.get("momento") == chave and isinstance(i.get("arquivo"), str)
-        and Path(i["arquivo"]).name == i["arquivo"] and (imagens / i["arquivo"]).is_file()
-    ]
-    saida = [
-        {"arquivo": i["arquivo"], "versao": i.get("versao"), "provedor": i.get("provedor", ""), "data": i.get("data", "")}
-        for i in itens
-    ]
-    registrados = {i["arquivo"] for i in ia if i.get("momento") == chave and isinstance(i.get("arquivo"), str)}
-    for k in range(1, MAXIMO_VERSOES + 1):  # imagem paga cujo registro falhou: aparece, sem provedor e data
-        nome = arquivo_de_versao(chave, k)
-        if nome not in registrados and (imagens / nome).is_file():
-            saida.append({"arquivo": nome, "versao": k, "provedor": "", "data": ""})
-    saida.sort(key=lambda i: i["versao"] if isinstance(i["versao"], int) else 0)
-    return saida
-
-
 def _json_do_momento(m: Momento, destino: Path, pessoas: list[str] | None) -> dict:
     """`pessoas` None: glossário ilegível, a pessoa citada fica desconhecida (null)."""
     imagens = destino / IMAGENS_SUGERIDAS
@@ -161,8 +119,8 @@ def _json_do_momento(m: Momento, destino: Path, pessoas: list[str] | None) -> di
         "prompt": m.prompt, "aprovado": m.aprovado, "descartar": m.descartar, "motivo": m.motivo,
         "candidatas": [_candidata(c) for c in m.candidatas],
         "escolhas": list(m.escolhas),
-        "fotos_prontas": _fotos_prontas(m, imagens, sugeridas, ler_creditos(destino / TRABALHO)),
-        "ia": _ia_do_momento(m, imagens, ler_ia(destino / TRABALHO)),
+        "fotos_prontas": fotos_prontas(m, chave_momento(m), imagens, sugeridas, ler_creditos(destino / TRABALHO)),
+        "ia": versoes_ia(chave_momento(m), imagens, ler_ia(destino / TRABALHO)),
         "pessoa_citada": _pessoa_citada(m.prompt, pessoas) if m.prompt and pessoas is not None else None,
     }
 
