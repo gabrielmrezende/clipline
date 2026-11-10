@@ -13,6 +13,18 @@ VOLUME_MAXIMO = -18.0
 VOLUME_PADRAO = -26.0
 
 
+@dataclass(frozen=True)
+class ImagemNoVideo:
+    """Uma imagem sobreposta ao corte.mp4, nos tempos de tela (linha do tempo do corte)."""
+
+    inicio: float
+    fim: float
+    arquivo: str  # relativo à pasta do corte: "imagens-sugeridas/<nome>"
+    tipo: str = ""
+    momento: str = ""  # chave do momento (MMSS-nome, pelo tempo proposto)
+    modificado_ns: int = 0  # st_mtime_ns do arquivo na hora da escolha
+
+
 @dataclass
 class Musica:
     arquivo: str

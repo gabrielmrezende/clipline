@@ -1,6 +1,6 @@
 import pytest
 
-from esteira.legenda import corrigir_palavras, escrever_ass, escrever_srt, montar_cues
+from esteira.legenda import corrigir_palavras, escrever_ass, escrever_srt, montar_cues, ocultar_durante
 from esteira.modelos import Cue, Palavra as P
 
 
@@ -132,3 +132,29 @@ def test_destaque_pinta_so_uma_palavra(tmp_path):
 def test_destaque_continua_escapando_texto(tmp_path):
     escrever_ass([Cue(0, 1, ["{x} Lula"], "lula")], tmp_path / "a.ass")
     assert r"\{x\} {\c&H00FFFF&}Lula{\c&HFFFFFF&}" in (tmp_path / "a.ass").read_text("utf-8")
+
+
+def test_ocultar_remove_cue_dentro():
+    assert ocultar_durante([Cue(1, 2, ["a"])], [(0.5, 2.5)]) == []
+
+
+def test_ocultar_encurta_borda():
+    assert ocultar_durante([Cue(1, 3, ["a"])], [(2, 4)]) == [Cue(1, 2, ["a"])]
+    assert ocultar_durante([Cue(1, 3, ["a"])], [(0, 2)]) == [Cue(2, 3, ["a"])]
+
+
+def test_ocultar_cue_que_contem_imagem_fica_com_o_lado_maior():
+    assert ocultar_durante([Cue(0, 10, ["a"])], [(2, 4)]) == [Cue(4, 10, ["a"])]
+    assert ocultar_durante([Cue(0, 10, ["a"])], [(6, 8)]) == [Cue(0, 6, ["a"])]
+    assert ocultar_durante([Cue(0, 10, ["a"])], [(4, 6)]) == [Cue(0, 4, ["a"])]
+
+
+def test_ocultar_sem_intervalo_ou_fora_nao_muda():
+    cues = [Cue(0, 1, ["a"]), Cue(5, 6, ["b"])]
+    assert ocultar_durante(cues, [(2, 4)]) == cues
+    assert ocultar_durante(cues, []) == cues
+
+
+def test_ocultar_varios_intervalos_e_preserva_destaque():
+    r = ocultar_durante([Cue(0, 10, ["a"], "a"), Cue(11, 12, ["b"])], [(0, 2), (3, 5), (10.5, 12)])
+    assert r == [Cue(5, 10, ["a"], "a")]

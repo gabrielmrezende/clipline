@@ -6,7 +6,7 @@ from PIL import Image
 from esteira.midia import ErroMidia, executar_ffmpeg, pico_de_audio, saida_ffmpeg, sondar
 from esteira.modelos import Cue
 from esteira import render
-from esteira.receita import Musica, Receita
+from esteira.receita import ImagemNoVideo, Musica, Receita
 from esteira.render import renderizar_final
 from tests.auxiliares import gerar_video_teste
 
@@ -285,3 +285,124 @@ def test_previa_musica_comeca_no_mesmo_ponto_do_corte(tmp_path, inicio, duracao_
     filtro = args[args.index("-filter_complex") + 1]
     duracao = sum(b - a for a, b in render.trechos_da_previa(FAIXAS_PREVIA, inicio, 15.0))
     assert ";".join(render._filtro_musica(1, musica, duracao)) in filtro  # mesmo filtro do corte, com os fades
+
+
+IMAGEM = "imagens-sugeridas/0000-placa-1.jpg"
+
+
+def _salvar(caminho, imagem):
+    caminho.parent.mkdir(parents=True, exist_ok=True)
+    imagem.save(caminho)
+    return caminho
+
+
+def _faixas_verticais(caminho, largura, altura):
+    imagem = Image.new("RGB", (largura, altura), (0, 255, 0))
+    imagem.paste((255, 0, 0), (0, 0, largura // 3, altura))
+    imagem.paste((0, 0, 255), (largura - largura // 3, 0, largura, altura))
+    return _salvar(caminho, imagem)
+
+
+def _verde(pixel):
+    r, g, b = pixel
+    return g > 200 and r < 70 and b < 70
+
+
+def test_imagem_aparece_no_tempo(tmp_path):
+    pasta, origem, cartao = _cenario(tmp_path)
+    _salvar(pasta / IMAGEM, Image.new("RGB", (1080, 1920), (255, 0, 0)))
+    saida = pasta / "final.mp4"
+    renderizar_final(Receita([(0.0, 3.0)], [], []), origem, cartao, pasta, saida, imagens=[ImagemNoVideo(0.5, 2.5, IMAGEM)])
+    durante = _quadro(saida, 1.5, pasta / "q1.png")
+    for ponto in ((540, 100), (540, 1800), (5, 960), (1075, 960)):
+        assert _vermelho(durante.getpixel(ponto))
+    assert not _vermelho(_quadro(saida, 0.2, pasta / "q0.png").getpixel((540, 100)))
+    assert not _vermelho(_quadro(saida, 2.8, pasta / "q2.png").getpixel((540, 100)))
+
+
+def test_imagem_vertical_preparada_fica_em_tela_cheia(tmp_path):
+    pasta, origem, cartao = _cenario(tmp_path)
+    _faixas_verticais(pasta / IMAGEM, 1080, 1920)
+    saida = pasta / "final.mp4"
+    renderizar_final(Receita([(0.0, 3.0)], [], []), origem, cartao, pasta, saida, imagens=[ImagemNoVideo(0.5, 2.5, IMAGEM)])
+    durante = _quadro(saida, 1.5, pasta / "q.png")
+    assert _vermelho(durante.getpixel((150, 100)))
+    assert _azul(durante.getpixel((930, 1800)))
+
+
+def test_imagem_de_outro_tamanho_cobre_a_tela_sem_distorcer(tmp_path):
+    pasta, origem, cartao = _cenario(tmp_path)
+    _faixas_verticais(pasta / IMAGEM, 1800, 900)
+    saida = pasta / "final.mp4"
+    renderizar_final(Receita([(0.0, 3.0)], [], []), origem, cartao, pasta, saida, imagens=[ImagemNoVideo(0.5, 2.5, IMAGEM)])
+    durante = _quadro(saida, 1.5, pasta / "q.png")
+    assert _verde(durante.getpixel((150, 960)))  # esticada, a faixa vermelha estaria aqui
+    assert _verde(durante.getpixel((930, 960)))
+
+
+def _quadrado_no_centro(caminho):
+    imagem = Image.new("RGB", (1080, 1920), (255, 255, 255))
+    imagem.paste((0, 0, 0), (270, 480, 810, 1440))
+    return _salvar(caminho, imagem)
+
+
+def test_zoom_aproxima_na_primeira_imagem_e_afasta_na_segunda(tmp_path):
+    pasta, origem, cartao = _cenario(tmp_path)
+    _quadrado_no_centro(pasta / IMAGEM)
+    saida = pasta / "final.mp4"
+    imagens = [ImagemNoVideo(0.2, 1.8, IMAGEM), ImagemNoVideo(2.0, 3.6, IMAGEM)]
+    renderizar_final(Receita([(0.0, 4.0)], [], []), origem, cartao, pasta, saida, imagens=imagens)
+    borda = (258, 960)  # fora do quadrado com zoom 1,00; dentro com zoom 1,08 (a borda vai a 248)
+    escuro = lambda quadro: max(quadro.getpixel(borda)) < 80
+    assert not escuro(_quadro(saida, 0.25, pasta / "a.png")) and escuro(_quadro(saida, 1.75, pasta / "b.png"))
+    assert escuro(_quadro(saida, 2.05, pasta / "c.png")) and not escuro(_quadro(saida, 3.55, pasta / "d.png"))
+
+
+def test_zoom_alterna_no_filtro():
+    imagem = ImagemNoVideo(0.5, 2.5, IMAGEM)
+    assert "(1+" in render._filtro_imagem(2, "img0", 0, imagem)
+    assert f"({render.ZOOM_IMAGEM}-" in render._filtro_imagem(3, "img1", 1, imagem)
+
+
+def test_legenda_some_durante_imagem(tmp_path):
+    pasta, origem, cartao = _cenario(tmp_path)
+    _salvar(pasta / IMAGEM, Image.new("RGB", (1080, 1920), (255, 0, 0)))
+    saida = pasta / "final.mp4"
+    receita = Receita([(0.0, 3.0)], [], [Cue(0, 3, ["LEGENDA BEM LONGA"])])
+    renderizar_final(receita, origem, cartao, pasta, saida, imagens=[ImagemNoVideo(0.5, 2.5, IMAGEM)])
+    assert _brancos_na_legenda(_quadro(saida, 0.2, pasta / "q0.png")) > 20
+    assert _brancos_na_legenda(_quadro(saida, 1.5, pasta / "q1.png")) == 0
+
+
+def test_imagem_ate_o_fim_da_parte_principal(tmp_path):
+    pasta, origem, cartao = _cenario(tmp_path)
+    _salvar(pasta / IMAGEM, Image.new("RGB", (1080, 1920), (255, 0, 0)))
+    saida = pasta / "final.mp4"
+    renderizar_final(Receita([(0.0, 3.0)], [], []), origem, cartao, pasta, saida, imagens=[ImagemNoVideo(1.0, 3.0, IMAGEM)])
+    assert sondar(saida).duracao == pytest.approx(4, abs=0.2)
+    assert _vermelho(_quadro(saida, 2.9, pasta / "q.png").getpixel((540, 960)))
+
+
+def test_caminhos_com_acento_em_imagem_e_musica(tmp_path):
+    pasta, origem, cartao = _cenario(tmp_path)
+    arquivo = "imagens-sugeridas/0001-ação-1.jpg"
+    _salvar(pasta / arquivo, Image.new("RGB", (1080, 1920), (255, 0, 0)))
+    musica = _musica(pasta / "música ação.wav", 1)
+    saida = pasta / "final.mp4"
+    receita = Receita([(0.0, 3.0)], [], [Cue(0, 3, ["olá"])], musica=Musica(str(musica), -20.0))
+    renderizar_final(receita, origem, cartao, pasta, saida, imagens=[ImagemNoVideo(0.5, 2.5, arquivo)])
+    assert _vermelho(_quadro(saida, 1.5, pasta / "q.png").getpixel((540, 960)))
+    assert sondar(saida).duracao == pytest.approx(4, abs=0.2)
+
+
+def test_imagem_nao_muda_as_cores_do_resto_do_corte(tmp_path):
+    """JPEG vem em faixa cheia (pc) e o vídeo em faixa limitada (tv): sem converter a imagem, o corte inteiro desbota."""
+    pasta, origem, cartao = _cenario(tmp_path)
+    _salvar(pasta / IMAGEM, Image.new("RGB", (1080, 1920), (255, 0, 0)))
+    sem, com = pasta / "sem.mp4", pasta / "com.mp4"
+    renderizar_final(Receita([(0.0, 3.0)], [], []), origem, cartao, pasta, sem)
+    renderizar_final(Receita([(0.0, 3.0)], [], []), origem, cartao, pasta, com, imagens=[ImagemNoVideo(1.0, 2.5, IMAGEM)])
+    for ponto in ((540, 960), (100, 1500), (900, 300)):
+        a = _quadro(sem, 0.4, pasta / "a.png").getpixel(ponto)
+        b = _quadro(com, 0.4, pasta / "b.png").getpixel(ponto)
+        assert all(abs(x - y) <= 4 for x, y in zip(a, b)), (ponto, a, b)
