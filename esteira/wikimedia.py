@@ -11,7 +11,7 @@ from esteira.rede import abrir
 API_URL = "https://commons.wikimedia.org/w/api.php"
 MIMES_ACEITOS = {"image/jpeg", "image/png", "image/webp"}
 LADO_MINIMO = 800
-LARGURA_MINIATURA = 640
+LARGURA_MINIATURA = 500  # largura padrão do Wikimedia (outras dão HTTP 400), dentro dos 640 px do CLAUDE.md
 LARGURA_FINAL = 1920
 RESULTADOS_BUSCA = 20
 INTERVALO_CONSULTAS = 2.0

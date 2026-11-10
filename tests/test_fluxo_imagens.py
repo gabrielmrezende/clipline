@@ -1,3 +1,4 @@
+import io
 import json
 
 import pytest
@@ -327,6 +328,71 @@ def test_sugerir_recusa_prompt_com_pessoa(tmp_path):
     resumir_episodio(ep, None, falso, lambda u: 1)
     assert sugerir_episodio(ep, None, ["Chuva"], falso, baixar_cor)[1].startswith("erro: momento 3: prompt cita")
     assert not (corte / "imagens-sugeridas").exists()
+
+
+# --- créditos da foto baixada ---
+
+def test_sugerir_grava_a_procedencia_de_cada_foto(tmp_path):
+    ep, corte = _sugeridos(tmp_path)
+    resumir_episodio(ep, None, falso, lambda u: 1)
+    sugerir_episodio(ep, None, [], falso, baixar_cor)
+    creditos = json.loads((corte / "trabalho" / "creditos.json").read_text("utf-8"))
+    assert creditos == {
+        "0012-yas-marina-1.jpg": {"autor": "Beltrana", "licenca": "CC BY-SA 4.0", "pagina": "https://c/A2", "titulo": "File:A2.jpg"},
+        "0012-yas-marina-2.jpg": {"autor": "Fulano", "licenca": "CC BY-SA 4.0", "pagina": "https://c/A1", "titulo": "File:A1.jpg"},
+    }
+    assert b"\r\n" not in (corte / "trabalho" / "creditos.json").read_bytes()
+    assert not list((corte / "trabalho").glob("*.tmp"))
+
+
+def test_sugerir_de_novo_zera_os_creditos_antigos(tmp_path):
+    ep, corte = _sugeridos(tmp_path)
+    resumir_episodio(ep, None, falso, lambda u: 1)
+    sugerir_episodio(ep, None, [], falso, baixar_cor)
+    momentos = ler_pedidos(corte / "trabalho")
+    momentos[0].escolhas = [1]
+    gravar_pedidos(corte / "trabalho", momentos)
+    resumir_episodio(ep, None, falso, lambda u: 1)
+    sugerir_episodio(ep, None, [], falso, baixar_cor)
+    creditos = json.loads((corte / "trabalho" / "creditos.json").read_text("utf-8"))
+    assert list(creditos) == ["0012-yas-marina-1.jpg"] and creditos["0012-yas-marina-1.jpg"]["autor"] == "Fulano"
+
+
+class _IaFalsa:
+    nome = "openai"
+
+    def gerar(self, prompt, proporcao="9:16"):
+        buffer = io.BytesIO()
+        Image.new("RGB", (1024, 1536), AZUL).save(buffer, "PNG")
+        return buffer.getvalue()
+
+
+def test_trocar_a_escolha_e_gerar_ia_mantem_o_credito_da_foto_baixada(tmp_path):
+    from esteira.imagens_ia.config import padrao
+    from esteira.imagens_ia.gerar import gerar_momento
+
+    ep, corte = _sugeridos(tmp_path)
+    resumir_episodio(ep, None, falso, lambda u: 1)
+    sugerir_episodio(ep, None, [], falso, baixar_cor)  # opção 1 = A2 (Beltrana), opção 2 = A1 (Fulano)
+    momentos = ler_pedidos(corte / "trabalho")
+    momentos[0].escolhas = [1, 2]  # o dono trocou a ordem depois do download
+    momentos[2].aprovado = True
+    gravar_pedidos(corte / "trabalho", momentos)
+    gerar_momento(corte, chave_momento(momentos[2]), _IaFalsa(), padrao(), [], base=tmp_path)
+    guia = (corte / "imagens-sugeridas" / "guia.md").read_text("utf-8")
+    assert "1. Beltrana, CC BY-SA 4.0, https://c/A2\n2. Fulano, CC BY-SA 4.0, https://c/A1" in guia
+
+
+def test_sem_creditos_o_guia_credita_pelas_escolhas(tmp_path):
+    ep, corte = _sugeridos(tmp_path)
+    resumir_episodio(ep, None, falso, lambda u: 1)
+    sugerir_episodio(ep, None, [], falso, baixar_cor)
+    (corte / "trabalho" / "creditos.json").unlink()  # corte antigo
+    momentos = ler_pedidos(corte / "trabalho")
+    momentos[0].escolhas = [1, 2]
+    escrever_guia(corte, momentos)
+    guia = (corte / "imagens-sugeridas" / "guia.md").read_text("utf-8")
+    assert "1. Fulano, CC BY-SA 4.0, https://c/A1\n2. Beltrana, CC BY-SA 4.0, https://c/A2" in guia
 
 
 # --- imagens de IA no ia.json e no guia ---

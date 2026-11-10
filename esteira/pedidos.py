@@ -83,8 +83,9 @@ def pessoas_do_glossario(caminho: Path) -> list[str]:
 
 
 def _normalizar(texto: str) -> str:
+    """Sem acento, minúsculo e com cada sequência de espaços, tabs ou quebras de linha virando um espaço."""
     sem_acento = unicodedata.normalize("NFKD", texto).encode("ascii", "ignore").decode()
-    return sem_acento.lower()
+    return re.sub(r"\s+", " ", sem_acento).strip().lower()
 
 
 def _pessoa_citada(prompt: str, pessoas: list[str]) -> str | None:
@@ -96,12 +97,25 @@ def _pessoa_citada(prompt: str, pessoas: list[str]) -> str | None:
     return None
 
 
-def validar_pedidos(momentos: list[Momento], duracao: float, pessoas: list[str]) -> list[str]:
+def tempo_texto(segundos: float) -> str:
+    minutos, resto = divmod(max(0, int(segundos)), 60)
+    return f"{minutos}:{resto:02d}"
+
+
+def rotulo_momento(numero: int, m: Momento, painel: bool = False, com_nome: bool = False) -> str:
+    """Como as mensagens nomeiam o momento. Na CLI, a posição no arquivo ("momento 2" ou "momento 2 (nome)");
+    no painel, o tempo e o nome que o cartão mostra ("0:12 Ministro"), já que a posição não aparece lá."""
+    if painel:
+        return f"{tempo_texto(m.inicio)} {m.nome}"
+    return f"momento {numero} ({m.nome})" if com_nome else f"momento {numero}"
+
+
+def validar_pedidos(momentos: list[Momento], duracao: float, pessoas: list[str], painel: bool = False) -> list[str]:
     erros = []
     for numero, m in enumerate(momentos, 1):
         if m.descartar:
             continue
-        prefixo = f"momento {numero}"
+        prefixo = rotulo_momento(numero, m, painel)
         if m.tipo not in TIPOS:
             erros.append(f"{prefixo}: tipo inválido '{m.tipo}'")
         elif m.tipo == "foto" and not m.busca:
@@ -112,7 +126,8 @@ def validar_pedidos(momentos: list[Momento], duracao: float, pessoas: list[str])
                     erros.append(f"{prefixo}: notícia sem {campo}")
         elif m.tipo == "ia":
             if not m.prompt:
-                erros.append(f"{prefixo}: ia sem prompt")
+                dica = "IA sem prompt (escreva o prompt ou descarte o momento)" if painel else "ia sem prompt"
+                erros.append(f"{prefixo}: {dica}")
             else:
                 pessoa = _pessoa_citada(m.prompt, pessoas)
                 if pessoa:
@@ -122,7 +137,7 @@ def validar_pedidos(momentos: list[Momento], duracao: float, pessoas: list[str])
     return erros
 
 
-def validar_escolhas(momentos: list[Momento]) -> list[str]:
+def validar_escolhas(momentos: list[Momento], painel: bool = False) -> list[str]:
     erros = []
     for numero, m in enumerate(momentos, 1):
         if m.descartar or m.tipo != "foto":
@@ -132,11 +147,15 @@ def validar_escolhas(momentos: list[Momento]) -> list[str]:
             isinstance(e, list) and 1 <= len(e) <= MAXIMO_ESCOLHAS and len(set(e)) == len(e)
             and all(type(n) is int and 1 <= n <= len(m.candidatas) for n in e)
         ):
-            erros.append(f"momento {numero}: escolhas inválidas")
+            problema = "escolhas inválidas"
+            if painel and isinstance(e, list) and not e:
+                problema = "nenhuma foto escolhida (escolha ao menos uma foto ou descarte o momento)"
+            erros.append(f"{rotulo_momento(numero, m, painel)}: {problema}")
     return erros
 
 
-def ajustar_tempos(momentos: list[Momento], duracao: float) -> list[str]:
+def ajustar_tempos(momentos: list[Momento], duracao: float, painel: bool = False) -> list[str]:
+    rotulos = [rotulo_momento(i, m, painel, com_nome=True) for i, m in enumerate(momentos, 1)]  # antes de ajustar
     mantidos = [m for m in momentos if not m.descartar]
     originais = [(m.inicio, m.fim) for m in mantidos]
     avisos: list[str] = []
@@ -144,7 +163,7 @@ def ajustar_tempos(momentos: list[Momento], duracao: float) -> list[str]:
         novos = _ajustar_uma_vez(momentos, duracao)
         if not novos:
             return avisos
-        avisos.extend(f"momento {i + 1} ({momentos[i].nome}) descartado: {momentos[i].motivo}" for i in novos)
+        avisos.extend(f"{rotulos[i]} descartado: {momentos[i].motivo}" for i in novos)
         for m, (inicio, fim) in zip(mantidos, originais):
             if not m.descartar:
                 m.inicio, m.fim = inicio, fim

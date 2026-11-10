@@ -108,7 +108,7 @@ def test_get_reduz_miniatura_e_acha_pessoa(ambiente):
     dados = _cliente(cortes).get(_url()).json()
     foto = _momento(dados, CHAVE_FOTO)
     assert [c["miniatura"].split("/")[-1] for c in foto["candidatas"]] == [
-        "640px-Foto_1.jpg", "640px-Foto_2.jpg", "640px-Foto_3.jpg",
+        "500px-Foto_1.jpg", "500px-Foto_2.jpg", "500px-Foto_3.jpg",
     ]
     assert set(foto["candidatas"][0]) == {"titulo", "miniatura", "autor", "licenca", "pagina", "largura", "altura"}
     assert foto["pessoa_citada"] is None
@@ -127,6 +127,26 @@ def test_get_mantem_miniatura_pequena_e_sem_padrao(ambiente):
     candidatas = _cliente(cortes).get(_url()).json()["momentos"][0]["candidatas"]
     assert candidatas[0]["miniatura"].endswith("/320px-Foto_1.jpg")
     assert candidatas[1]["miniatura"] == "https://x/sem-padrao.jpg"
+
+
+BASE_THUMB = "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/Doc.pdf"
+
+
+@pytest.mark.parametrize("miniatura, esperada", [
+    (f"{BASE_THUMB}/960px-Doc.pdf.jpg", f"{BASE_THUMB}/500px-Doc.pdf.jpg"),
+    (f"{BASE_THUMB}/1280px-Doc.pdf.jpg", f"{BASE_THUMB}/500px-Doc.pdf.jpg"),
+    (f"{BASE_THUMB}/330px-Doc.pdf.jpg", f"{BASE_THUMB}/330px-Doc.pdf.jpg"),
+    (f"{BASE_THUMB}/lossy-page1-1280px-Doc.pdf.jpg", f"{BASE_THUMB}/lossy-page1-500px-Doc.pdf.jpg"),
+    (f"{BASE_THUMB}/page1-960px-Doc.pdf.jpg", f"{BASE_THUMB}/page1-500px-Doc.pdf.jpg"),
+    (f"{BASE_THUMB}/page2-330px-Doc.pdf.jpg", f"{BASE_THUMB}/page2-330px-Doc.pdf.jpg"),
+])
+def test_miniatura_vira_largura_padrao_do_wikimedia(ambiente, miniatura, esperada):
+    # O Wikimedia só serve larguras padrão: /640px- dá HTTP 400; /500px- e /330px- dão 200.
+    cortes, _, trabalho = ambiente
+    foto = _foto()
+    foto.candidatas = [{**_candidata(1), "miniatura": miniatura}]
+    (trabalho / "pedidos.json").write_text(json.dumps({"momentos": [foto.__dict__]}), "utf-8")
+    assert _cliente(cortes).get(_url()).json()["momentos"][0]["candidatas"][0]["miniatura"] == esperada
 
 
 def test_get_sem_pedidos_e_ilegivel(ambiente):
@@ -170,6 +190,41 @@ def test_foto_deixa_de_estar_pronta_quando_a_escolha_muda(ambiente):
     resposta = cliente.put(_url(f"/{CHAVE_FOTO}"), json={"versao": versao, "escolhas": [2]})
     assert resposta.status_code == 200
     assert resposta.json()["momento"]["fotos_prontas"] == []
+
+
+def _baixado_e_trocado(ambiente, com_creditos: bool):
+    """Baixa a candidata 1; depois a escolha vira 2 e um resumo (o da CLI, por exemplo) marca resumidas=[2]."""
+    cortes, destino, trabalho = ambiente
+    imagens = destino / IMAGENS_SUGERIDAS
+    imagens.mkdir()
+    (imagens / f"{CHAVE_FOTO}-1.jpg").write_bytes(b"x")
+    (trabalho / "sugeridas.json").write_text(json.dumps([f"{CHAVE_FOTO}-1.jpg"]), "utf-8")
+    if com_creditos:
+        c = _candidata(1)
+        credito = {campo: c[campo] for campo in ("autor", "licenca", "pagina", "titulo")}
+        (trabalho / "creditos.json").write_text(json.dumps({f"{CHAVE_FOTO}-1.jpg": credito}), "utf-8")
+    foto = _foto()
+    foto.escolhas, foto.resumidas = [2], [2]
+    _gravar_momentos(trabalho, [foto])
+    return _momento(_cliente(cortes).get(_url()).json(), CHAVE_FOTO)
+
+
+def test_foto_baixada_de_outra_candidata_nao_fica_pronta(ambiente):
+    assert _baixado_e_trocado(ambiente, com_creditos=True)["fotos_prontas"] == []
+
+
+def test_foto_pronta_quando_a_procedencia_bate(ambiente):
+    cortes, _, trabalho = ambiente
+    _baixado_e_trocado(ambiente, com_creditos=True)
+    foto = _foto()
+    foto.escolhas, foto.resumidas = [1], [3]  # o resumo é antigo, mas o arquivo é da candidata 1
+    _gravar_momentos(trabalho, [foto])
+    assert _momento(_cliente(cortes).get(_url()).json(), CHAVE_FOTO)["fotos_prontas"] == [f"{CHAVE_FOTO}-1.jpg"]
+
+
+def test_sem_creditos_vale_a_regra_do_resumo(ambiente):
+    # Corte antigo, sem creditos.json: a posição conta como pronta quando o último resumo bate com a escolha.
+    assert _baixado_e_trocado(ambiente, com_creditos=False)["fotos_prontas"] == [f"{CHAVE_FOTO}-1.jpg"]
 
 
 def test_put_escolhas(ambiente):
@@ -311,7 +366,7 @@ def test_fotos_em_andamento_bloqueiam_put_e_buscar(ambiente):
     antes = (trabalho / "pedidos.json").read_bytes()
     r = cliente.put(_url(f"/{CHAVE_FOTO}"), json={"versao": versao, "escolhas": [2]})
     assert r.status_code == 409 and r.json() == {"detail": "Espere o download das fotos terminar."}
-    r = cliente.post(_url(f"/{CHAVE_FOTO}/buscar"), json={"busca": "outra"})
+    r = cliente.post(_url(f"/{CHAVE_FOTO}/buscar"), json={"versao": versao, "busca": "outra"})
     assert r.status_code == 409 and r.json() == {"detail": "Espere o download das fotos terminar."}
     assert (trabalho / "pedidos.json").read_bytes() == antes
 
@@ -325,14 +380,15 @@ def test_buscar_troca_candidatas_e_zera_escolhas(ambiente):
         return [Candidata("File:Nova.jpg", "https://p", "https://x/thumb/1000px-Nova.jpg", 2000, 1500, "Eu", "CC0")]
 
     cliente = _cliente(cortes, buscar_candidatas=falsa)
-    r = cliente.post(_url(f"/{CHAVE_FOTO}/buscar"), json={"busca": "  planalto  "})
+    versao = cliente.get(_url()).json()["versao"]
+    r = cliente.post(_url(f"/{CHAVE_FOTO}/buscar"), json={"versao": versao, "busca": "  planalto  "})
     assert r.status_code == 200
     corpo = r.json()
     assert pedidas == ["planalto"]
     momento = corpo["momento"]
     assert momento["busca"] == "planalto" and momento["escolhas"] == []
     assert [c["titulo"] for c in momento["candidatas"]] == ["File:Nova.jpg"]
-    assert momento["candidatas"][0]["miniatura"].endswith("/640px-Nova.jpg")
+    assert momento["candidatas"][0]["miniatura"].endswith("/500px-Nova.jpg")
     gravado = ler_pedidos(trabalho)[0]
     assert gravado.escolhas == [] and gravado.url == [] and gravado.bytes == [] and gravado.resumidas == []
     assert gravado.candidatas[0]["titulo"] == "File:Nova.jpg"
@@ -346,13 +402,53 @@ def test_buscar_erros(ambiente):
         raise OSError("sem internet")
 
     cliente = _cliente(cortes, buscar_candidatas=cai)
-    r = cliente.post(_url(f"/{CHAVE_FOTO}/buscar"), json={"busca": "  "})
+    versao = cliente.get(_url()).json()["versao"]
+    r = cliente.post(_url(f"/{CHAVE_FOTO}/buscar"), json={"versao": versao, "busca": "  "})
     assert r.status_code == 422 and r.json()["detail"] == "Escreva o que buscar."
-    r = cliente.post(_url(f"/{CHAVE_FOTO}/buscar"), json={"busca": "x"})
+    r = cliente.post(_url(f"/{CHAVE_FOTO}/buscar"), json={"versao": versao, "busca": "x"})
     assert r.status_code == 422 and r.json()["detail"] == "Não consegui buscar no Wikimedia: sem internet"
-    r = cliente.post(_url(f"/{CHAVE_IA}/buscar"), json={"busca": "x"})
+    r = cliente.post(_url(f"/{CHAVE_IA}/buscar"), json={"versao": versao, "busca": "x"})
     assert r.status_code == 422 and r.json()["detail"] == "Só momentos de foto buscam no Wikimedia."
-    assert cliente.post(_url("/9999-nada/buscar"), json={"busca": "x"}).status_code == 404
+    assert cliente.post(_url("/9999-nada/buscar"), json={"versao": versao, "busca": "x"}).status_code == 404
+    assert cliente.post(_url(f"/{CHAVE_FOTO}/buscar"), json={"busca": "x"}).status_code == 422  # sem versão
+
+
+def _claude_regrava_outro_momento(trabalho) -> bytes:
+    arquivo = trabalho / "pedidos.json"
+    dados = json.loads(arquivo.read_text("utf-8"))
+    dados["momentos"][2]["titulo"] = "Governo anuncia (Claude mudou)"
+    arquivo.write_text(json.dumps(dados, ensure_ascii=False), "utf-8")
+    return arquivo.read_bytes()
+
+
+def test_buscar_com_versao_antiga_da_409_sem_ir_a_rede(ambiente):
+    cortes, _, trabalho = ambiente
+    pedidas = []
+    cliente = _cliente(cortes, buscar_candidatas=lambda busca: pedidas.append(busca) or [])
+    versao = cliente.get(_url()).json()["versao"]
+    por_fora = _claude_regrava_outro_momento(trabalho)
+    r = cliente.post(_url(f"/{CHAVE_FOTO}/buscar"), json={"versao": versao, "busca": "planalto"})
+    assert r.status_code == 409
+    atual = cliente.get(_url()).json()["versao"]
+    assert r.json() == {"detail": "O pedidos.json mudou desde que você abriu.", "versao_atual": atual}
+    assert (trabalho / "pedidos.json").read_bytes() == por_fora and pedidas == []
+
+
+def test_buscar_quando_o_claude_regrava_durante_a_busca_da_409(ambiente):
+    cortes, _, trabalho = ambiente
+    regravado = {}
+
+    def busca_lenta(busca):
+        regravado["bytes"] = _claude_regrava_outro_momento(trabalho)  # enquanto a rede responde
+        return [Candidata("File:Nova.jpg", "https://p", "https://x/thumb/1000px-Nova.jpg", 2000, 1500, "Eu", "CC0")]
+
+    cliente = _cliente(cortes, buscar_candidatas=busca_lenta)
+    versao = cliente.get(_url()).json()["versao"]
+    r = cliente.post(_url(f"/{CHAVE_FOTO}/buscar"), json={"versao": versao, "busca": "planalto"})
+    assert r.status_code == 409 and r.json()["detail"] == "O pedidos.json mudou desde que você abriu."
+    assert r.json()["versao_atual"] != versao
+    assert (trabalho / "pedidos.json").read_bytes() == regravado["bytes"]  # a edição do Claude fica
+    assert ler_pedidos(trabalho)[0].candidatas[0]["titulo"] == "File:Foto 1.jpg"  # as buscadas foram descartadas
 
 
 def test_rede_sem_cookie_da_401(ambiente):
@@ -360,7 +456,7 @@ def test_rede_sem_cookie_da_401(ambiente):
     cliente = _cliente(cortes, rede=True, cofre=CofreFalso())
     assert cliente.get(_url()).status_code == 401
     assert cliente.put(_url(f"/{CHAVE_FOTO}"), json={"versao": ""}).status_code == 401
-    assert cliente.post(_url(f"/{CHAVE_FOTO}/buscar"), json={"busca": "x"}).status_code == 401
+    assert cliente.post(_url(f"/{CHAVE_FOTO}/buscar"), json={"versao": "", "busca": "x"}).status_code == 401
 
 
 # ---------------------------------------------------------------------------
@@ -493,7 +589,53 @@ def test_resumo_de_fotos_avisa_tamanho_desconhecido(ambiente):
     cliente = _cliente_ia(cortes, medir=lambda url: None)
     dados = cliente.get(_fotos_url("/resumo")).json()
     assert dados["fotos"] == 1 and dados["megabytes"] == 0
-    assert len(dados["avisos"]) == 1 and dados["avisos"][0].startswith("Corte 1: ok com alertas: ")
+    assert dados["avisos"] == ["Corte 1: ok com alertas: 0:12 Ministro: opção 1 com tamanho desconhecido"]
+    _fechar(cliente)
+
+
+def test_avisos_do_resumo_nomeiam_o_momento_como_o_cartao(ambiente):
+    # "momento N" é a posição no arquivo, que o cartão não mostra: o painel usa o tempo e o nome.
+    cortes, _, trabalho = ambiente
+    foto = _foto()
+    foto.escolhas, foto.url, foto.bytes, foto.resumidas = [], [], [], []
+    sem_prompt = _ia_aprovada(20.0, "País parado")
+    sem_prompt.prompt, sem_prompt.aprovado = "", False
+    com_pessoa = _ia_aprovada(25.0, "Palanque")
+    com_pessoa.prompt = "Lula num palanque"
+    _gravar_momentos(trabalho, [foto, sem_prompt, com_pessoa])
+    cliente = _cliente_ia(cortes)
+    dados = cliente.get(_fotos_url("/resumo")).json()
+    assert dados["fotos"] == 0
+    assert dados["avisos"] == [
+        "Corte 1: erro: 0:20 País parado: IA sem prompt (escreva o prompt ou descarte o momento); "
+        "0:25 Palanque: prompt cita pessoa real (Lula)"
+    ]
+    _gravar_momentos(trabalho, [foto])
+    dados = cliente.get(_fotos_url("/resumo")).json()
+    assert dados["avisos"] == [
+        "Corte 1: erro: 0:12 Ministro: nenhuma foto escolhida (escolha ao menos uma foto ou descarte o momento)"
+    ]
+    r = cliente.post(_fotos_url(), json=CONFIRMADO)
+    final = _pedido_pronto(cliente, r.json()["id"])
+    assert final["estado"] == "erro" and "momento 1" not in final["mensagem"]
+    assert final["mensagem"] == (
+        "Corte 1: erro: 0:12 Ministro: nenhuma foto escolhida (escolha ao menos uma foto ou descarte o momento)"
+    )
+    _fechar(cliente)
+
+
+def test_avisos_do_download_nomeiam_o_momento_como_o_cartao(ambiente):
+    cortes, _, trabalho = ambiente
+    _gravar_momentos(trabalho, [_foto()])
+
+    def cai(url, destino):
+        raise OSError("sem internet")
+
+    cliente = _cliente_ia(cortes, baixar=cai)
+    r = cliente.post(_fotos_url(), json=CONFIRMADO)
+    final = _pedido_pronto(cliente, r.json()["id"])
+    assert final["estado"] == "pronto"
+    assert final["avisos"] == ["Corte 1: ok com alertas: 0:12 Ministro: download falhou"]
     _fechar(cliente)
 
 

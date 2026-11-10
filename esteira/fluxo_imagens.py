@@ -14,12 +14,15 @@ from esteira.folhas import montar_folha
 from esteira.imagens import prefixo_tempo, preparar_foto
 from esteira.modelos import Corte
 from esteira.pedidos import (
-    ARQUIVO, Momento, ajustar_tempos, gravar_pedidos, ler_pedidos, validar_escolhas, validar_pedidos,
+    ARQUIVO, Momento, ajustar_tempos, gravar_pedidos, ler_pedidos, rotulo_momento, tempo_texto, validar_escolhas,
+    validar_pedidos,
 )
 from esteira.receita import NOME_ARQUIVO, duracao_principal, ler_receita
 from esteira.wikimedia import Consulta
 
 SUGERIDAS = "sugeridas.json"
+CREDITOS = "creditos.json"
+CAMPOS_CREDITO = ("autor", "licenca", "pagina", "titulo")
 GUIA = "guia.md"
 IA = "ia.json"
 EXTENSOES_GERADAS = {".jpg", ".png"}
@@ -51,7 +54,8 @@ def cortes_com_pedidos(pasta: Path, numeros: set[int] | None) -> list[tuple[Cort
     return cortes
 
 
-def _carregar(destino: Path, pessoas: list[str]) -> tuple[list[Momento], float] | str:
+def _carregar(destino: Path, pessoas: list[str], painel: bool = False) -> tuple[list[Momento], float] | str:
+    """`painel`: as mensagens nomeiam o momento como o cartão do painel (tempo e nome)."""
     trabalho = destino / TRABALHO
     if not (trabalho / NOME_ARQUIVO).exists():
         return ERRO_SEM_MONTAGEM
@@ -60,7 +64,7 @@ def _carregar(destino: Path, pessoas: list[str]) -> tuple[list[Momento], float] 
         momentos = ler_pedidos(trabalho)
     except (OSError, ValueError, KeyError, TypeError) as erro:
         return f"erro: {erro}"
-    erros = validar_pedidos(momentos, duracao, pessoas)
+    erros = validar_pedidos(momentos, duracao, pessoas, painel)
     if erros:
         return f"erro: {'; '.join(erros)}"
     return momentos, duracao
@@ -123,18 +127,23 @@ def _gravar_texto(caminho: Path, texto: str) -> None:
     caminho.write_text(texto, "utf-8", newline="\n")
 
 
-def _carregar_escolhas(destino: Path, pessoas: list[str]) -> tuple[list[Momento], float] | str:
-    carregado = _carregar(destino, pessoas)
+def _carregar_escolhas(destino: Path, pessoas: list[str], painel: bool = False) -> tuple[list[Momento], float] | str:
+    carregado = _carregar(destino, pessoas, painel)
     if isinstance(carregado, str):
         return carregado
-    erros = validar_escolhas(carregado[0])
+    erros = validar_escolhas(carregado[0], painel)
     return f"erro: {'; '.join(erros)}" if erros else carregado
 
 
-def _ajustados(momentos: list[Momento], duracao: float) -> tuple[list[Momento], list[str]]:
+def _ajustados(momentos: list[Momento], duracao: float, painel: bool = False) -> tuple[list[Momento], list[str]]:
     """Cópia com os tempos ajustados a 2-5 s; o pedidos.json não muda."""
     copia = copy.deepcopy(momentos)
-    return copia, ajustar_tempos(copia, duracao)
+    return copia, ajustar_tempos(copia, duracao, painel)
+
+
+def _rotulos(momentos: list[Momento], painel: bool) -> list[str]:
+    """Um rótulo por posição, tirado dos tempos originais (os do cartão), antes de qualquer ajuste."""
+    return [rotulo_momento(i, m, painel, com_nome=True) for i, m in enumerate(momentos, 1)]
 
 
 def _fotos_ativas(momentos: list[Momento]) -> list[tuple[int, Momento]]:
@@ -148,20 +157,23 @@ def resumir_episodio(
     medir: Callable[[str], int | None] = wikimedia.tamanho,
     pessoas: list[str] | None = None,
     gravar: bool = True,
+    painel: bool = False,
 ) -> tuple[int, int, dict[int, str]]:
     """Resolve o link de cada foto escolhida e soma os tamanhos. Não baixa nada.
 
-    Com `gravar=False` o pedidos.json não muda (o painel só mostra o resumo).
+    Com `gravar=False` o pedidos.json não muda (o painel só mostra o resumo). Com `painel`, as mensagens
+    nomeiam o momento como o cartão do painel.
     """
     fotos, total = 0, 0
     resultados: dict[int, str] = {}
     for corte, destino in cortes_com_pedidos(Path(pasta), numeros):
-        carregado = _carregar_escolhas(destino, pessoas or [])
+        carregado = _carregar_escolhas(destino, pessoas or [], painel)
         if isinstance(carregado, str):
             resultados[corte.numero] = carregado
             continue
         momentos, duracao = carregado
-        copia, alertas = _ajustados(momentos, duracao)
+        rotulos = _rotulos(momentos, painel)
+        copia, alertas = _ajustados(momentos, duracao, painel)
         resolvidos: dict[int, tuple[list[str], list[int | None]]] = {}
         try:
             for posicao, m in _fotos_ativas(copia):
@@ -170,9 +182,9 @@ def resumir_episodio(
                     url = wikimedia.url_final(m.candidatas[escolha - 1]["titulo"], consultar) or ""
                     tamanho = medir(url) if url else None
                     if not url:
-                        alertas.append(f"momento {posicao} ({m.nome}): opção {k} sem link de download")
+                        alertas.append(f"{rotulos[posicao - 1]}: opção {k} sem link de download")
                     elif tamanho is None:
-                        alertas.append(f"momento {posicao} ({m.nome}): opção {k} com tamanho desconhecido")
+                        alertas.append(f"{rotulos[posicao - 1]}: opção {k} com tamanho desconhecido")
                     urls.append(url)
                     tamanhos.append(tamanho)
                 resolvidos[posicao] = (urls, tamanhos)
@@ -188,11 +200,6 @@ def resumir_episodio(
             gravar_pedidos(pasta_de_trabalho(destino), momentos)
         resultados[corte.numero] = _resultado(alertas)
     return fotos, total, resultados
-
-
-def _minutos(segundos: float) -> str:
-    minutos, resto = divmod(int(segundos), 60)
-    return f"{minutos}:{resto:02d}"
 
 
 def chave_momento(m: Momento) -> str:
@@ -236,8 +243,8 @@ def _arquivos(m: Momento) -> list[str]:
     return [f"{_base(m)}.png"] if m.tipo == "noticia" else []
 
 
-def _bloco_guia(pasta: Path, m: Momento, geradas: set[str], ia: list[dict]) -> str:
-    linhas = [f"## {_minutos(m.inicio)} a {_minutos(m.fim)} · {m.nome} ({TIPOS_GUIA[m.tipo]})", f'Fala: "{m.fala}"']
+def _bloco_guia(pasta: Path, m: Momento, geradas: set[str], ia: list[dict], creditos: dict[str, dict]) -> str:
+    linhas = [f"## {tempo_texto(m.inicio)} a {tempo_texto(m.fim)} · {m.nome} ({TIPOS_GUIA[m.tipo]})", f'Fala: "{m.fala}"']
     if m.tipo == "ia":
         linha = _linha_ia(pasta, m, ia)
         if linha:
@@ -253,9 +260,10 @@ def _bloco_guia(pasta: Path, m: Momento, geradas: set[str], ia: list[dict]) -> s
         linhas.append(linha_fonte(m.veiculo, m.data))
     elif presentes:
         linhas.append("Créditos:")
-        for k, _ in presentes:
-            c = m.candidatas[m.escolhas[k - 1] - 1]
-            linhas.append(f"{k}. {c['autor']}, {c['licenca']}, {c['pagina']}")
+        for k, nome in presentes:
+            # A procedência gravada no download; sem ela (corte antigo), a candidata escolhida agora.
+            c = creditos.get(nome) or m.candidatas[m.escolhas[k - 1] - 1]
+            linhas.append(f"{k}. {c.get('autor', '')}, {c.get('licenca', '')}, {c.get('pagina', '')}")
     return "\n".join(linhas)
 
 
@@ -266,7 +274,8 @@ def escrever_guia(destino: Path, momentos: list[Momento]) -> Path:
     ativos = sorted((m for m in momentos if not m.descartar), key=lambda m: m.inicio)
     geradas = set(_ler_sugeridas(Path(destino) / TRABALHO))
     ia = ler_ia(Path(destino) / TRABALHO)
-    blocos = [_bloco_guia(pasta, m, geradas, ia) for m in ativos] or ["Nenhuma imagem sugerida neste corte."]
+    creditos = ler_creditos(Path(destino) / TRABALHO)
+    blocos = [_bloco_guia(pasta, m, geradas, ia, creditos) for m in ativos] or ["Nenhuma imagem sugerida neste corte."]
     caminho = pasta / GUIA
     _gravar_texto(caminho, LEMBRETES + "\n" + "\n\n".join(blocos) + "\n")
     return caminho
@@ -286,6 +295,30 @@ def _gravar_sugeridas(trabalho: Path, geradas: list[str]) -> None:
     _gravar_texto(trabalho / SUGERIDAS, json.dumps(sorted(geradas), ensure_ascii=False, indent=2) + "\n")
 
 
+def ler_creditos(trabalho: Path) -> dict[str, dict]:
+    """De qual candidata veio cada foto baixada (creditos.json); ausente ou ilegível vira {}."""
+    try:
+        dados = json.loads((Path(trabalho) / CREDITOS).read_text("utf-8"))
+    except (OSError, ValueError):
+        return {}
+    if not isinstance(dados, dict):
+        return {}
+    return {nome: c for nome, c in dados.items() if isinstance(c, dict)}
+
+
+def _gravar_creditos(trabalho: Path, creditos: dict[str, dict]) -> None:
+    caminho = trabalho / CREDITOS
+    temporario = caminho.with_name(caminho.name + ".tmp")
+    _gravar_texto(temporario, json.dumps(creditos, ensure_ascii=False, indent=2) + "\n")
+    os.replace(temporario, caminho)
+
+
+def _credito(m: Momento, k: int) -> dict:
+    """A procedência da opção k: a candidata escolhida na hora do download."""
+    c = m.candidatas[m.escolhas[k - 1] - 1]
+    return {campo: c.get(campo, "") for campo in CAMPOS_CREDITO}
+
+
 def _produzir(caminho: Path, produzir: Callable[[Path], object], falha: str) -> str:
     """Gera um arquivo; devolve o motivo da falha, ou "" quando deu certo."""
     if caminho.exists():
@@ -298,14 +331,22 @@ def _produzir(caminho: Path, produzir: Callable[[Path], object], falha: str) -> 
         return falha
 
 
-def _sugerir_um(destino: Path, momentos: list[Momento], alertas: list[str], baixar: Callable[[str, Path], None]) -> str:
+def _sugerir_um(
+    destino: Path,
+    momentos: list[Momento],
+    alertas: list[str],
+    baixar: Callable[[str, Path], None],
+    rotulos: list[str],
+) -> str:
     trabalho = pasta_de_trabalho(destino)
     pasta = destino / IMAGENS_SUGERIDAS
     pasta.mkdir(exist_ok=True)
     for nome in _ler_sugeridas(trabalho):  # só o que a própria esteira gerou
         (pasta / nome).unlink(missing_ok=True)
     geradas: list[str] = []
+    creditos: dict[str, dict] = {}
     _gravar_sugeridas(trabalho, geradas)
+    _gravar_creditos(trabalho, creditos)
     for m in momentos:
         if not m.descartar:
             m.motivo = ""  # não herda "Sem imagem" de rodadas antigas
@@ -329,6 +370,9 @@ def _sugerir_um(destino: Path, momentos: list[Momento], alertas: list[str], baix
                 if motivo:
                     falhas.append((k, motivo))
                 else:
+                    if m.tipo == "foto":  # antes da lista: foto listada sempre tem a procedência
+                        creditos[nome] = _credito(m, k)
+                        _gravar_creditos(trabalho, creditos)
                     geradas.append(nome)
                     _gravar_sugeridas(trabalho, geradas)  # lista sempre em dia, mesmo se interromper
             if not falhas:
@@ -337,7 +381,7 @@ def _sugerir_um(destino: Path, momentos: list[Momento], alertas: list[str], baix
                 m.motivo = falhas[0][1]
             else:
                 m.motivo = "; ".join(f"opção {k}: {motivo}" for k, motivo in falhas)
-            alertas.append(f"momento {posicao} ({m.nome}): {m.motivo}")
+            alertas.append(f"{rotulos[posicao - 1]}: {m.motivo}")
     escrever_guia(destino, momentos)
     return _resultado(alertas)
 
@@ -353,20 +397,23 @@ def sugerir_episodio(
     pessoas: list[str],
     consultar: Consulta = wikimedia.consultar,
     baixar: Callable[[str, Path], None] = rede.baixar_url,
+    painel: bool = False,
 ) -> dict[int, str]:
     """Baixa e prepara as fotos escolhidas, gera os cartões e o guia em imagens-sugeridas/.
 
     Os links vêm do `imagens resumo`; `consultar` fica na assinatura do contrato, sem uso aqui.
+    Com `painel`, as mensagens nomeiam o momento como o cartão do painel.
     """
     resultados: dict[int, str] = {}
     for corte, destino in cortes_com_pedidos(Path(pasta), numeros):
-        carregado = _carregar_escolhas(destino, pessoas)
+        carregado = _carregar_escolhas(destino, pessoas, painel)
         if isinstance(carregado, str):
             resultados[corte.numero] = carregado
             continue
-        copia, alertas = _ajustados(*carregado)
+        momentos, duracao = carregado
+        copia, alertas = _ajustados(momentos, duracao, painel)
         if any(not _resumido(m) for _, m in _fotos_ativas(copia)):
             resultados[corte.numero] = ERRO_SEM_RESUMO
             continue
-        resultados[corte.numero] = _sugerir_um(destino, copia, alertas, baixar)
+        resultados[corte.numero] = _sugerir_um(destino, copia, alertas, baixar, _rotulos(momentos, painel))
     return resultados

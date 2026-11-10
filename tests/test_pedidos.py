@@ -1,7 +1,10 @@
 import json
 
+import pytest
+
 from esteira.pedidos import (
     Momento,
+    _pessoa_citada,
     ajustar_tempos,
     gravar_pedidos,
     ler_pedidos,
@@ -31,6 +34,35 @@ def test_prompt_com_pessoa_recusado():
     assert validar_pedidos(m, 60, ["Ayrton Senna", "Nico Hülkenberg", "Hülkenberg", "Lula"]) == [
         "momento 1: prompt cita pessoa real (Ayrton Senna)",
         "momento 2: prompt cita pessoa real (Hülkenberg)"]
+
+
+@pytest.mark.parametrize("prompt", [
+    "foto do Felipe  Massa na pista", "foto do Felipe\nMassa na pista", "foto do felipe\t  massa",
+])
+def test_pessoa_com_espacos_diferentes_no_prompt(prompt):
+    assert _pessoa_citada(prompt, ["Felipe Massa"]) == "Felipe Massa"
+
+
+def test_pessoa_com_espacos_diferentes_no_glossario():
+    assert _pessoa_citada("foto do felipe massa", [" Felipe   Massa "]) == " Felipe   Massa "
+    assert _pessoa_citada("foto do felipe massa", ["   "]) is None
+
+
+def test_mensagens_do_painel_usam_tempo_e_nome():
+    m = [Momento(75.4, 78, "f", "ia", "Sala"), Momento(5, 7, "f", "foto", "Ministro", busca="x", candidatas=[{}])]
+    assert validar_pedidos(m, 60, [], painel=True) == [
+        "1:15 Sala: IA sem prompt (escreva o prompt ou descarte o momento)", "1:15 Sala: fora do corte"]
+    assert validar_escolhas(m, painel=True) == [
+        "0:05 Ministro: nenhuma foto escolhida (escolha ao menos uma foto ou descarte o momento)"]
+    m[1].escolhas = [2]
+    assert validar_escolhas(m, painel=True) == ["0:05 Ministro: escolhas inválidas"]
+    assert validar_escolhas(m) == ["momento 2: escolhas inválidas"]
+
+
+def test_ajustar_tempos_no_painel_usa_o_tempo_de_antes_do_ajuste():
+    m = [Momento(10, 13.9, "f", "foto", "A"), Momento(14.1, 14.4, "f", "foto", "B"), Momento(15.5, 18, "f", "foto", "C")]
+    assert ajustar_tempos(m, 60, painel=True) == ["0:14 B descartado: não cabe em 2 s"]  # o tempo do cartão
+    assert m[1].inicio == 13.9  # o ajuste tinha puxado o início para 0:13
 
 
 def test_descartado_nao_e_validado():

@@ -95,15 +95,23 @@ imagem sobre o vídeo (foto, notícia ou imagem de IA).
 
 1. **Revisar.** Para cada momento de foto, escolha até 3 candidatas do
    Wikimedia Commons ou refaça a busca. Para IA, ajuste o prompt e clique em
-   aprovar. Prompt que cita pessoa real não pode ser aprovado. Momentos podem
-   ser descartados ou trocar entre foto e IA (notícia não troca).
+   aprovar. Prompt que cita pessoa real não pode ser aprovado. Se o glossário
+   (`Contexto/glossario.md`) não puder ser lido, o painel avisa e não aprova
+   nem gera nada até ele voltar. Momentos podem ser descartados ou trocar
+   entre foto e IA (notícia não troca).
 2. **Baixar as fotos.** O painel mostra quantas fotos e quantos MB serão
-   baixados (origem: Wikimedia Commons) e só baixa depois do seu clique. Durante
-   o download, as escolhas do corte ficam travadas.
+   baixados (origem: Wikimedia Commons) e só baixa depois do seu clique. Logo
+   abaixo do botão aparecem os motivos de um corte não ter fotos para baixar
+   (por exemplo, um momento sem foto escolhida ou de IA sem prompt). Durante o
+   download, as escolhas do corte ficam travadas.
 3. **Gerar as imagens de IA.** O painel mostra o custo estimado (quantidade de
-   imagens aprovadas sem versão x preço do provedor) antes de gerar. Cada
-   momento guarda até 3 versões; `Gerar de novo` cria a próxima. Se faltar a
-   chave, o pedido termina com o aviso do que fazer.
+   imagens aprovadas sem versão x preço do provedor) antes de gerar, e gera só
+   as imagens dessa confirmação: o que for aprovado depois fica para o próximo
+   clique. Cada momento guarda até 3 versões; `Gerar` (ou `Gerar de novo`) cria
+   a próxima, depois de confirmar o preço. Se faltar a chave, o pedido termina
+   com o aviso do que fazer. Uma imagem já salva nunca é cobrada de novo, mesmo
+   que o registro (`ia.json`) falhe; fechar o painel no meio de um pedido para
+   antes da próxima imagem.
 4. **Chave do provedor.** Rode uma vez, no terminal, `python -m esteira imagens
    conectar openai` (ou `google`). A chave fica no cofre do Windows e nunca
    aparece no painel.

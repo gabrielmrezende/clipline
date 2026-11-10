@@ -35,7 +35,7 @@ def executar_fotos(
     """Resume (grava os links e tamanhos) e baixa as fotos; o `sugerir` recusa sem o resumo."""
 
     def executar(progresso: Progresso) -> Resultado:
-        fotos, _, resumos = resumir_episodio(pasta, numeros, consultar, medir, pessoas, gravar=True)
+        fotos, _, resumos = resumir_episodio(pasta, numeros, consultar, medir, pessoas, gravar=True, painel=True)
         feitas = 0
 
         def contando(url: str, destino: Path) -> None:
@@ -44,7 +44,7 @@ def executar_fotos(
             progresso(f"Baixando {feitas} de {fotos}…")
             baixar(url, destino)
 
-        resultados = sugerir_episodio(pasta, numeros, pessoas, consultar, contando)
+        resultados = sugerir_episodio(pasta, numeros, pessoas, consultar, contando, painel=True)
         for n, texto in resumos.items():  # o motivo do resumo explica melhor que "rode imagens resumo"
             if texto.startswith("erro"):
                 resultados[n] = texto

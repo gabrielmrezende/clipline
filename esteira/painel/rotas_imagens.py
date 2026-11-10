@@ -11,7 +11,7 @@ from pydantic import BaseModel, StrictInt
 from esteira.caminhos import garantir_escrita
 from esteira.cortar import IMAGENS_SUGERIDAS, TRABALHO
 from esteira.fluxo_imagens import (
-    _arquivos, _ler_sugeridas, chave_momento, cortes_com_pedidos, ler_ia, resumir_episodio,
+    _arquivos, _ler_sugeridas, chave_momento, cortes_com_pedidos, ler_creditos, ler_ia, resumir_episodio,
 )
 from esteira.imagens_ia.config import PROVEDORES, Config, gravar_config, ler_config, provedor_atual
 from esteira.imagens_ia.gerar import MAXIMO_VERSOES, arquivo_de_versao, orcamento_com_itens, pendentes
@@ -24,18 +24,20 @@ from esteira.painel.tarefas_imagens import (
 )
 from esteira.pedidos import ARQUIVO, MAXIMO_ESCOLHAS, Momento, _pessoa_citada, pedidos_dos_bytes, texto_dos_pedidos
 from esteira.publicar.post import versao_dos_bytes
+from esteira.wikimedia import LARGURA_MINIATURA
 
 roteador = APIRouter(prefix="/api")
 
-LARGURA_MAXIMA_MINIATURA = 640
+LARGURA_MAXIMA_MINIATURA = 640  # limite do CLAUDE.md para miniaturas sem confirmação
 FOTOS_EM_ANDAMENTO = "Espere o download das fotos terminar."
 SEM_CORTES = "Nenhum corte com momentos de imagem."
 SEM_PENDENTES = "Nenhuma imagem aprovada para gerar."
 FOTOS_REPETIDAS = "Já há um pedido de fotos em andamento para este corte."
 IA_REPETIDA = "Já há um pedido de imagens em andamento para este corte."
 ORIGEM_FOTOS = "Wikimedia Commons"
+PEDIDOS_MUDOU = "O pedidos.json mudou desde que você abriu."
 TIPOS_TROCAVEIS = ("foto", "ia")
-_MINIATURA = re.compile(r"/(\d+)px-([^/]*)$")
+_MINIATURA = re.compile(r"/((?:lossy-)?page\d+-)?(\d+)px-([^/]*)$")  # com o prefixo das páginas de PDF
 
 
 class AlteracaoMomento(BaseModel):
@@ -48,6 +50,7 @@ class AlteracaoMomento(BaseModel):
 
 
 class PedidoBusca(BaseModel):
+    versao: str
     busca: str
 
 
@@ -88,9 +91,10 @@ class ConfigIa(BaseModel):
 
 
 def _miniatura(url: str) -> str:
+    """Acima de 640 px, a largura padrão do Wikimedia (500): ele recusa as outras (HTTP 400)."""
     achado = _MINIATURA.search(url)
-    if achado and int(achado.group(1)) > LARGURA_MAXIMA_MINIATURA:
-        return _MINIATURA.sub(f"/{LARGURA_MAXIMA_MINIATURA}px-\\2", url)
+    if achado and int(achado.group(2)) > LARGURA_MAXIMA_MINIATURA:
+        return f"{url[: achado.start()]}/{achado.group(1) or ''}{LARGURA_MINIATURA}px-{achado.group(3)}"
     return url
 
 
@@ -103,13 +107,25 @@ def _candidata(c) -> dict:
     return saida
 
 
-def _fotos_prontas(m: Momento, imagens: Path, sugeridas: set[str]) -> list[str]:
+def _mesma_foto(m: Momento, k: int, nome: str, creditos: dict[str, dict]) -> bool:
+    """O arquivo da opção k é a candidata escolhida agora? Pela procedência gravada no download;
+    sem ela (corte antigo, sem creditos.json), pelo último resumo."""
+    credito = creditos.get(nome)
+    if credito is None:
+        return k <= len(m.resumidas) and m.resumidas[k - 1] == m.escolhas[k - 1]
+    escolha = m.escolhas[k - 1]
+    candidata = m.candidatas[escolha - 1] if type(escolha) is int and 1 <= escolha <= len(m.candidatas) else None
+    if not isinstance(candidata, dict):
+        return False
+    return any(credito.get(campo) and credito.get(campo) == candidata.get(campo) for campo in ("pagina", "titulo"))
+
+
+def _fotos_prontas(m: Momento, imagens: Path, sugeridas: set[str], creditos: dict[str, dict]) -> list[str]:
     nomes = _arquivos(m)
     if m.tipo == "foto":
         return [
             nome for k, nome in enumerate(nomes, 1)
-            if nome in sugeridas and (imagens / nome).is_file()
-            and k <= len(m.resumidas) and m.resumidas[k - 1] == m.escolhas[k - 1]
+            if nome in sugeridas and (imagens / nome).is_file() and _mesma_foto(m, k, nome, creditos)
         ]
     return [nome for nome in nomes if nome in sugeridas and (imagens / nome).is_file()]
 
@@ -145,7 +161,7 @@ def _json_do_momento(m: Momento, destino: Path, pessoas: list[str] | None) -> di
         "prompt": m.prompt, "aprovado": m.aprovado, "descartar": m.descartar, "motivo": m.motivo,
         "candidatas": [_candidata(c) for c in m.candidatas],
         "escolhas": list(m.escolhas),
-        "fotos_prontas": _fotos_prontas(m, imagens, sugeridas),
+        "fotos_prontas": _fotos_prontas(m, imagens, sugeridas, ler_creditos(destino / TRABALHO)),
         "ia": _ia_do_momento(m, imagens, ler_ia(destino / TRABALHO)),
         "pessoa_citada": _pessoa_citada(m.prompt, pessoas) if m.prompt and pessoas is not None else None,
     }
@@ -215,6 +231,10 @@ def _fotos_ativas(requisicao: Request, episodio: str, n: int) -> bool:
 
 def _bloqueio_das_fotos() -> JSONResponse:
     return JSONResponse({"detail": FOTOS_EM_ANDAMENTO}, status_code=409)
+
+
+def _conflito(versao_atual: str) -> JSONResponse:
+    return JSONResponse({"detail": PEDIDOS_MUDOU, "versao_atual": versao_atual}, status_code=409)
 
 
 def _resposta(requisicao: Request, destino: Path, m: Momento, versao: str) -> dict:
@@ -300,9 +320,7 @@ def alterar_momento(ep: str, n: int, chave: str, corpo: AlteracaoMomento, requis
             raise NaoEncontrado("pedidos.json não encontrado")
         versao, lista = lido
         if corpo.versao != versao:
-            return JSONResponse(
-                {"detail": "O pedidos.json mudou desde que você abriu.", "versao_atual": versao}, status_code=409
-            )
+            return _conflito(versao)
         m = _achar(lista, chave)
         _aplicar(m, corpo, pessoas)
         nova = _gravar(requisicao, caminho, lista)
@@ -320,6 +338,8 @@ def buscar(ep: str, n: int, chave: str, corpo: PedidoBusca, requisicao: Request)
     lido = _ler(caminho)
     if lido is None:
         raise NaoEncontrado("pedidos.json não encontrado")
+    if lido[0] != corpo.versao:  # já mudou: nem vai à rede
+        return _conflito(lido[0])
     if _achar(lido[1], chave).tipo != "foto":
         raise HTTPException(422, "Só momentos de foto buscam no Wikimedia.")
     try:
@@ -332,7 +352,9 @@ def buscar(ep: str, n: int, chave: str, corpo: PedidoBusca, requisicao: Request)
         lido = _ler(caminho)  # releitura: o arquivo pode ter mudado durante a busca
         if lido is None:
             raise NaoEncontrado("pedidos.json não encontrado")
-        _, lista = lido
+        versao, lista = lido
+        if versao != corpo.versao:  # o Claude regravou durante a busca: as candidatas buscadas são descartadas
+            return _conflito(versao)
         m = _achar(lista, chave)
         m.busca = busca
         m.candidatas = [asdict(c) for c in candidatas]
@@ -356,7 +378,7 @@ def _resumo_de_fotos(requisicao: Request, ep: str, n: int | None) -> dict:
     pasta, numeros = _alvo(requisicao, ep, n)
     estado = requisicao.app.state
     fotos, total, resultados = resumir_episodio(
-        pasta, numeros, estado.consultar, estado.medir, _pessoas(requisicao), gravar=False
+        pasta, numeros, estado.consultar, estado.medir, _pessoas(requisicao), gravar=False, painel=True
     )  # gravar=False: a versão do pedidos.json que a tela tem aberta não pode mudar
     return {
         "fotos": fotos,

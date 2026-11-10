@@ -68,7 +68,8 @@ def test_busca_sem_resultado():
     assert buscar_candidatas("x", lambda p: {}) == []
 
 
-def test_consulta_pede_largura_640():
+def test_consulta_pede_largura_500():
+    # 500 é a largura padrão do Wikimedia até 640 px (limite das miniaturas sem confirmação no CLAUDE.md).
     params = {}
 
     def falso(p):
@@ -76,7 +77,7 @@ def test_consulta_pede_largura_640():
         return {}
 
     buscar_candidatas("Senna", falso)
-    assert params["iiurlwidth"] == 640 and params["gsrnamespace"] == 6
+    assert params["iiurlwidth"] == 500 and params["gsrnamespace"] == 6
     assert params["gsrsearch"] == "Senna" and params["gsrlimit"] == 20
 
 
