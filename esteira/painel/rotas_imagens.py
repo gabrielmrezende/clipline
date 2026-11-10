@@ -141,7 +141,7 @@ def _ia_do_momento(m: Momento, imagens: Path, ia: list[dict]) -> list[dict]:
         {"arquivo": i["arquivo"], "versao": i.get("versao"), "provedor": i.get("provedor", ""), "data": i.get("data", "")}
         for i in itens
     ]
-    registrados = {i["arquivo"] for i in ia if i.get("momento") == chave}
+    registrados = {i["arquivo"] for i in ia if i.get("momento") == chave and isinstance(i.get("arquivo"), str)}
     for k in range(1, MAXIMO_VERSOES + 1):  # imagem paga cujo registro falhou: aparece, sem provedor e data
         nome = arquivo_de_versao(chave, k)
         if nome not in registrados and (imagens / nome).is_file():

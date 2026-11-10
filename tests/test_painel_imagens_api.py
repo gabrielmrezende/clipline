@@ -179,6 +179,23 @@ def test_get_fotos_prontas_e_ia(ambiente):
     ]
 
 
+def test_ia_json_fora_do_formato_nao_derruba_o_get(ambiente):
+    cortes, destino, trabalho = ambiente
+    imagens = destino / IMAGENS_SUGERIDAS
+    imagens.mkdir()
+    (imagens / f"{CHAVE_IA}-v1.png").write_bytes(b"x")
+    (trabalho / "ia.json").write_text(json.dumps([
+        {"momento": CHAVE_IA, "versao": 2},
+        {"momento": CHAVE_IA, "arquivo": ["lista"], "versao": 3},
+        {"momento": CHAVE_IA, "arquivo": f"{CHAVE_IA}-v1.png", "versao": 1, "provedor": "x", "data": "2026-11-08"},
+    ]), "utf-8")
+    resposta = _cliente(cortes).get(_url())
+    assert resposta.status_code == 200
+    assert _momento(resposta.json(), CHAVE_IA)["ia"] == [
+        {"arquivo": f"{CHAVE_IA}-v1.png", "versao": 1, "provedor": "x", "data": "2026-11-08"},
+    ]
+
+
 def test_foto_deixa_de_estar_pronta_quando_a_escolha_muda(ambiente):
     cortes, destino, trabalho = ambiente
     imagens = destino / IMAGENS_SUGERIDAS
