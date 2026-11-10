@@ -1,3 +1,4 @@
+import "./imagensNoVideo.css";
 import { useEffect, useState } from "react";
 import { AlteracaoMomento, Momento, formatarDolar, plural, tempoTexto, urlImagem } from "../api";
 

@@ -1,3 +1,4 @@
+import "./imagensNoVideo.css";
 import { useState } from "react";
 import { Aprovacao as EstadoAprovacao, CorteDetalhe, aprovarCorte, caminhoCorte, pedir } from "../api";
 import { mensagem } from "./imagensComum";
