@@ -21,6 +21,8 @@ interface Props {
   soltarVideo?: () => void;
   /** Avisa quando há (ou deixa de haver) troca de música em andamento neste corte. */
   aoMudarAndamento?: (ativo: boolean) => void;
+  /** A tela está montando o corte (imagens ou música): não dá para pedir outra montagem. */
+  montandoNaTela?: boolean;
 }
 
 const VOLUME_PADRAO = -26;
@@ -62,6 +64,7 @@ export function BlocoMusica({
   aoTerminar,
   soltarVideo,
   aoMudarAndamento,
+  montandoNaTela = false,
 }: Props) {
   const base = caminhoCorte(ep, n);
   const [lista, setLista] = useState<ListaMusicas | null>(null);
@@ -363,7 +366,7 @@ export function BlocoMusica({
         </p>
       ) : null}
       <div className="acoes-musica">
-        <button type="button" disabled={!arquivoEscolhido || ocupado} onClick={montarComEsta}>
+        <button type="button" disabled={!arquivoEscolhido || ocupado || montandoNaTela} onClick={montarComEsta}>
           Montar com esta música
         </button>
       </div>

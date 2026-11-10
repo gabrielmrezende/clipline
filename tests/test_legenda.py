@@ -158,3 +158,12 @@ def test_ocultar_sem_intervalo_ou_fora_nao_muda():
 def test_ocultar_varios_intervalos_e_preserva_destaque():
     r = ocultar_durante([Cue(0, 10, ["a"], "a"), Cue(11, 12, ["b"])], [(0, 2), (3, 5), (10.5, 12)])
     assert r == [Cue(5, 10, ["a"], "a")]
+
+
+def test_ocultar_nao_deixa_pedaco_curto_piscando():
+    imagem = [(2.0, 4.0)]
+    assert ocultar_durante([Cue(1.9, 3.0, ["a"])], imagem) == []  # sobraria 0,1 s antes da imagem
+    assert ocultar_durante([Cue(3.0, 4.2, ["a"])], imagem) == []  # sobraria 0,2 s depois
+    assert ocultar_durante([Cue(1.9, 4.2, ["a"])], imagem) == []  # os dois lados curtos
+    assert ocultar_durante([Cue(1.5, 4.1, ["a"])], imagem) == [Cue(1.5, 2.0, ["a"])]
+    assert ocultar_durante([Cue(5.0, 5.2, ["b"])], imagem) == [Cue(5.0, 5.2, ["b"])]  # fora da imagem fica

@@ -251,6 +251,7 @@ def test_montar_poe_as_imagens_prontas_e_registra(tmp_path):
     assert registro["imagens"] == [{
         "inicio": 1.0, "fim": 3.0, "arquivo": "imagens-sugeridas/0001-placa-1.jpg", "tipo": "foto",
         "momento": "0001-placa", "modificado_ns": mtime,
+        "credito": {"autor": "Fulano", "licenca": "CC BY-SA 4.0", "pagina": "https://c/A1", "titulo": "File:A1.jpg"},
     }]
     assert _vermelho_em(corte / "corte.mp4", 2.0, tmp_path / "q.png")
     assert not _vermelho_em(corte / "corte.mp4", 4.0, tmp_path / "q2.png")

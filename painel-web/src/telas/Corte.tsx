@@ -122,6 +122,7 @@ export function Corte() {
             soltarVideo={soltarVideo}
             aoMudarAndamento={setMontando}
             aoTerminar={aoTerminarTroca}
+            montandoNaTela={montando}
           />
           <section aria-labelledby="titulo-info" className="info-corte">
             <h2 id="titulo-info">Informações</h2>
@@ -161,6 +162,7 @@ export function Corte() {
             soltarVideo={soltarVideo}
             aoMudarAndamento={setMontando}
             aoTerminarMontagem={aoTerminarTroca}
+            montandoNaTela={montando}
           />
           {guia && !comMomentos ? (
             <section aria-label="Guia do corte">

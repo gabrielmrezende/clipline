@@ -16,6 +16,7 @@ from esteira.pedidos import ARQUIVO, TIPOS, Momento, ajustar_tempos, ler_pedidos
 from esteira.receita import ImagemNoVideo, duracao_principal, ler_receita
 
 FALTA = {"foto": "foto não baixada", "noticia": "cartão não gerado", "ia": "IA ainda não gerada"}
+CAMPOS_CREDITO = ("autor", "licenca", "pagina", "titulo")
 ERROS_DE_LEITURA = (OSError, ValueError, KeyError, TypeError, AttributeError)
 
 
@@ -116,6 +117,18 @@ def escolhas_do_corte(destino: Path, momentos: list[Momento], duracao: float | N
     return escolhas
 
 
+def _credito(m: Momento, chave: str, arquivo: str, creditos: dict[str, dict]) -> dict | None:
+    """A procedência da foto que entra: a gravada no download ou, sem ela (corte antigo), a candidata escolhida."""
+    c = creditos.get(arquivo)
+    if c is None:
+        try:
+            escolha = m.escolhas[int(arquivo[len(chave) + 1:].removesuffix(".jpg")) - 1]
+            c = m.candidatas[escolha - 1]
+        except (ValueError, IndexError, TypeError):
+            return None
+    return {campo: c.get(campo, "") for campo in CAMPOS_CREDITO} if isinstance(c, dict) else None
+
+
 def imagens_do_corte(destino: Path) -> tuple[list[ImagemNoVideo], list[str]]:
     """As imagens que entram no corte.mp4 (em ordem de tempo) e os alertas do que ficou de fora."""
     destino = Path(destino)
@@ -131,15 +144,17 @@ def imagens_do_corte(destino: Path) -> tuple[list[ImagemNoVideo], list[str]]:
     except ERROS_DE_LEITURA:
         duracao = None
     lista, alertas = [], []
+    creditos = ler_creditos(trabalho)
     for e in escolhas_do_corte(destino, momentos, duracao):
         if e.alerta:
             alertas.append(e.alerta)
         if e.arquivo is None:
             continue
         caminho = destino / IMAGENS_SUGERIDAS / e.arquivo
+        credito = _credito(e.momento, e.chave, e.arquivo, creditos) if e.momento.tipo == "foto" else None
         lista.append(ImagemNoVideo(
             e.inicio_tela, e.fim_tela, f"{IMAGENS_SUGERIDAS}/{e.arquivo}", e.momento.tipo, e.chave,
-            caminho.stat().st_mtime_ns,
+            caminho.stat().st_mtime_ns, credito,
         ))
     return sorted(lista, key=lambda i: i.inicio), alertas
 

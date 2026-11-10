@@ -111,6 +111,7 @@ interface PropsTeste {
   aoTerminar?: () => void;
   soltarVideo?: () => void;
   aoMudarAndamento?: (ativo: boolean) => void;
+  montandoNaTela?: boolean;
 }
 
 async function montar(props: PropsTeste = {}) {
@@ -124,6 +125,7 @@ async function montar(props: PropsTeste = {}) {
       aoTerminar={aoTerminar}
       soltarVideo={props.soltarVideo}
       aoMudarAndamento={props.aoMudarAndamento}
+      montandoNaTela={props.montandoNaTela}
     />,
   );
   await avancar(0);
@@ -378,5 +380,11 @@ describe("BlocoMusica", () => {
     fireEvent.click(botaoMontar());
     await avancar(0);
     expect(screen.getByText("Este corte já está sendo montado.")).toBeTruthy();
+  });
+
+  it("Montar com esta música fica desabilitado enquanto a tela monta (imagens)", async () => {
+    await montar({ montandoNaTela: true });
+    escolher("Brisa");
+    expect((botaoMontar() as HTMLButtonElement).disabled).toBe(true);
   });
 });

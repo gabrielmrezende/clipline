@@ -169,21 +169,27 @@ def escrever_ass(cues: list[Cue], caminho: Path) -> None:
     Path(caminho).write_text(CABECALHO_ASS + "\n".join(eventos) + "\n", "utf-8", newline="\n")
 
 
+MINIMO_PEDACO = 0.3  # pedaço de tela que sobra ao lado de uma imagem: menos que isso só pisca
+
+
 def ocultar_durante(cues: list[Cue], intervalos: list[tuple[float, float]]) -> list[Cue]:
-    """Tira a legenda de dentro dos intervalos (as imagens). Uma tela que cobre a imagem inteira fica com o lado maior."""
+    """Tira a legenda de dentro dos intervalos (as imagens). Uma tela que cobre a imagem inteira fica com o lado maior;
+    um pedaço cortado com menos de 0,3 s some (só piscaria)."""
     for de, ate in intervalos:
         restantes = []
         for cue in cues:
             if cue.fim <= de or cue.inicio >= ate:
                 restantes.append(cue)
-            elif cue.inicio < de and cue.fim > ate:
-                if de - cue.inicio >= cue.fim - ate:
-                    restantes.append(replace(cue, fim=de))
-                else:
-                    restantes.append(replace(cue, inicio=ate))
+                continue
+            if cue.inicio < de and cue.fim > ate:
+                pedaco = replace(cue, fim=de) if de - cue.inicio >= cue.fim - ate else replace(cue, inicio=ate)
             elif cue.inicio < de:
-                restantes.append(replace(cue, fim=de))
+                pedaco = replace(cue, fim=de)
             elif cue.fim > ate:
-                restantes.append(replace(cue, inicio=ate))
+                pedaco = replace(cue, inicio=ate)
+            else:
+                continue
+            if pedaco.fim - pedaco.inicio >= MINIMO_PEDACO:
+                restantes.append(pedaco)
         cues = restantes
     return cues

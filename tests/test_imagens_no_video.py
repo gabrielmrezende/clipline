@@ -66,8 +66,10 @@ def _mtime(corte, nome):
 def test_foto_entra_a_primeira_opcao_pronta(tmp_path):
     corte = _corte(tmp_path, [_foto()])
     _gravada(corte, "0012-placa-2.jpg", CANDIDATAS[1])  # a opção 1 falhou no download
+    credito = {campo: CANDIDATAS[1][campo] for campo in ("autor", "licenca", "pagina", "titulo")}
     assert imagens_do_corte(corte) == (
-        [ImagemNoVideo(12.0, 15.0, "imagens-sugeridas/0012-placa-2.jpg", "foto", "0012-placa", _mtime(corte, "0012-placa-2.jpg"))],
+        [ImagemNoVideo(12.0, 15.0, "imagens-sugeridas/0012-placa-2.jpg", "foto", "0012-placa",
+                       _mtime(corte, "0012-placa-2.jpg"), credito)],
         [],
     )
     _gravada(corte, "0012-placa-1.jpg", CANDIDATAS[0])
@@ -209,3 +211,17 @@ def test_corte_antigo_sem_imagens_no_registro_e_nada_pronto_nao_esta_desatualiza
     (corte / "corte.mp4").write_bytes(b"")
     _registro(corte)
     assert not montagem_desatualizada(corte)
+
+
+def test_foto_sem_creditos_json_leva_o_credito_da_candidata_escolhida(tmp_path):
+    corte = _corte(tmp_path, [_foto(escolhas=(3,), resumidas=[3])])  # corte antigo, sem creditos.json
+    _gravada(corte, "0012-placa-1.jpg")
+    assert imagens_do_corte(corte)[0][0].credito == {
+        "autor": "Fulano", "licenca": "CC BY-SA 4.0", "pagina": "https://c/A3", "titulo": "File:A3.jpg"}
+
+
+def test_ia_e_noticia_nao_levam_credito(tmp_path):
+    corte = _corte(tmp_path, [_ia(), _noticia()])
+    _gerada(corte, "0030-chuva", 1)
+    _gravada(corte, "0040-manchete.png")
+    assert [i.credito for i in imagens_do_corte(corte)[0]] == [None, None]

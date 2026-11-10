@@ -829,4 +829,11 @@ describe("BlocoImagens", () => {
     await montar();
     expect(screen.getByText("As imagens mudaram desde a última montagem.")).toBeTruthy();
   });
+
+  it("Montar com as imagens fica desabilitado enquanto a tela monta (troca de música)", async () => {
+    render(<BlocoImagens ep="Ep 1" n={2} irPara={vi.fn()} montandoNaTela={true} />);
+    await avancar(0);
+    await avancar(0);
+    expect((screen.getByRole("button", { name: "Montar com as imagens" }) as HTMLButtonElement).disabled).toBe(true);
+  });
 });

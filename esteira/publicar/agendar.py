@@ -76,7 +76,8 @@ def _creditos_das_fotos(pasta_corte: Path, imagens: list[dict]) -> list[str]:
         if imagem.get("tipo") != "foto":
             continue
         nome = Path(str(imagem.get("arquivo", ""))).name
-        c = creditos.get(nome)
+        # O crédito gravado na montagem é o da foto que está no vídeo; o creditos.json pode já ser de outra.
+        c = imagem.get("credito") if isinstance(imagem.get("credito"), dict) else creditos.get(nome)
         if c:
             linhas.append(f"- {c.get('autor', '')}, {c.get('licenca', '')}, {c.get('pagina', '')}")
         else:

@@ -363,3 +363,14 @@ def test_copia_do_painel_sem_lista_de_imagens_mantem_a_linha_antiga(episodio, tm
     aprovar(corte, base=tmp_path)
     texto = resumo(preparar_pedido(pasta, 1, "2026-11-08 18:00", TODAS, AGORA), MODOS)
     assert "Este corte tem 1 imagem de IA gerada: confira se o vídeo final usa alguma e inclua o aviso." in texto
+
+
+def test_credito_vem_do_video_aprovado_mesmo_se_a_foto_mudou_depois(episodio, tmp_path):
+    pasta, corte, _ = episodio
+    no_video = {**FOTO_NO_VIDEO, "credito": {"autor": "Fulano", "licenca": "CC BY-SA 4.0", "pagina": "https://c/A1"}}
+    _aprovado_pelo_painel(corte, [no_video], tmp_path)
+    # depois de aprovar, o dono trocou a foto da posição 1 e baixou de novo, sem remontar
+    outra = {"autor": "Beltrana", "licenca": "CC BY 4.0", "pagina": "https://c/A9", "titulo": "File:A9.jpg"}
+    (corte / "trabalho" / "creditos.json").write_text(json.dumps({"0005-placa-1.jpg": outra}), "utf-8")
+    linhas = resumo(preparar_pedido(pasta, 1, "2026-11-08 18:00", TODAS, AGORA), MODOS).splitlines()
+    assert "- Fulano, CC BY-SA 4.0, https://c/A1" in linhas and not any("Beltrana" in l for l in linhas)

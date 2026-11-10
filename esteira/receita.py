@@ -23,6 +23,7 @@ class ImagemNoVideo:
     tipo: str = ""
     momento: str = ""  # chave do momento (MMSS-nome, pelo tempo proposto)
     modificado_ns: int = 0  # st_mtime_ns do arquivo na hora da escolha
+    credito: dict | None = None  # foto: autor, licença, página e título da foto que entrou no vídeo
 
 
 @dataclass

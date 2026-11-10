@@ -51,6 +51,8 @@ interface Props {
   aoMudarAndamento?: (montando: boolean) => void;
   /** A montagem terminou: a tela recarrega o vídeo e o selo. */
   aoTerminarMontagem?: () => void;
+  /** A tela está montando o corte (troca de música ou imagens): não dá para pedir outra montagem. */
+  montandoNaTela?: boolean;
 }
 
 const ESPERA_RESUMOS_MS = 500;
@@ -63,7 +65,16 @@ export function textoDeMontar(imagens: number): string {
 
 const emOrdem = (lista: Momento[]) => [...lista].sort((a, b) => a.inicio - b.inicio);
 
-export function BlocoImagens({ ep, n, irPara, aoCarregar, soltarVideo, aoMudarAndamento, aoTerminarMontagem }: Props) {
+export function BlocoImagens({
+  ep,
+  n,
+  irPara,
+  aoCarregar,
+  soltarVideo,
+  aoMudarAndamento,
+  aoTerminarMontagem,
+  montandoNaTela = false,
+}: Props) {
   const [momentos, setMomentos] = useState<Momento[] | null>(null);
   const [erroLeitura, setErroLeitura] = useState<string | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
@@ -333,7 +344,7 @@ export function BlocoImagens({ ep, n, irPara, aoCarregar, soltarVideo, aoMudarAn
         <button type="button" disabled={ocupado || !orcamento || orcamento.imagens === 0} onClick={() => void gerar()}>
           {rotuloDeIa(orcamento)}
         </button>
-        <button type="button" disabled={ocupado} onClick={() => void montarDeNovo()}>
+        <button type="button" disabled={ocupado || montandoNaTela} onClick={() => void montarDeNovo()}>
           Montar com as imagens
         </button>
       </div>
