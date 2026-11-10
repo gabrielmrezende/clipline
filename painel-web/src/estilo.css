@@ -169,7 +169,8 @@ button[type="submit"] {
   margin-top: 0.75rem;
   cursor: pointer;
 }
-input {
+/* :where mantém a especificidade de "input"; caixa e rádio têm tamanho próprio. */
+input:where(:not([type="checkbox"], [type="radio"])) {
   display: block;
   width: 100%;
   min-height: 44px;
@@ -320,6 +321,13 @@ input {
   align-items: center;
   gap: 0.5rem;
   min-height: 44px;
+  cursor: pointer;
+}
+.aprovado input[type="checkbox"] {
+  width: 1.25rem;
+  height: 1.25rem;
+  margin: 0;
+  flex: none;
 }
 .noticia-imagem {
   max-width: 100%;

@@ -229,6 +229,8 @@ export interface Momento {
 export interface ListaMomentos {
   versao: string;
   momentos: Momento[];
+  /** Glossário ilegível: o painel não aprova nem gera, e a pessoa citada fica desconhecida. */
+  aviso_glossario?: string | null;
 }
 
 export interface RespostaMomento {
@@ -251,11 +253,18 @@ export interface ResumoFotos {
   avisos: string[];
 }
 
+export interface ItemIa {
+  corte: number;
+  chave: string;
+}
+
 export interface OrcamentoIa {
   imagens: number;
   provedor: string;
   modelo: string;
   custo_usd: number;
+  /** As imagens contadas: o POST de gerar manda exatamente esta lista, a que o dono confirmou. */
+  itens: ItemIa[];
 }
 
 export interface ConfigImagens {
@@ -284,33 +293,38 @@ export const alterarMomento = (
   alteracao: AlteracaoMomento,
 ) => enviarJson<RespostaMomento>(caminhoMomento(ep, n, chave), "PUT", { versao, ...alteracao });
 
-export const buscarOutras = (ep: string, n: number | string, chave: string, busca: string) =>
-  enviarJson<RespostaMomento>(`${caminhoMomento(ep, n, chave)}/buscar`, "POST", { busca });
+export const buscarOutras = (ep: string, n: number | string, chave: string, versao: string, busca: string) =>
+  enviarJson<RespostaMomento>(`${caminhoMomento(ep, n, chave)}/buscar`, "POST", { versao, busca });
+
+/** Corpo dos POSTs que baixam ou custam: sem JSON, o servidor recusa (uma página qualquer não dispara o pedido). */
+const CONFIRMADO = { confirmado: true };
 
 export const resumoDeFotos = (ep: string, n: number | string) =>
   pedir<ResumoFotos>(`${caminhoCorte(ep, n)}/fotos/resumo`);
 
 export const baixarFotos = (ep: string, n: number | string) =>
-  enviarJson<Pedido>(`${caminhoCorte(ep, n)}/fotos`, "POST", {});
+  enviarJson<Pedido>(`${caminhoCorte(ep, n)}/fotos`, "POST", CONFIRMADO);
 
 export const orcamentoDeIa = (ep: string, n: number | string) =>
   pedir<OrcamentoIa>(`${caminhoCorte(ep, n)}/ia/orcamento`);
 
-export const gerarImagensIa = (ep: string, n: number | string) =>
-  enviarJson<Pedido>(`${caminhoCorte(ep, n)}/ia`, "POST", {});
+export const gerarImagensIa = (ep: string, n: number | string, itens: ItemIa[]) =>
+  enviarJson<Pedido>(`${caminhoCorte(ep, n)}/ia`, "POST", { itens });
 
 export const gerarDeNovoIa = (ep: string, n: number | string, chave: string) =>
-  enviarJson<Pedido>(`${caminhoMomento(ep, n, chave)}/ia`, "POST", {});
+  enviarJson<Pedido>(`${caminhoMomento(ep, n, chave)}/ia`, "POST", CONFIRMADO);
 
 export const configuracaoDeImagens = () => pedir<ConfigImagens>("/api/configuracoes/imagens");
 
 export const resumoDeFotosDoEpisodio = (ep: string) => pedir<ResumoFotos>(`${caminhoEpisodio(ep)}/fotos/resumo`);
 
-export const baixarFotosDoEpisodio = (ep: string) => enviarJson<Pedido>(`${caminhoEpisodio(ep)}/fotos`, "POST", {});
+export const baixarFotosDoEpisodio = (ep: string) =>
+  enviarJson<Pedido>(`${caminhoEpisodio(ep)}/fotos`, "POST", CONFIRMADO);
 
 export const orcamentoDeIaDoEpisodio = (ep: string) => pedir<OrcamentoIa>(`${caminhoEpisodio(ep)}/ia/orcamento`);
 
-export const gerarImagensIaDoEpisodio = (ep: string) => enviarJson<Pedido>(`${caminhoEpisodio(ep)}/ia`, "POST", {});
+export const gerarImagensIaDoEpisodio = (ep: string, itens: ItemIa[]) =>
+  enviarJson<Pedido>(`${caminhoEpisodio(ep)}/ia`, "POST", { itens });
 
 export const gravarConfiguracaoDeImagens = (provedor: string, provedores: ConfigImagens["provedores"]) =>
   enviarJson<ConfigImagens>("/api/configuracoes/imagens", "PUT", { provedor, provedores });

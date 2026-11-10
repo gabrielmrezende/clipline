@@ -15,7 +15,9 @@ import {
   resumoDeFotosDoEpisodio,
 } from "../api";
 import {
+  Alerta,
   AndamentoPedido,
+  AvisosDoResumo,
   PEDIDO_PERDIDO,
   ativo,
   ehDeImagens,
@@ -25,6 +27,7 @@ import {
   textoDeFotos,
   textoDeIa,
   useAcompanhamento,
+  useUmaPorVez,
 } from "./imagensComum";
 
 interface Props {
@@ -39,7 +42,7 @@ const SUBSTITUIDAS = "As fotos baixadas antes nestes cortes serão substituídas
 function Numeros({ momentos }: { momentos: Momento[] }) {
   const ativos = momentos.filter((m) => !m.descartar);
   if (ativos.length === 0) return <span className="suave">Sem momentos de imagem</span>;
-  const fotos = ativos.reduce((soma, m) => soma + m.fotos_prontas.length, 0);
+  const fotos = ativos.filter((m) => m.tipo === "foto").reduce((soma, m) => soma + m.fotos_prontas.length, 0);
   const prompts = ativos.filter((m) => m.tipo === "ia" && m.aprovado).length;
   const imagens = ativos.reduce((soma, m) => soma + m.ia.length, 0);
   return (
@@ -62,21 +65,30 @@ export function ImagensDoEpisodio({ ep, cortes }: Props) {
   const [enviando, setEnviando] = useState(false);
   const [erroPedido, setErroPedido] = useState<string | null>(null);
   const [erroResumo, setErroResumo] = useState<string | null>(null);
+  const [erroOrcamento, setErroOrcamento] = useState<string | null>(null);
+  const [avisoGlossario, setAvisoGlossario] = useState<string | null>(null);
+  const [preparando, umaPorVez] = useUmaPorVez();
   const vivo = useRef(true);
   const numeros = cortes.map((c) => c.numero).join(",");
 
   const lerCortes = useCallback(async () => {
     const lista = numeros ? numeros.split(",").map(Number) : [];
+    let aviso: string | null = null;
     const lidos = await Promise.all(
       lista.map(async (n): Promise<[number, Leitura]> => {
         try {
-          return [n, { momentos: (await lerMomentos(ep, n)).momentos }];
+          const d = await lerMomentos(ep, n);
+          aviso = aviso ?? d.aviso_glossario ?? null;
+          return [n, { momentos: d.momentos }];
         } catch (x) {
           return [n, { erro: mensagem(x) }];
         }
       }),
     );
-    if (vivo.current) setLeituras(Object.fromEntries(lidos));
+    if (vivo.current) {
+      setLeituras(Object.fromEntries(lidos));
+      setAvisoGlossario(aviso);
+    }
   }, [ep, numeros]);
 
   const lerResumo = useCallback(async () => {
@@ -96,9 +108,13 @@ export function ImagensDoEpisodio({ ep, cortes }: Props) {
   const lerOrcamento = useCallback(async () => {
     try {
       const o = await orcamentoDeIaDoEpisodio(ep);
-      if (vivo.current) setOrcamento(o);
+      if (vivo.current) {
+        setOrcamento(o);
+        setErroOrcamento(null);
+      }
       return o;
-    } catch {
+    } catch (x) {
+      if (vivo.current) setErroOrcamento(mensagem(x));
       return null;
     }
   }, [ep]);
@@ -148,24 +164,31 @@ export function ImagensDoEpisodio({ ep, cortes }: Props) {
     }
   }
 
-  async function baixar() {
-    setErroPedido(null);
-    const r = await lerResumo();
-    if (!r) return;
-    if (window.confirm(textoDeFotos(r, SUBSTITUIDAS))) await enviarPedido(() => baixarFotosDoEpisodio(ep));
+  // O botão fica desabilitado enquanto lê o resumo ou o orçamento: um clique duplo confirma uma vez só.
+  function baixar() {
+    return umaPorVez(async () => {
+      setErroPedido(null);
+      const r = await lerResumo();
+      if (!r) return;
+      if (window.confirm(textoDeFotos(r, SUBSTITUIDAS))) await enviarPedido(() => baixarFotosDoEpisodio(ep));
+    });
   }
 
-  async function gerar() {
-    setErroPedido(null);
-    const o = await lerOrcamento();
-    if (!o || o.imagens === 0) return;
-    if (window.confirm(textoDeIa(o))) await enviarPedido(() => gerarImagensIaDoEpisodio(ep));
+  function gerar() {
+    return umaPorVez(async () => {
+      setErroPedido(null);
+      const o = await lerOrcamento();
+      if (!o || o.imagens === 0) return;
+      // Só o que estava no orçamento confirmado: o que for aprovado depois fica para o próximo clique.
+      if (window.confirm(textoDeIa(o))) await enviarPedido(() => gerarImagensIaDoEpisodio(ep, o.itens));
+    });
   }
 
-  const ocupado = ativo(pedido) || enviando;
+  const ocupado = ativo(pedido) || enviando || preparando;
 
   return (
     <section aria-label="Imagens do episódio" className="bloco-imagens">
+      <Alerta texto={avisoGlossario} />
       <div className="acoes-musica">
         <button type="button" disabled={ocupado || !resumo || resumo.fotos === 0} onClick={() => void baixar()}>
           {rotuloDeFotos(resumo)}
@@ -174,16 +197,10 @@ export function ImagensDoEpisodio({ ep, cortes }: Props) {
           {rotuloDeIa(orcamento)}
         </button>
       </div>
-      {erroResumo ? (
-        <p role="alert" className="mensagem-erro">
-          {erroResumo}
-        </p>
-      ) : null}
-      {erroPedido ? (
-        <p role="alert" className="mensagem-erro">
-          {erroPedido}
-        </p>
-      ) : null}
+      <AvisosDoResumo resumo={resumo} />
+      <Alerta texto={erroResumo} />
+      <Alerta texto={erroOrcamento} />
+      <Alerta texto={erroPedido} />
       {pedido ? <AndamentoPedido pedido={pedido} /> : null}
       {cortes.length === 0 ? <p>Nenhum corte neste episódio.</p> : null}
       <ul className="resumo-cortes">

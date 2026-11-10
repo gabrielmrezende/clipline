@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ErroApi, OrcamentoIa, Pedido, ResumoFotos, consultarTarefa, formatarDolar, formatarMb, plural } from "../api";
 
 const ESPERA_CONSULTA_MS = 2000;
@@ -34,6 +34,50 @@ export function rotuloDeIa(o: OrcamentoIa | null): string {
   return o
     ? `Gerar as aprovadas (${plural(o.imagens, "imagem", "imagens")}, ${formatarDolar(o.custo_usd)})`
     : "Gerar as aprovadas";
+}
+
+/**
+ * Uma ação de cada vez (ler o resumo ou o orçamento, confirmar, enviar): enquanto ela não termina,
+ * novos cliques são ignorados, então um clique duplo abre uma confirmação só.
+ */
+export function useUmaPorVez(): [boolean, (acao: () => Promise<void>) => Promise<void>] {
+  const [ocupado, setOcupado] = useState(false);
+  const emCurso = useRef(false);
+  const rodar = useCallback(async (acao: () => Promise<void>) => {
+    if (emCurso.current) return;
+    emCurso.current = true;
+    setOcupado(true);
+    try {
+      await acao();
+    } finally {
+      emCurso.current = false;
+      setOcupado(false);
+    }
+  }, []);
+  return [ocupado, rodar];
+}
+
+/** Por que um corte não tem fotos para baixar (escolha vazia, IA sem prompt…), logo abaixo dos botões. */
+export function AvisosDoResumo({ resumo }: { resumo: ResumoFotos | null }) {
+  if (!resumo || resumo.avisos.length === 0) return null;
+  return (
+    <ul className="alertas" aria-label="Avisos das fotos">
+      {resumo.avisos.map((a, i) => (
+        <li key={i} className="aviso">
+          ⚠ {a}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** Uma mensagem de erro (ou aviso) em destaque; nada quando vazia. */
+export function Alerta({ texto }: { texto: string | null | undefined }) {
+  return texto ? (
+    <p role="alert" className="mensagem-erro">
+      {texto}
+    </p>
+  ) : null;
 }
 
 /**

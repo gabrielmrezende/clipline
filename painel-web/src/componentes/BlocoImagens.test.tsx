@@ -106,6 +106,8 @@ let config: any;
 let tarefasLista: Pedido[];
 let tarefa: Pedido[];
 let putExtra: (chave: string, corpo: any) => Promise<Response> | null;
+let postBuscar: (chave: string, corpo: any) => Promise<Response>;
+let avisoGlossario: string | null;
 let postFotos: () => Promise<Response>;
 let postIa: () => Promise<Response>;
 let confirmar: ReturnType<typeof vi.fn>;
@@ -130,7 +132,16 @@ beforeEach(() => {
   momentos = [FOTO(), IA(), NOTICIA()];
   versao = 1;
   resumo = { fotos: 2, megabytes: 1.54, origem: "Wikimedia Commons", avisos: ["tamanho desconhecido: f1-2.jpg"] };
-  orcamento = { imagens: 2, provedor: "openai", modelo: "gpt-image-1", custo_usd: 0.1 };
+  orcamento = {
+    imagens: 2,
+    provedor: "openai",
+    modelo: "gpt-image-1",
+    custo_usd: 0.1,
+    itens: [
+      { corte: 2, chave: "i1" },
+      { corte: 2, chave: "i9" },
+    ],
+  };
   config = {
     provedor: "openai",
     provedores: { openai: { modelo: "gpt-image-1", qualidade: "low", preco_usd: 0.05 } },
@@ -139,6 +150,14 @@ beforeEach(() => {
   tarefasLista = [];
   tarefa = [pedido({ estado: "montando", progresso: "Baixando 1 de 2" })];
   putExtra = () => null;
+  avisoGlossario = null;
+  postBuscar = (chave) => {
+    const m = momentos.find((x) => x.chave === chave)!;
+    m.candidatas = [candidata(7)];
+    m.escolhas = [];
+    versao += 1;
+    return resposta({ momento: m, versao: `v${versao}` });
+  };
   postFotos = () => resposta(pedido(), 202);
   postIa = () => resposta(pedido({ tipo: "ia" }), 202);
   confirmar = vi.fn(() => true);
@@ -149,7 +168,9 @@ beforeEach(() => {
       const metodo = init?.method ?? "GET";
       chamadas.push({ url, metodo, corpo: init?.body ? JSON.parse(String(init.body)) : null });
       const corpo = init?.body ? JSON.parse(String(init.body)) : null;
-      if (url === `${BASE}/momentos`) return resposta({ versao: `v${versao}`, momentos });
+      if (url === `${BASE}/momentos`) return resposta({ versao: `v${versao}`, momentos, aviso_glossario: avisoGlossario });
+      const busca = url.match(/\/momentos\/([^/]+)\/buscar$/);
+      if (busca && metodo === "POST") return postBuscar(decodeURIComponent(busca[1]), corpo);
       const mom = url.match(/\/momentos\/([^/]+)$/);
       if (mom && metodo === "PUT") {
         const extra = putExtra(decodeURIComponent(mom[1]), corpo);
@@ -159,8 +180,9 @@ beforeEach(() => {
         versao += 1;
         return resposta({ momento: m, versao: `v${versao}` });
       }
-      if (url.endsWith("/fotos/resumo")) return resposta(resumo);
-      if (url.endsWith("/ia/orcamento")) return resposta(orcamento);
+      if (url.endsWith("/fotos/resumo")) return resumo === "erro" ? resposta({ detail: "Wikimedia fora do ar" }, 422) : resposta(resumo);
+      if (url.endsWith("/ia/orcamento"))
+        return orcamento === "erro" ? resposta({ detail: "imagens-ia.json ilegível" }, 422) : resposta(orcamento);
       if (url === "/api/configuracoes/imagens") return resposta(config);
       if (url === "/api/tarefas") return resposta(tarefasLista);
       if (url.startsWith("/api/tarefas/"))
@@ -269,7 +291,7 @@ describe("BlocoImagens", () => {
     await avancar(0);
     const c = chamadas.find((x) => x.url.endsWith("/momentos/f1/buscar"))!;
     expect(c.metodo).toBe("POST");
-    expect(c.corpo).toEqual({ busca: "lula posse" });
+    expect(c.corpo).toEqual({ versao: "v1", busca: "lula posse" });
   });
 
   it("editar o prompt desmarca Aprovado na hora e grava ao sair do campo", async () => {
@@ -404,7 +426,8 @@ describe("BlocoImagens", () => {
     expect(texto).toContain("Wikimedia Commons");
     expect(texto).toContain("tamanho desconhecido: f1-2.jpg");
     expect(texto).toContain("As fotos baixadas antes neste corte serão substituídas.");
-    expect(chamadas.filter((c) => c.metodo === "POST" && c.url === `${BASE}/fotos`)).toHaveLength(1);
+    const posts = chamadas.filter((c) => c.metodo === "POST" && c.url === `${BASE}/fotos`);
+    expect(posts.map((c) => c.corpo)).toEqual([{ confirmado: true }]);
   });
 
   it("Baixar com confirm falso não envia nada", async () => {
@@ -433,7 +456,8 @@ describe("BlocoImagens", () => {
     fireEvent.click(botaoIa());
     await avancar(0);
     await avancar(0);
-    expect(chamadas.filter((c) => c.metodo === "POST" && c.url === `${BASE}/ia`)).toHaveLength(1);
+    const posts = chamadas.filter((c) => c.metodo === "POST" && c.url === `${BASE}/ia`);
+    expect(posts.map((c) => c.corpo)).toEqual([{ itens: orcamento.itens }]);
   });
 
   it("Gerar as aprovadas fica desabilitado com 0 imagens", async () => {
@@ -449,7 +473,8 @@ describe("BlocoImagens", () => {
     fireEvent.click(screen.getByRole("button", { name: "Gerar de novo" }));
     expect(String(confirmar.mock.calls[0][0])).toContain("1 imagem, ~US$ 0,05");
     await avancar(0);
-    expect(chamadas.filter((c) => c.metodo === "POST" && c.url.endsWith("/momentos/i1/ia"))).toHaveLength(1);
+    const posts = chamadas.filter((c) => c.metodo === "POST" && c.url.endsWith("/momentos/i1/ia"));
+    expect(posts.map((c) => c.corpo)).toEqual([{ confirmado: true }]);
   });
 
   it("Gerar de novo com confirm falso não envia", async () => {
@@ -560,5 +585,165 @@ describe("BlocoImagens", () => {
     await avancar(0);
     await avancar(0);
     expect(aoCarregar).toHaveBeenLastCalledWith(true);
+  });
+
+  it("mostra os avisos do resumo abaixo dos botões, mesmo com 0 fotos", async () => {
+    const motivo = "Corte 2: erro: 0:12 lula: nenhuma foto escolhida (escolha ao menos uma foto ou descarte o momento)";
+    resumo = { fotos: 0, megabytes: 0, origem: "Wikimedia Commons", avisos: [motivo] };
+    await montar();
+    expect((botaoFotos() as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByText(new RegExp(motivo.replace(/[()]/g, "\\$&")))).toBeTruthy();
+  });
+
+  it("mostra o erro do resumo e o do orçamento em vez de engolir", async () => {
+    resumo = "erro";
+    orcamento = "erro";
+    await montar();
+    expect(screen.getByText("Wikimedia fora do ar")).toBeTruthy();
+    expect(screen.getByText("imagens-ia.json ilegível")).toBeTruthy();
+  });
+
+  it("mostra o aviso do glossário", async () => {
+    avisoGlossario = "Não consegui ler o glossário (Contexto/glossario.md): nada foi aprovado nem gerado.";
+    await montar();
+    expect(screen.getByText(avisoGlossario)).toBeTruthy();
+  });
+
+  it("clicar Aprovado e logo Gerar lê o orçamento depois do PUT e manda os itens dele", async () => {
+    const outra = momento({ ...IA(), chave: "i2", inicio: 90, prompt: "um corredor", aprovado: false, ia: [] });
+    momentos = [momento({ ...IA(), ia: [] }), outra];
+    orcamento = { ...orcamento, imagens: 1, custo_usd: 0.05, itens: [{ corte: 2, chave: "i1" }] };
+    let soltar: () => void = () => {};
+    putExtra = (chave, corpo) =>
+      new Promise<Response>((resolver) => {
+        soltar = () => {
+          const m = momentos.find((x) => x.chave === chave)!;
+          aplicar(m, corpo);
+          versao += 1;
+          orcamento = {
+            ...orcamento,
+            imagens: 2,
+            custo_usd: 0.1,
+            itens: [
+              { corte: 2, chave: "i1" },
+              { corte: 2, chave: "i2" },
+            ],
+          };
+          void resposta({ momento: m, versao: `v${versao}` }).then(resolver);
+        };
+      });
+    await montar();
+    const orcamentosAntes = chamadas.filter((c) => c.url.endsWith("/ia/orcamento")).length;
+    fireEvent.click(screen.getAllByLabelText("Aprovado")[1]);
+    fireEvent.click(botaoIa());
+    await avancar(0);
+    await avancar(0);
+    expect(chamadas.filter((c) => c.url.endsWith("/ia/orcamento")).length).toBe(orcamentosAntes);
+    expect((botaoIa() as HTMLButtonElement).disabled).toBe(true);
+    expect(confirmar).not.toHaveBeenCalled();
+    soltar();
+    await avancar(0);
+    await avancar(0);
+    await avancar(0);
+    expect(confirmar).toHaveBeenCalledTimes(1);
+    expect(String(confirmar.mock.calls[0][0])).toContain("2 imagens");
+    const indice = (f: (c: Chamada) => boolean) => chamadas.findIndex(f);
+    const put = indice((c) => c.metodo === "PUT");
+    const leitura = chamadas.findIndex((c, i) => i > put && c.url.endsWith("/ia/orcamento"));
+    const post = indice((c) => c.metodo === "POST" && c.url === `${BASE}/ia`);
+    expect(put).toBeGreaterThanOrEqual(0);
+    expect(leitura).toBeGreaterThan(put);
+    expect(post).toBeGreaterThan(leitura);
+    expect(chamadas[post].corpo).toEqual({
+      itens: [
+        { corte: 2, chave: "i1" },
+        { corte: 2, chave: "i2" },
+      ],
+    });
+  });
+
+  it("Gerar no cartão logo depois de aprovar manda o pedido depois do PUT", async () => {
+    momentos = [momento({ ...IA(), aprovado: false, ia: [] })];
+    let soltar: () => void = () => {};
+    putExtra = (chave, corpo) =>
+      new Promise<Response>((resolver) => {
+        soltar = () => {
+          const m = momentos.find((x) => x.chave === chave)!;
+          aplicar(m, corpo);
+          versao += 1;
+          void resposta({ momento: m, versao: `v${versao}` }).then(resolver);
+        };
+      });
+    await montar();
+    fireEvent.click(screen.getByLabelText("Aprovado"));
+    fireEvent.click(screen.getByRole("button", { name: "Gerar" }));
+    expect(String(confirmar.mock.calls[0][0])).toBe("Gerar esta imagem: 1 imagem, ~US$ 0,05?");
+    await avancar(0);
+    expect(chamadas.filter((c) => c.metodo === "POST")).toHaveLength(0);
+    soltar();
+    await avancar(0);
+    await avancar(0);
+    const post = chamadas.findIndex((c) => c.metodo === "POST" && c.url.endsWith("/momentos/i1/ia"));
+    expect(post).toBeGreaterThan(chamadas.findIndex((c) => c.metodo === "PUT"));
+    expect(chamadas[post].corpo).toEqual({ confirmado: true });
+  });
+
+  it("clique duplo em Gerar e em Baixar abre uma confirmação só", async () => {
+    confirmar.mockReturnValue(false);
+    await montar();
+    fireEvent.click(botaoIa());
+    fireEvent.click(botaoIa());
+    await avancar(0);
+    await avancar(0);
+    expect(confirmar).toHaveBeenCalledTimes(1);
+    fireEvent.click(botaoFotos());
+    fireEvent.click(botaoFotos());
+    await avancar(0);
+    await avancar(0);
+    expect(confirmar).toHaveBeenCalledTimes(2);
+    expect(chamadas.filter((c) => c.metodo === "POST")).toHaveLength(0);
+  });
+
+  it("Buscar com 409 recarrega os momentos e mostra a mensagem", async () => {
+    postBuscar = () => {
+      momentos = [momento({ escolhas: [4] })];
+      versao = 7;
+      return resposta({ detail: "O pedidos.json mudou desde que você abriu.", versao_atual: "v7" }, 409);
+    };
+    momentos = [momento()];
+    await montar();
+    fireEvent.click(screen.getByRole("button", { name: "Buscar" }));
+    await avancar(0);
+    await avancar(0);
+    expect(screen.getByText("O pedidos.json mudou desde que você abriu.")).toBeTruthy();
+    expect(within(candidataBtn(4)).getByText("1")).toBeTruthy();
+    fireEvent.click(candidataBtn(2));
+    await avancar(0);
+    expect(puts()[0].corpo).toEqual({ versao: "v7", escolhas: [4, 2] });
+  });
+
+  it("o resultado da busca aparece mesmo com outro cartão alterado logo depois", async () => {
+    let soltar: () => void = () => {};
+    postBuscar = (chave) =>
+      new Promise<Response>((resolver) => {
+        soltar = () => {
+          const m = momentos.find((x) => x.chave === chave)!;
+          m.candidatas = [candidata(7)];
+          m.escolhas = [];
+          versao += 1;
+          void resposta({ momento: m, versao: `v${versao}` }).then(resolver);
+        };
+      });
+    momentos = [FOTO(), momento({ ...IA(), aprovado: false })];
+    await montar();
+    fireEvent.click(screen.getByRole("button", { name: "Buscar" }));
+    fireEvent.click(screen.getByLabelText("Aprovado"));
+    await avancar(0);
+    soltar();
+    await avancar(0);
+    await avancar(0);
+    expect(screen.getAllByRole("button", { name: /^Candidata \d/ })).toHaveLength(1);
+    expect(screen.getByRole("button", { name: /^Candidata 1: Foto 7/ })).toBeTruthy();
+    expect(puts().map((c) => c.corpo)).toEqual([{ versao: "v2", aprovado: true }]);
   });
 });

@@ -21,7 +21,9 @@ import {
 } from "../api";
 import { CartaoMomento } from "./CartaoMomento";
 import {
+  Alerta,
   AndamentoPedido,
+  AvisosDoResumo,
   PEDIDO_PERDIDO,
   ativo,
   ehDeImagens,
@@ -31,6 +33,7 @@ import {
   textoDeFotos,
   textoDeIa,
   useAcompanhamento,
+  useUmaPorVez,
 } from "./imagensComum";
 
 interface Props {
@@ -53,7 +56,11 @@ export function BlocoImagens({ ep, n, irPara, aoCarregar }: Props) {
   const [aviso, setAviso] = useState<string | null>(null);
   const [erros, setErros] = useState<Record<string, string>>({});
   const [resumo, setResumo] = useState<ResumoFotos | null>(null);
+  const [erroResumo, setErroResumo] = useState<string | null>(null);
   const [orcamento, setOrcamento] = useState<OrcamentoIa | null>(null);
+  const [erroOrcamento, setErroOrcamento] = useState<string | null>(null);
+  const [avisoGlossario, setAvisoGlossario] = useState<string | null>(null);
+  const [preparando, umaPorVez] = useUmaPorVez();
   const [config, setConfig] = useState<ConfigImagens | null>(null);
   const [pedido, setPedido] = useState<Pedido | null>(null);
   const [erroPedido, setErroPedido] = useState<string | null>(null);
@@ -73,6 +80,7 @@ export function BlocoImagens({ ep, n, irPara, aoCarregar }: Props) {
       carregou.current = true;
       setMomentos(emOrdem(d.momentos));
       setErroLeitura(null);
+      setAvisoGlossario(d.aviso_glossario ?? null);
       aoCarregarRef.current?.(d.momentos.length > 0);
     } catch (x) {
       setErroLeitura(mensagem(x));
@@ -84,8 +92,10 @@ export function BlocoImagens({ ep, n, irPara, aoCarregar }: Props) {
     try {
       const r = await resumoDeFotos(ep, n);
       setResumo(r);
+      setErroResumo(null);
       return r;
-    } catch {
+    } catch (x) {
+      setErroResumo(mensagem(x));
       return null;
     }
   }, [ep, n]);
@@ -94,8 +104,10 @@ export function BlocoImagens({ ep, n, irPara, aoCarregar }: Props) {
     try {
       const o = await orcamentoDeIa(ep, n);
       setOrcamento(o);
+      setErroOrcamento(null);
       return o;
-    } catch {
+    } catch (x) {
+      setErroOrcamento(mensagem(x));
       return null;
     }
   }, [ep, n]);
@@ -156,8 +168,11 @@ export function BlocoImagens({ ep, n, irPara, aoCarregar }: Props) {
     else setErros((e) => ({ ...e, [chave]: mensagem(x) }));
   }
 
-  /** Um pedido de cada vez, na ordem dos cliques: cada um precisa da versão que o anterior gerou. */
-  function enfileirar(chave: string, enviar: () => Promise<RespostaMomento>) {
+  /**
+   * Um pedido de cada vez, na ordem dos cliques: cada um precisa da versão que o anterior gerou.
+   * `sempre`: a resposta redesenha o cartão mesmo com outros pedidos a caminho (a busca troca as candidatas).
+   */
+  function enfileirar(chave: string, enviar: () => Promise<RespostaMomento>, sempre = false) {
     setErros((e) => {
       const { [chave]: _, ...resto } = e;
       return resto;
@@ -170,7 +185,7 @@ export function BlocoImagens({ ep, n, irPara, aoCarregar }: Props) {
         versao.current = r.versao;
         emVoo.current -= 1;
         // Só a última resposta da fila redesenha: as anteriores apagariam cliques que ainda estão a caminho.
-        if (emVoo.current === 0) {
+        if (sempre || emVoo.current === 0) {
           setMomentos((ms) => ms && ms.map((m) => (m.chave === r.momento.chave ? r.momento : m)));
         }
         agendarResumos();
@@ -188,7 +203,7 @@ export function BlocoImagens({ ep, n, irPara, aoCarregar }: Props) {
   }
 
   function buscar(chave: string, busca: string) {
-    enfileirar(chave, () => buscarOutras(ep, n, chave, busca));
+    enfileirar(chave, () => buscarOutras(ep, n, chave, versao.current, busca), true);
   }
 
   async function enviarPedido(enviar: () => Promise<Pedido>, chave?: string) {
@@ -204,31 +219,34 @@ export function BlocoImagens({ ep, n, irPara, aoCarregar }: Props) {
     }
   }
 
-  async function baixar() {
-    setErroPedido(null);
-    let r: ResumoFotos;
-    try {
-      r = await resumoDeFotos(ep, n);
-    } catch (x) {
-      setErroPedido(mensagem(x));
-      return;
-    }
-    setResumo(r);
-    if (window.confirm(textoDeFotos(r, SUBSTITUIDAS))) await enviarPedido(() => baixarFotos(ep, n));
+  // Baixar e Gerar esperam os cliques que ainda estão a caminho (a fila de PUTs) antes de ler o
+  // resumo ou o orçamento: a confirmação mostra o estado já gravado e o POST manda exatamente isso.
+  function baixar() {
+    return umaPorVez(async () => {
+      setErroPedido(null);
+      await cadeia.current;
+      const r = await lerResumo();
+      if (!r) return;
+      if (window.confirm(textoDeFotos(r, SUBSTITUIDAS))) await enviarPedido(() => baixarFotos(ep, n));
+    });
   }
 
-  async function gerar() {
-    setErroPedido(null);
-    let o: OrcamentoIa;
-    try {
-      o = await orcamentoDeIa(ep, n);
-    } catch (x) {
-      setErroPedido(mensagem(x));
-      return;
-    }
-    setOrcamento(o);
-    if (o.imagens === 0) return;
-    if (window.confirm(textoDeIa(o))) await enviarPedido(() => gerarImagensIa(ep, n));
+  function gerar() {
+    return umaPorVez(async () => {
+      setErroPedido(null);
+      await cadeia.current;
+      const o = await lerOrcamento();
+      if (!o || o.imagens === 0) return;
+      if (window.confirm(textoDeIa(o))) await enviarPedido(() => gerarImagensIa(ep, n, o.itens));
+    });
+  }
+
+  /** "Gerar (de novo)" de um cartão, já confirmado nele: a aprovação a caminho grava antes do pedido. */
+  function gerarUma(chave: string) {
+    return umaPorVez(async () => {
+      await cadeia.current;
+      await enviarPedido(() => gerarDeNovoIa(ep, n, chave), chave);
+    });
   }
 
   if (momentos === null || momentos.length === 0) {
@@ -239,7 +257,7 @@ export function BlocoImagens({ ep, n, irPara, aoCarregar }: Props) {
     ) : null;
   }
 
-  const ocupado = ativo(pedido) || enviando;
+  const ocupado = ativo(pedido) || enviando || preparando;
   const fotosAtivas = ativo(pedido) && pedido?.tipo === "fotos";
   const iaAtiva = ativo(pedido) && pedido?.tipo === "ia";
   const precoIa = config?.provedores?.[config.provedor]?.preco_usd ?? null;
@@ -247,16 +265,9 @@ export function BlocoImagens({ ep, n, irPara, aoCarregar }: Props) {
   return (
     <section aria-labelledby="titulo-imagens" className="bloco-imagens">
       <h2 id="titulo-imagens">Imagens</h2>
-      {erroLeitura ? (
-        <p role="alert" className="mensagem-erro">
-          {erroLeitura}
-        </p>
-      ) : null}
-      {aviso ? (
-        <p role="alert" className="mensagem-erro">
-          {aviso}
-        </p>
-      ) : null}
+      <Alerta texto={erroLeitura} />
+      <Alerta texto={avisoGlossario} />
+      <Alerta texto={aviso} />
       <div className="acoes-musica">
         <button type="button" disabled={ocupado || !resumo || resumo.fotos === 0} onClick={() => void baixar()}>
           {rotuloDeFotos(resumo)}
@@ -265,11 +276,10 @@ export function BlocoImagens({ ep, n, irPara, aoCarregar }: Props) {
           {rotuloDeIa(orcamento)}
         </button>
       </div>
-      {erroPedido ? (
-        <p role="alert" className="mensagem-erro">
-          {erroPedido}
-        </p>
-      ) : null}
+      <AvisosDoResumo resumo={resumo} />
+      <Alerta texto={erroResumo} />
+      <Alerta texto={erroOrcamento} />
+      <Alerta texto={erroPedido} />
       {pedido ? <AndamentoPedido pedido={pedido} /> : null}
       <ul className="momentos">
         {momentos.map((m) => (
@@ -279,13 +289,13 @@ export function BlocoImagens({ ep, n, irPara, aoCarregar }: Props) {
             ep={ep}
             n={n}
             bloqueado={fotosAtivas}
-            gerando={iaAtiva || enviando}
+            gerando={iaAtiva || enviando || preparando}
             erro={erros[m.chave] ?? null}
             precoIa={precoIa}
             irPara={irPara}
             alterar={(corpo, otimista) => alterar(m.chave, corpo, otimista)}
             buscar={(busca) => buscar(m.chave, busca)}
-            gerarDeNovo={() => void enviarPedido(() => gerarDeNovoIa(ep, n, m.chave), m.chave)}
+            gerarDeNovo={() => void gerarUma(m.chave)}
           />
         ))}
       </ul>

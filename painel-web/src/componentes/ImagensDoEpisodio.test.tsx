@@ -35,8 +35,9 @@ let resumo: any;
 let orcamento: any;
 let tarefasLista: Pedido[];
 let tarefa: Pedido[];
-let chamadas: { url: string; metodo: string }[];
+let chamadas: { url: string; metodo: string; corpo: any }[];
 let postFotos: () => Promise<Response>;
+let avisoGlossario: string | null;
 let confirmar: ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
@@ -56,13 +57,25 @@ beforeEach(() => {
           }),
           momento({ chave: "c", tipo: "ia", aprovado: true, ia: [] }),
           momento({ chave: "d", descartar: true, fotos_prontas: ["d.png"] }),
+          momento({ chave: "n", tipo: "noticia", fotos_prontas: ["n.png"] }),
         ],
+        aviso_glossario: avisoGlossario,
       }),
     2: () => resposta({ versao: "v1", momentos: [] }),
     3: () => resposta({ detail: "pedidos.json ilegível" }, 422),
   };
   resumo = { fotos: 1, megabytes: 1.54, origem: "Wikimedia Commons", avisos: ["tamanho desconhecido: a-2.jpg"] };
-  orcamento = { imagens: 2, provedor: "openai", modelo: "gpt-image-1", custo_usd: 0.1 };
+  orcamento = {
+    imagens: 2,
+    provedor: "openai",
+    modelo: "gpt-image-1",
+    custo_usd: 0.1,
+    itens: [
+      { corte: 1, chave: "c" },
+      { corte: 4, chave: "x" },
+    ],
+  };
+  avisoGlossario = null;
   tarefasLista = [];
   tarefa = [
     pedido({ estado: "montando", progresso: "Baixando 1 de 2" }),
@@ -75,14 +88,16 @@ beforeEach(() => {
     "fetch",
     vi.fn((url: string, init?: RequestInit) => {
       const metodo = init?.method ?? "GET";
-      chamadas.push({ url, metodo });
+      chamadas.push({ url, metodo, corpo: init?.body ? JSON.parse(String(init.body)) : null });
       const m = url.match(/\/cortes\/(\d+)\/momentos$/);
       if (m) return porCorte[Number(m[1])]();
       if (url === `${EP}/fotos/resumo`) return resposta(resumo);
-      if (url === `${EP}/ia/orcamento`) return resposta(orcamento);
+      if (url === `${EP}/ia/orcamento`)
+        return orcamento === "erro" ? resposta({ detail: "imagens-ia.json ilegível" }, 422) : resposta(orcamento);
       if (url === "/api/tarefas") return resposta(tarefasLista);
       if (url.startsWith("/api/tarefas/")) return resposta(tarefa.length > 1 ? tarefa.shift() : tarefa[0]);
       if (url === `${EP}/fotos` && metodo === "POST") return postFotos();
+      if (url === `${EP}/ia` && metodo === "POST") return resposta(pedido({ tipo: "ia" }), 202);
       return resposta({ detail: "?" }, 404);
     }),
   );
@@ -119,8 +134,8 @@ describe("ImagensDoEpisodio", () => {
     await montar();
     const l1 = linha(1);
     expect(within(l1).getByRole("link").getAttribute("href")).toBe("/episodios/Ep%201/cortes/1");
-    expect(l1.textContent).toContain("3 momentos");
-    expect(l1.textContent).toContain("2 fotos baixadas");
+    expect(l1.textContent).toContain("4 momentos");
+    expect(l1.textContent).toContain("2 fotos baixadas"); // o cartão da notícia não conta
     expect(l1.textContent).toContain("2 prompts aprovados");
     expect(l1.textContent).toContain("1 imagem gerada");
     expect(linha(2).textContent).toContain("Sem momentos de imagem");
@@ -145,7 +160,9 @@ describe("ImagensDoEpisodio", () => {
     expect(texto).toContain("Baixar 1 foto (1,5 MB) de Wikimedia Commons?");
     expect(texto).toContain("tamanho desconhecido: a-2.jpg");
     expect(texto).toContain("As fotos baixadas antes nestes cortes serão substituídas.");
-    expect(chamadas.some((c) => c.url === `${EP}/fotos` && c.metodo === "POST")).toBe(true);
+    expect(chamadas.filter((c) => c.url === `${EP}/fotos` && c.metodo === "POST").map((c) => c.corpo)).toEqual([
+      { confirmado: true },
+    ]);
     expect(screen.getByRole("status").textContent).toContain("Na fila");
     const antes = chamadas.filter((c) => c.url === `${EP}/fotos/resumo`).length;
     await avancar(2000);
@@ -183,5 +200,37 @@ describe("ImagensDoEpisodio", () => {
     expect((botaoFotos() as HTMLButtonElement).disabled).toBe(true);
     await avancar(2000);
     expect(chamadas.some((c) => c.url === "/api/tarefas/t1")).toBe(true);
+  });
+
+  it("gerar manda os itens do orçamento confirmado", async () => {
+    await montar();
+    fireEvent.click(botaoIa());
+    await avancar(0);
+    expect(confirmar).toHaveBeenCalledTimes(1);
+    const posts = chamadas.filter((c) => c.url === `${EP}/ia` && c.metodo === "POST");
+    expect(posts.map((c) => c.corpo)).toEqual([{ itens: orcamento.itens }]);
+  });
+
+  it("clique duplo em Baixar e em Gerar abre uma confirmação só", async () => {
+    confirmar.mockReturnValue(false);
+    await montar();
+    fireEvent.click(botaoFotos());
+    fireEvent.click(botaoFotos());
+    await avancar(0);
+    expect(confirmar).toHaveBeenCalledTimes(1);
+    fireEvent.click(botaoIa());
+    fireEvent.click(botaoIa());
+    await avancar(0);
+    expect(confirmar).toHaveBeenCalledTimes(2);
+  });
+
+  it("mostra os avisos do resumo, o erro do orçamento e o aviso do glossário", async () => {
+    resumo = { fotos: 0, megabytes: 0, origem: "Wikimedia Commons", avisos: ["Corte 1: erro: 0:01 x: escolhas inválidas"] };
+    orcamento = "erro";
+    avisoGlossario = "Não consegui ler o glossário (Contexto/glossario.md): nada foi aprovado nem gerado.";
+    await montar();
+    expect(screen.getByText(/Corte 1: erro: 0:01 x: escolhas inválidas/)).toBeTruthy();
+    expect(screen.getByText("imagens-ia.json ilegível")).toBeTruthy();
+    expect(screen.getAllByText(avisoGlossario)).toHaveLength(1);
   });
 });

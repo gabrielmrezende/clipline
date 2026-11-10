@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { AlteracaoMomento, Momento, formatarDolar, plural, tempoTexto, urlImagem } from "../api";
 
 const MAXIMO_ESCOLHAS = 3;
+const MAXIMO_VERSOES = 3;
 
 export type Alterar = (corpo: AlteracaoMomento, otimista: Partial<Momento>) => void;
 
@@ -11,7 +12,7 @@ interface Props {
   n: number | string;
   /** Fotos sendo baixadas: o servidor recusa qualquer mudança no pedidos.json. */
   bloqueado: boolean;
-  /** Há geração de imagens em andamento neste corte. */
+  /** Há um pedido de imagens em andamento (ou sendo confirmado) neste corte. */
   gerando: boolean;
   erro: string | null;
   /** Preço (US$) de uma imagem no provedor atual, se conhecido. */
@@ -86,6 +87,15 @@ function CorpoIa({
   useEffect(() => setRascunho(m.prompt), [m.prompt]);
   const salvo = rascunho === m.prompt;
   const aprovado = m.aprovado && salvo;
+  const rotuloGerar = m.ia.length > 0 ? "Gerar de novo" : "Gerar";
+  const podeGerar =
+    aprovado &&
+    !gerando &&
+    !bloqueado &&
+    m.ia.length < MAXIMO_VERSOES &&
+    precoIa !== null &&
+    m.pessoa_citada === null &&
+    m.prompt.trim() !== "";
 
   function salvarPrompt() {
     if (!salvo) alterar({ prompt: rascunho }, { prompt: rascunho, aprovado: false });
@@ -101,8 +111,9 @@ function CorpoIa({
   }
 
   function novaVersao() {
-    const custo = precoIa === null ? "" : `, ${formatarDolar(precoIa)}`;
-    if (window.confirm(`Gerar de novo esta imagem: ${plural(1, "imagem", "imagens")}${custo}?`)) gerarDeNovo();
+    if (!podeGerar || precoIa === null) return;
+    const texto = `${rotuloGerar} esta imagem: ${plural(1, "imagem", "imagens")}, ${formatarDolar(precoIa)}?`;
+    if (window.confirm(texto)) gerarDeNovo();
   }
 
   return (
@@ -142,12 +153,8 @@ function CorpoIa({
         </ul>
       ) : null}
       <div className="acoes-musica">
-        <button
-          type="button"
-          disabled={gerando || !m.prompt.trim() || m.pessoa_citada !== null}
-          onClick={novaVersao}
-        >
-          Gerar de novo
+        <button type="button" disabled={!podeGerar} onClick={novaVersao}>
+          {rotuloGerar}
         </button>
       </div>
     </>
