@@ -88,6 +88,7 @@ def criar_app(
     app.state.provedores = provedores
     app.state.tem_chave = tem_chave
     app.state.config_ia = Path(config_ia)
+    app.state.montar = montar
     if fila is None:
         fila = Fila(executar=functools.partial(
             trocar_musica, montar=montar, base=app.state.cortes,

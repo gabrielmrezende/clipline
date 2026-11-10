@@ -16,15 +16,19 @@ from esteira.fluxo_imagens import (
 from esteira.imagens_ia.config import PROVEDORES, Config, gravar_config, ler_config, provedor_atual
 from esteira.imagens_ia.gerar import orcamento_com_itens, pendentes
 from esteira.imagens_ia.provedor import ErroImagem
-from esteira.imagens_no_video import fotos_prontas, versoes_ia
+from esteira.imagens_no_video import (
+    Escolha, escolhas_do_corte, fotos_prontas, montagem_desatualizada, no_corte, versoes_ia,
+)
 from esteira.painel.fila import PedidoAtivo
 from esteira.painel.leitura import NaoEncontrado, resolver_episodio
 from esteira.painel.rotas import _TRAVA_GRAVACAO, _pasta_do_corte
+from esteira.painel.troca_musica import remontar
 from esteira.painel.tarefas_imagens import (
     ERROS_DO_GLOSSARIO, GLOSSARIO_ILEGIVEL, avisos_dos_cortes, executar_fotos, executar_ia, executar_momento_ia,
 )
 from esteira.pedidos import ARQUIVO, MAXIMO_ESCOLHAS, Momento, _pessoa_citada, pedidos_dos_bytes, texto_dos_pedidos
 from esteira.publicar.post import versao_dos_bytes
+from esteira.receita import duracao_principal, ler_receita
 from esteira.wikimedia import LARGURA_MINIATURA
 
 roteador = APIRouter(prefix="/api")
@@ -37,6 +41,8 @@ FOTOS_REPETIDAS = "Já há um pedido de fotos em andamento para este corte."
 IA_REPETIDA = "Já há um pedido de imagens em andamento para este corte."
 ORIGEM_FOTOS = "Wikimedia Commons"
 PEDIDOS_MUDOU = "O pedidos.json mudou desde que você abriu."
+NAO_PRONTA = "Essa imagem não está pronta para este momento."
+MONTANDO = "Este corte já está sendo montado."
 TIPOS_TROCAVEIS = ("foto", "ia")
 _MINIATURA = re.compile(r"/((?:lossy-)?page\d+-)?(\d+)px-([^/]*)$")  # com o prefixo das páginas de PDF
 
@@ -48,6 +54,7 @@ class AlteracaoMomento(BaseModel):
     prompt: str | None = None
     aprovado: bool | None = None
     descartar: bool | None = None
+    no_video: str | None = None
 
 
 class PedidoBusca(BaseModel):
@@ -108,7 +115,19 @@ def _candidata(c) -> dict:
     return saida
 
 
-def _json_do_momento(m: Momento, destino: Path, pessoas: list[str] | None) -> dict:
+def _duracao(destino: Path) -> float | None:
+    try:
+        return duracao_principal(ler_receita(destino / TRABALHO))
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
+
+
+def _jsons(lista: list[Momento], destino: Path, pessoas: list[str] | None) -> list[dict]:
+    escolhas = escolhas_do_corte(destino, lista, _duracao(destino))
+    return [_json_do_momento(m, destino, pessoas, e) for m, e in zip(lista, escolhas)]
+
+
+def _json_do_momento(m: Momento, destino: Path, pessoas: list[str] | None, escolha: Escolha) -> dict:
     """`pessoas` None: glossário ilegível, a pessoa citada fica desconhecida (null)."""
     imagens = destino / IMAGENS_SUGERIDAS
     sugeridas = set(_ler_sugeridas(destino / TRABALHO))
@@ -122,6 +141,10 @@ def _json_do_momento(m: Momento, destino: Path, pessoas: list[str] | None) -> di
         "fotos_prontas": fotos_prontas(m, chave_momento(m), imagens, sugeridas, ler_creditos(destino / TRABALHO)),
         "ia": versoes_ia(chave_momento(m), imagens, ler_ia(destino / TRABALHO)),
         "pessoa_citada": _pessoa_citada(m.prompt, pessoas) if m.prompt and pessoas is not None else None,
+        "no_video": escolha.arquivo,
+        "prontas": escolha.prontas,
+        "inicio_tela": escolha.inicio_tela,
+        "fim_tela": escolha.fim_tela,
     }
 
 
@@ -195,8 +218,9 @@ def _conflito(versao_atual: str) -> JSONResponse:
     return JSONResponse({"detail": PEDIDOS_MUDOU, "versao_atual": versao_atual}, status_code=409)
 
 
-def _resposta(requisicao: Request, destino: Path, m: Momento, versao: str) -> dict:
-    return {"momento": _json_do_momento(m, destino, _pessoas_ou_nada(requisicao)), "versao": versao}
+def _resposta(requisicao: Request, destino: Path, lista: list[Momento], m: Momento, versao: str) -> dict:
+    jsons = _jsons(lista, destino, _pessoas_ou_nada(requisicao))
+    return {"momento": next(j for x, j in zip(lista, jsons) if x is m), "versao": versao}
 
 
 @roteador.get("/episodios/{ep}/cortes/{n}/momentos")
@@ -205,14 +229,11 @@ def momentos(ep: str, n: int, requisicao: Request) -> dict:
     pessoas = _pessoas_ou_nada(requisicao)
     aviso = None if pessoas is not None else GLOSSARIO_ILEGIVEL
     lido = _ler(caminho)
+    no_video = {"no_corte": no_corte(destino), "montagem_desatualizada": montagem_desatualizada(destino)}
     if lido is None:
-        return {"versao": "", "momentos": [], "aviso_glossario": aviso}
+        return {"versao": "", "momentos": [], "aviso_glossario": aviso, **no_video}
     versao, lista = lido
-    return {
-        "versao": versao,
-        "momentos": [_json_do_momento(m, destino, pessoas) for m in lista],
-        "aviso_glossario": aviso,
-    }
+    return {"versao": versao, "momentos": _jsons(lista, destino, pessoas), "aviso_glossario": aviso, **no_video}
 
 
 def _aplicar_tipo(m: Momento, tipo: str) -> None:
@@ -224,6 +245,7 @@ def _aplicar_tipo(m: Momento, tipo: str) -> None:
         return
     m.tipo = tipo
     m.aprovado = False
+    m.no_video = ""
     if tipo == "foto" and not m.busca.strip():
         m.busca = m.nome
 
@@ -281,8 +303,12 @@ def alterar_momento(ep: str, n: int, chave: str, corpo: AlteracaoMomento, requis
             return _conflito(versao)
         m = _achar(lista, chave)
         _aplicar(m, corpo, pessoas)
+        if corpo.no_video is not None:
+            if corpo.no_video and corpo.no_video not in escolhas_do_corte(destino, [m], None)[0].prontas:
+                raise HTTPException(422, NAO_PRONTA)
+            m.no_video = corpo.no_video
         nova = _gravar(requisicao, caminho, lista)
-    return _resposta(requisicao, destino, m, nova)
+    return _resposta(requisicao, destino, lista, m, nova)
 
 
 @roteador.post("/episodios/{ep}/cortes/{n}/momentos/{chave}/buscar")
@@ -316,9 +342,28 @@ def buscar(ep: str, n: int, chave: str, corpo: PedidoBusca, requisicao: Request)
         m = _achar(lista, chave)
         m.busca = busca
         m.candidatas = [asdict(c) for c in candidatas]
-        m.escolhas, m.url, m.bytes, m.resumidas, m.motivo = [], [], [], [], ""
+        m.escolhas, m.url, m.bytes, m.resumidas, m.motivo, m.no_video = [], [], [], [], "", ""
         nova = _gravar(requisicao, caminho, lista)
-    return _resposta(requisicao, destino, m, nova)
+    return _resposta(requisicao, destino, lista, m, nova)
+
+
+# --- montar o corte com as imagens ---------------------------------------------
+
+
+@roteador.post("/episodios/{ep}/cortes/{n}/montar", status_code=202)
+def montar_corte(ep: str, n: int, corpo: Confirmacao, requisicao: Request):
+    pasta, _ = _pasta_do_corte(requisicao, ep, n)
+    estado = requisicao.app.state
+
+    def executar(progresso):
+        progresso("Montando o corte…")
+        return remontar(pasta, n, estado.montar, base=estado.cortes)
+
+    try:
+        pedido = estado.fila.pedir_tarefa("montar", pasta, [n], executar)
+    except PedidoAtivo:
+        return JSONResponse({"detail": MONTANDO}, status_code=409)
+    return pedido.como_dict()
 
 
 # --- fotos -----------------------------------------------------------------

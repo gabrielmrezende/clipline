@@ -157,7 +157,9 @@ def test_get_sem_pedidos_e_ilegivel(ambiente):
     assert resposta.status_code == 422
     assert resposta.json()["detail"].startswith("pedidos.json ilegível: ")
     (trabalho / "pedidos.json").unlink()
-    assert cliente.get(_url()).json() == {"versao": "", "momentos": [], "aviso_glossario": None}
+    assert cliente.get(_url()).json() == {
+        "versao": "", "momentos": [], "aviso_glossario": None, "no_corte": [], "montagem_desatualizada": False,
+    }
 
 
 def test_get_fotos_prontas_e_ia(ambiente):
@@ -1151,3 +1153,130 @@ def test_gravar_travado_da_422_e_apaga_o_temporario(ambiente, monkeypatch):
     assert "arquivo em uso" in r.json()["detail"]
     assert not (trabalho / "pedidos.json.tmp").exists()
     assert (trabalho / "pedidos.json").read_bytes() == antes
+
+
+# --- imagens no vídeo ------------------------------------------------------------
+
+
+def _prontas_no_disco(destino, trabalho):
+    imagens = destino / IMAGENS_SUGERIDAS
+    imagens.mkdir(exist_ok=True)
+    for nome in (f"{CHAVE_FOTO}-1.jpg", f"{CHAVE_NOTICIA}.png", f"{CHAVE_IA}-ia-1.jpg", f"{CHAVE_IA}-ia-2.jpg"):
+        (imagens / nome).write_bytes(b"x")
+    (trabalho / "sugeridas.json").write_text(json.dumps([f"{CHAVE_FOTO}-1.jpg", f"{CHAVE_NOTICIA}.png"]), "utf-8")
+    c = _candidata(1)
+    credito = {campo: c[campo] for campo in ("autor", "licenca", "pagina", "titulo")}
+    (trabalho / "creditos.json").write_text(json.dumps({f"{CHAVE_FOTO}-1.jpg": credito}), "utf-8")
+    (trabalho / "ia.json").write_text(json.dumps([
+        {"momento": CHAVE_IA, "arquivo": f"{CHAVE_IA}-ia-{v}.jpg", "versao": v, "provedor": "x", "data": "2026-11-09"}
+        for v in (1, 2)
+    ]), "utf-8")
+
+
+def test_momentos_traz_no_video_prontas_e_tempo_de_tela(ambiente):
+    cortes, destino, trabalho = ambiente
+    _prontas_no_disco(destino, trabalho)
+    dados = _cliente(cortes).get(_url()).json()
+    foto, ia, noticia = (_momento(dados, c) for c in (CHAVE_FOTO, CHAVE_IA, CHAVE_NOTICIA))
+    assert (foto["no_video"], foto["prontas"]) == (f"{CHAVE_FOTO}-1.jpg", [f"{CHAVE_FOTO}-1.jpg"])
+    assert (foto["inicio_tela"], foto["fim_tela"]) == (12.0, 15.0)
+    assert (ia["no_video"], ia["prontas"]) == (f"{CHAVE_IA}-ia-2.jpg", [f"{CHAVE_IA}-ia-2.jpg", f"{CHAVE_IA}-ia-1.jpg"])
+    assert noticia["no_video"] == f"{CHAVE_NOTICIA}.png"
+    assert dados["no_corte"] == [] and dados["montagem_desatualizada"] is True
+
+
+def test_momentos_sem_nada_pronto(ambiente):
+    cortes, _, _ = ambiente
+    dados = _cliente(cortes).get(_url()).json()
+    assert _momento(dados, CHAVE_FOTO)["no_video"] is None and _momento(dados, CHAVE_FOTO)["prontas"] == []
+    assert dados["montagem_desatualizada"] is False  # corte antigo sem "imagens" no registro e nada pronto
+
+
+def test_put_no_video_valido_grava(ambiente):
+    cortes, destino, trabalho = ambiente
+    _prontas_no_disco(destino, trabalho)
+    cliente = _cliente(cortes)
+    versao = cliente.get(_url()).json()["versao"]
+    resposta = cliente.put(_url(f"/{CHAVE_IA}"), json={"versao": versao, "no_video": f"{CHAVE_IA}-ia-1.jpg"})
+    assert resposta.status_code == 200 and resposta.json()["momento"]["no_video"] == f"{CHAVE_IA}-ia-1.jpg"
+    assert ler_pedidos(trabalho)[1].no_video == f"{CHAVE_IA}-ia-1.jpg"
+    resposta = cliente.put(_url(f"/{CHAVE_IA}"), json={"versao": resposta.json()["versao"], "no_video": ""})
+    assert resposta.json()["momento"]["no_video"] == f"{CHAVE_IA}-ia-2.jpg"  # vazio volta ao padrão
+    assert ler_pedidos(trabalho)[1].no_video == ""
+
+
+@pytest.mark.parametrize("arquivo", ["../x.jpg", "sub/x.jpg", f"{CHAVE_FOTO}-1.jpg", "nao-existe.jpg"])
+def test_put_no_video_invalido_422(ambiente, arquivo):
+    cortes, destino, trabalho = ambiente
+    _prontas_no_disco(destino, trabalho)
+    cliente = _cliente(cortes)
+    versao = cliente.get(_url()).json()["versao"]
+    antes = (trabalho / "pedidos.json").read_bytes()
+    resposta = cliente.put(_url(f"/{CHAVE_IA}"), json={"versao": versao, "no_video": arquivo})
+    assert resposta.status_code == 422 and resposta.json()["detail"] == "Essa imagem não está pronta para este momento."
+    assert (trabalho / "pedidos.json").read_bytes() == antes
+
+
+def test_trocar_o_tipo_zera_o_no_video(ambiente):
+    cortes, destino, trabalho = ambiente
+    _prontas_no_disco(destino, trabalho)
+    cliente = _cliente(cortes)
+    versao = cliente.get(_url()).json()["versao"]
+    versao = cliente.put(_url(f"/{CHAVE_IA}"), json={"versao": versao, "no_video": f"{CHAVE_IA}-ia-1.jpg"}).json()["versao"]
+    cliente.put(_url(f"/{CHAVE_IA}"), json={"versao": versao, "tipo": "foto"})
+    assert ler_pedidos(trabalho)[1].no_video == ""
+
+
+def _montar_url() -> str:
+    return f"/api/episodios/{quote(NOME)}/cortes/1/montar"
+
+
+def test_montar_202_e_executa_remontar(ambiente):
+    cortes, destino, _ = ambiente
+    chamadas = []
+
+    def montar(pasta, numero):
+        chamadas.append((pasta.name, numero))
+        return "ok com alertas: imagem 0:20 País parado fora do vídeo: IA ainda não gerada"
+
+    cliente = _cliente(cortes, montar=montar)
+    try:
+        resposta = cliente.post(_montar_url(), json=CONFIRMADO)
+        assert resposta.status_code == 202
+        assert (resposta.json()["tipo"], resposta.json()["cortes"]) == ("montar", [1])
+        pedido = _pedido_pronto(cliente, resposta.json()["id"])
+        assert pedido["estado"] == "pronto"
+        assert pedido["avisos"] == ["imagem 0:20 País parado fora do vídeo: IA ainda não gerada"]
+        assert chamadas == [(NOME, 1)]
+    finally:
+        _fechar(cliente)
+
+
+def test_montar_repetido_409(ambiente):
+    cortes, _, _ = ambiente
+    entrou, solto = threading.Event(), threading.Event()
+
+    def montar(pasta, numero):
+        entrou.set()
+        assert solto.wait(10)
+        return "ok"
+
+    cliente = _cliente(cortes, montar=montar)
+    try:
+        assert cliente.post(_montar_url(), json=CONFIRMADO).status_code == 202
+        assert entrou.wait(10)
+        resposta = cliente.post(_montar_url(), json=CONFIRMADO)
+        assert resposta.status_code == 409 and resposta.json()["detail"] == "Este corte já está sendo montado."
+    finally:
+        solto.set()
+        _fechar(cliente)
+
+
+def test_montar_sem_confirmacao_422(ambiente):
+    cortes, _, _ = ambiente
+    cliente = _cliente(cortes, montar=lambda p, n: pytest.fail("não devia montar"))
+    try:
+        assert cliente.post(_montar_url()).status_code == 422
+        assert cliente.post(_montar_url(), json={"confirmado": False}).status_code == 422
+    finally:
+        _fechar(cliente)

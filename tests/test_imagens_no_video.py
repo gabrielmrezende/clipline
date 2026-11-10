@@ -173,3 +173,39 @@ def test_pedidos_ilegivel_lista_vazia_com_alerta(tmp_path):
     (corte / "trabalho" / "pedidos.json").write_text("{quebrado", "utf-8")
     lista, alertas = imagens_do_corte(corte)
     assert lista == [] and len(alertas) == 1 and alertas[0].startswith("imagens: pedidos.json ilegível:")
+
+
+def _registro(corte, imagens=None, resultado="ok"):
+    dados = {"resultado": resultado, "alertas": []}
+    if imagens is not None:
+        dados["imagens"] = imagens
+    (corte / "trabalho" / "registro.json").write_text(json.dumps(dados), "utf-8")
+
+
+def test_montagem_desatualizada(tmp_path):
+    from dataclasses import asdict
+
+    from esteira.imagens_no_video import montagem_desatualizada, no_corte
+
+    corte = _corte(tmp_path, [_foto(escolhas=(1,))])
+    _gravada(corte, "0012-placa-1.jpg", CANDIDATAS[0])
+    previstas = [asdict(i) for i in imagens_do_corte(corte)[0]]
+    _registro(corte, [])
+    assert not montagem_desatualizada(corte)  # sem corte.mp4 não há o que comparar
+    (corte / "corte.mp4").write_bytes(b"")
+    assert montagem_desatualizada(corte)
+    _registro(corte, previstas)
+    assert not montagem_desatualizada(corte) and no_corte(corte) == previstas
+    _registro(corte, previstas, resultado="erro: x")
+    assert no_corte(corte) == []
+    (corte / "trabalho" / "registro.json").write_text("{quebrado", "utf-8")
+    assert no_corte(corte) == [] and montagem_desatualizada(corte)
+
+
+def test_corte_antigo_sem_imagens_no_registro_e_nada_pronto_nao_esta_desatualizado(tmp_path):
+    from esteira.imagens_no_video import montagem_desatualizada
+
+    corte = _corte(tmp_path, [_foto()])
+    (corte / "corte.mp4").write_bytes(b"")
+    _registro(corte)
+    assert not montagem_desatualizada(corte)

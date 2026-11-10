@@ -5,10 +5,11 @@ feito numa cópia. Só entram arquivos prontos: os que a própria esteira gravou
 """
 
 import copy
-from dataclasses import dataclass
+import json
+from dataclasses import asdict, dataclass
 from pathlib import Path
 
-from esteira.cortar import IMAGENS_SUGERIDAS, TRABALHO
+from esteira.cortar import CORTE_MP4, IMAGENS_SUGERIDAS, TRABALHO
 from esteira.fluxo_imagens import _arquivos, _ler_sugeridas, chave_momento, ler_creditos, ler_ia
 from esteira.imagens_ia.gerar import MAXIMO_VERSOES, arquivo_de_versao
 from esteira.pedidos import ARQUIVO, TIPOS, Momento, ajustar_tempos, ler_pedidos, rotulo_momento
@@ -141,3 +142,34 @@ def imagens_do_corte(destino: Path) -> tuple[list[ImagemNoVideo], list[str]]:
             caminho.stat().st_mtime_ns,
         ))
     return sorted(lista, key=lambda i: i.inicio), alertas
+
+
+def no_corte(destino: Path) -> list[dict]:
+    """As imagens que estão no corte.mp4 de agora: as do registro.json da última montagem que deu certo."""
+    try:
+        registro = json.loads((Path(destino) / TRABALHO / "registro.json").read_text("utf-8"))
+    except (OSError, ValueError):
+        return []
+    if not isinstance(registro, dict) or not str(registro.get("resultado", "")).startswith("ok"):
+        return []
+    imagens = registro.get("imagens", [])
+    return [i for i in imagens if isinstance(i, dict)] if isinstance(imagens, list) else []
+
+
+def _assinatura(itens: list[dict]) -> list[tuple]:
+    return [
+        (i.get("arquivo"), round(float(i.get("inicio", 0)), 3), round(float(i.get("fim", 0)), 3), i.get("modificado_ns", 0))
+        for i in itens
+    ]
+
+
+def montagem_desatualizada(destino: Path) -> bool:
+    """As imagens previstas agora diferem das que estão no corte.mp4? Sem corte.mp4, não há o que comparar."""
+    destino = Path(destino)
+    if not (destino / CORTE_MP4).exists():
+        return False
+    try:
+        atuais = _assinatura(no_corte(destino))
+    except (TypeError, ValueError):
+        return True
+    return _assinatura([asdict(i) for i in imagens_do_corte(destino)[0]]) != atuais
