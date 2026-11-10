@@ -14,6 +14,7 @@ LIMITE_DESCRICAO = 5000
 LIMITE_LEGENDA = 2200
 LIMITE_HASHTAGS = 30
 OBRIGATORIAS = ("YouTube", "Instagram", "TikTok")
+AVISO_IA = "Algumas imagens utilizadas neste vídeo foram geradas por Inteligência Artificial (IA)."
 
 
 class ErroPost(Exception):
@@ -68,6 +69,18 @@ def ler_post(caminho: Path) -> Textos:
 def tem_quebra_de_linha(texto: str) -> bool:
     """Qualquer quebra que str.splitlines() reconhece (a mesma regra do leitor)."""
     return texto.splitlines(keepends=True) != texto.splitlines()
+
+
+def _sem_forma(texto: str) -> str:
+    """Minúsculas e cada sequência de espaços ou quebras de linha virando um espaço."""
+    return re.sub(r"\s+", " ", texto).strip().lower()
+
+
+def faltando_aviso_ia(textos: Textos, redes: set[str]) -> list[str]:
+    """As redes cujo texto não traz o aviso de IA do canal (no YouTube, a descrição)."""
+    aviso = _sem_forma(AVISO_IA)
+    corpos = (("youtube", textos.youtube_descricao), ("instagram", textos.instagram), ("tiktok", textos.tiktok))
+    return [f"{rede}: falta o aviso de IA" for rede, texto in corpos if rede in redes and aviso not in _sem_forma(texto)]
 
 
 def conferir_textos(textos: Textos, credito: str | None, redes: set[str]) -> list[str]:

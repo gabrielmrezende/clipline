@@ -422,3 +422,22 @@ def test_trocar_credito_apaga_tmp_se_falhar(tmp_path, monkeypatch):
         trocar_credito(c, ANTIGA, NOVA, base=tmp_path)
     assert list(tmp_path.glob("*.tmp")) == []
     assert c.read_bytes() == antes
+
+
+from esteira.publicar.post import AVISO_IA, faltando_aviso_ia  # noqa: E402
+
+
+def test_aviso_de_ia_do_canal():
+    assert AVISO_IA == "Algumas imagens utilizadas neste vídeo foram geradas por Inteligência Artificial (IA)."
+
+
+def test_faltando_aviso_ia():
+    textos = Textos("t", "descrição sem aviso", f"insta {AVISO_IA}", "tiktok")
+    assert faltando_aviso_ia(textos, TODAS) == ["youtube: falta o aviso de IA", "tiktok: falta o aviso de IA"]
+    assert faltando_aviso_ia(textos, {"instagram"}) == []
+
+
+def test_aviso_de_ia_ignora_maiusculas_e_quebras_de_linha():
+    quebrado = "algumas imagens utilizadas  neste vídeo\nforam geradas por Inteligência Artificial (IA)."
+    textos = Textos("t", AVISO_IA.upper(), quebrado, f"x {AVISO_IA} y")
+    assert faltando_aviso_ia(textos, TODAS) == []

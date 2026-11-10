@@ -255,7 +255,7 @@ def test_confirmar_grava_assinatura(episodio):
     assert item.assinatura == assinatura(pedido.video, pedido.textos, "instagram") != ""
 
 
-DESATUALIZADO = "vídeo final mais antigo que o corte.mp4: refaça no CapCut"
+DESATUALIZADO = "vídeo final mais antigo que o corte.mp4: aprove de novo no painel ou refaça no CapCut"
 
 
 def _datas(corte, video_final, corte_mp4):
@@ -283,3 +283,83 @@ def test_sem_corte_mp4_nao_recusa_por_data(episodio):
     os.utime(corte / "video-final" / "Corte 1.mp4", (1_000_000, 1_000_000))
     assert not (corte / "corte.mp4").exists()
     assert preparar_pedido(pasta, 1, "2026-11-08 18:00", TODAS, AGORA)
+
+
+# --- vídeo aprovado pelo painel (Fase B) ------------------------------------------
+
+from esteira.aprovacao import aprovar  # noqa: E402
+from esteira.publicar.post import AVISO_IA  # noqa: E402
+
+IA_NO_VIDEO = {"inicio": 1.0, "fim": 3.0, "arquivo": "imagens-sugeridas/0001-ceu-ia-1.jpg", "tipo": "ia",
+               "momento": "0001-ceu", "modificado_ns": 1}
+FOTO_NO_VIDEO = {"inicio": 5.0, "fim": 8.0, "arquivo": "imagens-sugeridas/0005-placa-1.jpg", "tipo": "foto",
+                 "momento": "0005-placa", "modificado_ns": 1}
+
+
+def _aprovado_pelo_painel(corte, imagens, base):
+    """Troca o vídeo do CapCut pela cópia que o botão Aprovar do painel grava."""
+    (corte / "video-final" / "Corte 1.mp4").unlink()
+    (corte / "corte.mp4").write_bytes(b"CORTE")
+    (corte / "trabalho" / "registro.json").write_text(json.dumps({"resultado": "ok", "imagens": imagens}), "utf-8")
+    assert aprovar(corte, base=base).estado == "aprovado"
+
+
+def _com_aviso(corte):
+    texto = (corte / "post.md").read_text("utf-8")
+    for marca in ("Descrição:\n", "## Instagram\n", "## TikTok\n"):
+        texto = texto.replace(marca, marca + AVISO_IA + "\n", 1)
+    (corte / "post.md").write_text(texto, "utf-8")
+
+
+def test_ia_no_video_aprovado_sem_aviso_recusa(episodio, tmp_path):
+    pasta, corte, _ = episodio
+    _aprovado_pelo_painel(corte, [IA_NO_VIDEO], tmp_path)
+    with pytest.raises(ErroAgendar) as erro:
+        preparar_pedido(pasta, 1, "2026-11-08 18:00", ["youtube", "tiktok"], AGORA)
+    linhas = str(erro.value).splitlines()
+    assert "youtube: falta o aviso de IA" in linhas and "tiktok: falta o aviso de IA" in linhas
+    assert "instagram: falta o aviso de IA" not in linhas
+
+
+def test_ia_no_video_aprovado_com_aviso_passa_e_resume(episodio, tmp_path):
+    pasta, corte, _ = episodio
+    _aprovado_pelo_painel(corte, [IA_NO_VIDEO], tmp_path)
+    _com_aviso(corte)
+    pedido = preparar_pedido(pasta, 1, "2026-11-08 18:00", TODAS, AGORA)
+    texto = resumo(pedido, MODOS)
+    assert pedido.video.name == "corte-aprovado.mp4"
+    assert "Imagens de IA no vídeo: 1 (o aviso está nos textos)." in texto.splitlines()
+    assert "Este corte tem" not in texto
+
+
+def test_sem_ia_no_video_aprovado_nao_mostra_linha_de_ia(episodio, tmp_path):
+    pasta, corte, _ = episodio
+    (corte / "trabalho" / "ia.json").write_text(json.dumps([{"arquivo": "a-ia-1.jpg", "momento": "a"}] * 2), "utf-8")
+    _aprovado_pelo_painel(corte, [FOTO_NO_VIDEO], tmp_path)
+    texto = resumo(preparar_pedido(pasta, 1, "2026-11-08 18:00", TODAS, AGORA), MODOS)
+    assert "de IA" not in texto
+
+
+def test_resumo_lista_creditos_das_fotos(episodio, tmp_path):
+    pasta, corte, _ = episodio
+    sem_credito = {**FOTO_NO_VIDEO, "inicio": 9.0, "fim": 11.0, "arquivo": "imagens-sugeridas/0009-x-1.jpg", "momento": "0009-x"}
+    credito = {"autor": "Fulano", "licenca": "CC BY-SA 4.0", "pagina": "https://c/A1", "titulo": "File:A1.jpg"}
+    (corte / "trabalho" / "creditos.json").write_text(json.dumps({"0005-placa-1.jpg": credito}), "utf-8")
+    _aprovado_pelo_painel(corte, [FOTO_NO_VIDEO, sem_credito], tmp_path)
+    linhas = resumo(preparar_pedido(pasta, 1, "2026-11-08 18:00", TODAS, AGORA), MODOS).splitlines()
+    i = linhas.index("Créditos das fotos no vídeo:")
+    assert linhas[i + 1:i + 3] == [
+        "- Fulano, CC BY-SA 4.0, https://c/A1",
+        "- 0009-x-1.jpg: crédito não encontrado (confira o guia.md)",
+    ]
+
+
+def test_copia_do_painel_sem_lista_de_imagens_mantem_a_linha_antiga(episodio, tmp_path):
+    pasta, corte, _ = episodio
+    (corte / "trabalho" / "ia.json").write_text(json.dumps([{"arquivo": "a-ia-1.jpg", "momento": "a"}]), "utf-8")
+    (corte / "video-final" / "Corte 1.mp4").unlink()
+    (corte / "corte.mp4").write_bytes(b"CORTE")
+    (corte / "trabalho" / "registro.json").write_text(json.dumps({"resultado": "ok"}), "utf-8")  # antes da Fase B
+    aprovar(corte, base=tmp_path)
+    texto = resumo(preparar_pedido(pasta, 1, "2026-11-08 18:00", TODAS, AGORA), MODOS)
+    assert "Este corte tem 1 imagem de IA gerada: confira se o vídeo final usa alguma e inclua o aviso." in texto

@@ -1,13 +1,14 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+from esteira.aprovacao import imagens_aprovadas
 from esteira.cortar import TRABALHO, ler_aprovados, pasta_do_corte
-from esteira.fluxo_imagens import ler_ia
+from esteira.fluxo_imagens import ler_creditos, ler_ia
 from esteira.midia import ErroMidia, sondar
 from esteira.publicar.envio import assinatura, enviar
 from esteira.publicar.fila import Item, gravar_fila, ler_fila
-from esteira.publicar.post import ErroPost, Textos, conferir_textos, ler_post
+from esteira.publicar.post import ErroPost, Textos, conferir_textos, faltando_aviso_ia, ler_post
 from esteira.receita import ler_receita
 from esteira.revisao import video_final_desatualizado
 
@@ -15,7 +16,7 @@ FUSO = timezone(timedelta(hours=-3))
 REDES = ("youtube", "instagram", "tiktok")
 INATIVOS = ("cancelado", "erro")
 LIMITE_SHORTS = 180
-VIDEO_FINAL_DESATUALIZADO = "vídeo final mais antigo que o corte.mp4: refaça no CapCut"
+VIDEO_FINAL_DESATUALIZADO = "vídeo final mais antigo que o corte.mp4: aprove de novo no painel ou refaça no CapCut"
 DIAS = ("segunda-feira", "terça-feira", "quarta-feira", "quinta-feira", "sexta-feira", "sábado", "domingo")
 NOMES = {"youtube": "YouTube", "instagram": "Instagram", "tiktok": "TikTok"}
 MODOS_TEXTO = {
@@ -41,6 +42,8 @@ class Pedido:
     data: datetime
     redes: list[str]
     imagens_ia: int = 0
+    imagens_no_video: list[dict] | None = None  # do vídeo aprovado pelo painel; None = desconhecidas (CapCut)
+    creditos: list[str] = field(default_factory=list)
 
 
 def ler_data(texto: str, agora: datetime) -> datetime:
@@ -66,6 +69,21 @@ def _credito(pasta_corte: Path) -> str | None:
     return receita.musica.credito if receita.musica and receita.musica.credito else None
 
 
+def _creditos_das_fotos(pasta_corte: Path, imagens: list[dict]) -> list[str]:
+    creditos = ler_creditos(pasta_corte / TRABALHO)
+    linhas = []
+    for imagem in imagens:
+        if imagem.get("tipo") != "foto":
+            continue
+        nome = Path(str(imagem.get("arquivo", ""))).name
+        c = creditos.get(nome)
+        if c:
+            linhas.append(f"- {c.get('autor', '')}, {c.get('licenca', '')}, {c.get('pagina', '')}")
+        else:
+            linhas.append(f"- {nome}: crédito não encontrado (confira o guia.md)")
+    return linhas
+
+
 def preparar_pedido(pasta_episodio: Path, numero: int, data: str, redes: list[str], agora: datetime) -> Pedido:
     pasta_episodio = Path(pasta_episodio)
     for rede in redes:
@@ -81,6 +99,7 @@ def preparar_pedido(pasta_episodio: Path, numero: int, data: str, redes: list[st
     pasta_final = pasta_corte / "video-final"
     videos = sorted(p for p in pasta_final.glob("*") if p.suffix.lower() == ".mp4") if pasta_final.exists() else []
     video, duracao = None, 0.0
+    no_video: list[dict] | None = None
     if not videos:
         problemas.append("video-final/ sem vídeo")
     elif len(videos) > 1:
@@ -99,6 +118,7 @@ def preparar_pedido(pasta_episodio: Path, numero: int, data: str, redes: list[st
                 problemas.append(f"youtube: vídeo com {_minutos(midia.duracao)}; o Shorts aceita até 3:00")
         if video_final_desatualizado(pasta_corte, video):
             problemas.append(VIDEO_FINAL_DESATUALIZADO)
+        no_video = imagens_aprovadas(pasta_corte, video)
 
     textos = None
     try:
@@ -107,6 +127,8 @@ def preparar_pedido(pasta_episodio: Path, numero: int, data: str, redes: list[st
         problemas.append(str(erro))
     else:
         problemas += conferir_textos(textos, _credito(pasta_corte), set(redes))
+        if no_video and any(i.get("tipo") == "ia" for i in no_video):
+            problemas += faltando_aviso_ia(textos, set(redes))
 
     quando = None
     try:
@@ -120,7 +142,10 @@ def preparar_pedido(pasta_episodio: Path, numero: int, data: str, redes: list[st
 
     if problemas:
         raise ErroAgendar("\n".join(problemas))
-    return Pedido(pasta_episodio, numero, corte.titulo, video, duracao, textos, quando, redes, len(ler_ia(pasta_corte / TRABALHO)))
+    return Pedido(
+        pasta_episodio, numero, corte.titulo, video, duracao, textos, quando, redes, len(ler_ia(pasta_corte / TRABALHO)),
+        no_video, _creditos_das_fotos(pasta_corte, no_video or []),
+    )
 
 
 def _data_por_extenso(data: datetime) -> str:
@@ -133,7 +158,13 @@ def resumo(pedido: Pedido, modos: dict) -> str:
         f"Vídeo: {pedido.video.name} ({_minutos(pedido.duracao)}, 1080x1920)",
         f"Data: {_data_por_extenso(pedido.data)}",
     ]
-    if pedido.imagens_ia:
+    if pedido.imagens_no_video is not None:
+        ia = sum(1 for i in pedido.imagens_no_video if i.get("tipo") == "ia")
+        if ia:
+            linhas.append(f"Imagens de IA no vídeo: {ia} (o aviso está nos textos).")
+        if pedido.creditos:
+            linhas += ["Créditos das fotos no vídeo:", *pedido.creditos]
+    elif pedido.imagens_ia:
         n = pedido.imagens_ia
         gerada = "imagem de IA gerada" if n == 1 else "imagens de IA geradas"
         linhas.append(f"Este corte tem {n} {gerada}: confira se o vídeo final usa alguma e inclua o aviso.")
