@@ -175,10 +175,154 @@ export interface Pedido {
   /** Segundos desde 1970 (time.time() do painel). */
   criado: number;
   terminado: number | null;
+  /** "musica", "fotos" ou "ia". */
+  tipo?: string;
+  cortes?: number[];
+  progresso?: string;
 }
 
 export interface MusicaDoCorte {
   atual: MusicaResumo | null;
   anterior: MusicaResumo | null;
   pedido: Pedido | null;
+}
+
+export interface Candidata {
+  titulo: string | null;
+  miniatura: string;
+  autor: string | null;
+  licenca: string | null;
+  pagina: string | null;
+  largura: number | null;
+  altura: number | null;
+}
+
+export interface VersaoIa {
+  arquivo: string;
+  versao: number | null;
+  provedor: string;
+  data: string;
+}
+
+export interface Momento {
+  chave: string;
+  inicio: number;
+  fim: number;
+  fala: string;
+  tipo: "foto" | "ia" | "noticia" | string;
+  nome: string;
+  busca: string;
+  titulo: string;
+  veiculo: string;
+  data: string;
+  prompt: string;
+  aprovado: boolean;
+  descartar: boolean;
+  motivo: string;
+  candidatas: Candidata[];
+  escolhas: number[];
+  fotos_prontas: string[];
+  ia: VersaoIa[];
+  pessoa_citada: string | null;
+}
+
+export interface ListaMomentos {
+  versao: string;
+  momentos: Momento[];
+}
+
+export interface RespostaMomento {
+  momento: Momento;
+  versao: string;
+}
+
+export interface AlteracaoMomento {
+  tipo?: string;
+  escolhas?: number[];
+  prompt?: string;
+  aprovado?: boolean;
+  descartar?: boolean;
+}
+
+export interface ResumoFotos {
+  fotos: number;
+  megabytes: number;
+  origem: string;
+  avisos: string[];
+}
+
+export interface OrcamentoIa {
+  imagens: number;
+  provedor: string;
+  modelo: string;
+  custo_usd: number;
+}
+
+export interface ConfigImagens {
+  provedor: string;
+  provedores: Record<string, { modelo?: string; qualidade?: string; preco_usd?: number }>;
+  chaves: Record<string, boolean>;
+}
+
+/** Texto do detail do 409 do PUT quando o Claude regravou o pedidos.json. */
+export const PEDIDOS_MUDOU = "O pedidos.json mudou desde que você abriu.";
+
+export const urlImagem = (ep: string, n: number | string, arquivo: string): string =>
+  `${caminhoCorte(ep, n)}/imagens/${encodeURIComponent(arquivo)}`;
+
+const caminhoMomento = (ep: string, n: number | string, chave: string): string =>
+  `${caminhoCorte(ep, n)}/momentos/${encodeURIComponent(chave)}`;
+
+export const lerMomentos = (ep: string, n: number | string) =>
+  pedir<ListaMomentos>(`${caminhoCorte(ep, n)}/momentos`);
+
+export const alterarMomento = (
+  ep: string,
+  n: number | string,
+  chave: string,
+  versao: string,
+  alteracao: AlteracaoMomento,
+) => enviarJson<RespostaMomento>(caminhoMomento(ep, n, chave), "PUT", { versao, ...alteracao });
+
+export const buscarOutras = (ep: string, n: number | string, chave: string, busca: string) =>
+  enviarJson<RespostaMomento>(`${caminhoMomento(ep, n, chave)}/buscar`, "POST", { busca });
+
+export const resumoDeFotos = (ep: string, n: number | string) =>
+  pedir<ResumoFotos>(`${caminhoCorte(ep, n)}/fotos/resumo`);
+
+export const baixarFotos = (ep: string, n: number | string) =>
+  enviarJson<Pedido>(`${caminhoCorte(ep, n)}/fotos`, "POST", {});
+
+export const orcamentoDeIa = (ep: string, n: number | string) =>
+  pedir<OrcamentoIa>(`${caminhoCorte(ep, n)}/ia/orcamento`);
+
+export const gerarImagensIa = (ep: string, n: number | string) =>
+  enviarJson<Pedido>(`${caminhoCorte(ep, n)}/ia`, "POST", {});
+
+export const gerarDeNovoIa = (ep: string, n: number | string, chave: string) =>
+  enviarJson<Pedido>(`${caminhoMomento(ep, n, chave)}/ia`, "POST", {});
+
+export const configuracaoDeImagens = () => pedir<ConfigImagens>("/api/configuracoes/imagens");
+
+export const listarTarefas = () => pedir<Pedido[]>("/api/tarefas");
+
+export const consultarTarefa = (id: string) => pedir<Pedido>(`/api/tarefas/${encodeURIComponent(id)}`);
+
+export function plural(n: number, singular: string, pluralTexto: string): string {
+  return `${n} ${n === 1 ? singular : pluralTexto}`;
+}
+
+/** 12,3 MB (vírgula decimal, uma casa). */
+export function formatarMb(mb: number): string {
+  return `${mb.toFixed(1).replace(".", ",")} MB`;
+}
+
+/** ~US$ 0,10 (vírgula decimal, duas casas). */
+export function formatarDolar(usd: number): string {
+  return `~US$ ${usd.toFixed(2).replace(".", ",")}`;
+}
+
+export function tempoTexto(segundos: number): string {
+  const total = Math.max(0, Math.floor(segundos));
+  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`;
 }

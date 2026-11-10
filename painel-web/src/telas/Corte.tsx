@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { CorteDetalhe, ErroApi, caminhoCorte, pedir } from "../api";
+import { BlocoImagens } from "../componentes/BlocoImagens";
 import { BlocoMusica } from "../componentes/BlocoMusica";
 import { EditorPost } from "../componentes/EditorPost";
 import { Markdown } from "../componentes/Markdown";
@@ -16,6 +17,7 @@ export function Corte() {
   const [versaoVideo, setVersaoVideo] = useState<string | null>(null);
   const [sinalPost, setSinalPost] = useState(0);
   const [montando, setMontando] = useState(false);
+  const [comMomentos, setComMomentos] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
@@ -23,6 +25,7 @@ export function Corte() {
     setErro(null);
     setVersaoVideo(null);
     setMontando(false);
+    setComMomentos(false);
     pedir<CorteDetalhe>(caminhoCorte(ep, n))
       .then(setDados)
       .catch((x) => setErro(x instanceof ErroApi ? x.detail : "Erro inesperado."));
@@ -79,6 +82,16 @@ export function Corte() {
     }
     setMontando(true);
   }
+
+  /** ▶ de um momento: põe o player do corte no tempo e dá play. */
+  function irPara(segundos: number) {
+    const video = videoRef.current;
+    if (!video) return;
+    video.currentTime = segundos;
+    const tocando = video.play();
+    if (tocando && typeof tocando.catch === "function") tocando.catch(() => {});
+  }
+
   return (
     <main className="coluna">
       {voltar}
@@ -135,12 +148,13 @@ export function Corte() {
               </ul>
             ) : null}
           </section>
-          {guia ? (
+          <BlocoImagens key={`imagens-${ep}/${n}`} ep={ep} n={n} irPara={irPara} aoCarregar={setComMomentos} />
+          {guia && !comMomentos ? (
             <section aria-label="Guia do corte">
               <Markdown texto={guia} />
             </section>
           ) : null}
-          {imagens.length > 0 ? (
+          {imagens.length > 0 && !comMomentos ? (
             <section aria-labelledby="titulo-imagens">
               <h2 id="titulo-imagens">Imagens</h2>
               <ul className="miniaturas">

@@ -72,6 +72,7 @@ let detalhes: any[];
 let musicaDoCorte: any;
 let tarefas: any[];
 let urls: string[];
+let momentosDoCorte: any;
 
 beforeEach(() => {
   vi.useFakeTimers();
@@ -79,6 +80,7 @@ beforeEach(() => {
   detalhes = [{ bloco: bloco(), guia: null, imagens: [] }];
   musicaDoCorte = { atual: { arquivo: "leve/Velha.mp3", titulo: "Velha", volume_db: -26 }, anterior: null, pedido: null };
   tarefas = [];
+  momentosDoCorte = { versao: "", momentos: [] };
   HTMLMediaElement.prototype.pause = vi.fn();
   HTMLMediaElement.prototype.load = vi.fn();
   vi.stubGlobal(
@@ -87,6 +89,7 @@ beforeEach(() => {
       const metodo = init?.method ?? "GET";
       urls.push(`${metodo} ${url}`);
       if (url === BASE) return resposta(detalhes.length > 1 ? detalhes.shift() : detalhes[0]);
+      if (url === `${BASE}/momentos`) return resposta(momentosDoCorte);
       if (url.endsWith("/musicas")) return resposta(LISTA);
       if (url.endsWith("/musica") && metodo === "POST") return resposta(pedido({ estado: "na fila" }), 202);
       if (url.endsWith("/musica")) return resposta(musicaDoCorte);
@@ -187,5 +190,36 @@ describe("Corte", () => {
     await abrir();
     expect(screen.getByRole("alert").textContent).toBe("corte não montado");
     expect(screen.getByText("erro")).toBeTruthy();
+  });
+
+  it("sem momentos, mantém o guia e a lista antiga de miniaturas", async () => {
+    detalhes = [{ bloco: bloco({ tem_guia: true }), guia: "# Guia do corte\n\nTexto do guia.", imagens: ["a.jpg"] }];
+    await abrir();
+    expect(screen.getByText("Texto do guia.")).toBeTruthy();
+    expect(screen.getByAltText("a.jpg")).toBeTruthy();
+  });
+
+  it("com momentos, o bloco Imagens substitui o guia e a lista antiga, e ▶ toca o player", async () => {
+    detalhes = [{ bloco: bloco({ tem_guia: true }), guia: "# Guia do corte\n\nTexto do guia.", imagens: ["a.jpg"] }];
+    momentosDoCorte = {
+      versao: "v1",
+      momentos: [
+        {
+          chave: "f1", inicio: 12, fim: 18, fala: "Fala", tipo: "noticia", nome: "n", busca: "", titulo: "Manchete",
+          veiculo: "Veículo", data: "", prompt: "", aprovado: false, descartar: false, motivo: "", candidatas: [],
+          escolhas: [], fotos_prontas: [], ia: [], pessoa_citada: null,
+        },
+      ],
+    };
+    const play = vi.fn(() => Promise.resolve());
+    HTMLMediaElement.prototype.play = play as any;
+    const { container } = await abrir();
+    expect(screen.queryByText("Texto do guia.")).toBeNull();
+    expect(screen.queryByAltText("a.jpg")).toBeNull();
+    expect(screen.getByText("Manchete")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Ir para 0:12" }));
+    const video = container.querySelector("video") as HTMLVideoElement;
+    expect(video.currentTime).toBe(12);
+    expect(play).toHaveBeenCalled();
   });
 });

@@ -203,6 +203,129 @@ input {
 .markdown {
   overflow-wrap: anywhere;
 }
+.bloco-imagens {
+  margin: 1.5rem 0;
+}
+.bloco-imagens button {
+  min-height: 44px;
+  padding: 0 1rem;
+  cursor: pointer;
+}
+.momentos {
+  list-style: none;
+  padding: 0;
+  margin: 1rem 0 0;
+  display: grid;
+  gap: 0.75rem;
+}
+.momento {
+  border: 1px solid var(--borda);
+  border-radius: 8px;
+  background: var(--superficie);
+  padding: 0.5rem 0.75rem;
+}
+.momento.descartado {
+  opacity: 0.55;
+}
+.momento-topo {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.momento-tempo {
+  font-weight: 600;
+}
+.momento-tipo {
+  color: var(--suave);
+}
+.momento-fala {
+  margin: 0.25rem 0 0.5rem;
+  overflow-wrap: anywhere;
+}
+.candidatas {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 0.5rem;
+  display: grid;
+  gap: 0.5rem;
+  grid-template-columns: repeat(auto-fill, minmax(7rem, 1fr));
+}
+.candidata {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.candidata button {
+  position: relative;
+  padding: 0;
+  min-height: 44px;
+  overflow: hidden;
+}
+.candidata button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.candidata img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 6px;
+}
+.candidata.escolhida button {
+  outline: 3px solid var(--destaque);
+}
+.ordem {
+  position: absolute;
+  top: 0.25rem;
+  left: 0.25rem;
+  min-width: 1.5rem;
+  border-radius: 999px;
+  background: var(--destaque);
+  color: var(--superficie);
+  font-weight: 700;
+  text-align: center;
+}
+.pronta {
+  color: var(--ok-texto, var(--suave));
+  font-weight: 600;
+}
+.suave-bloco {
+  color: var(--suave);
+  overflow-wrap: anywhere;
+}
+.busca-momento {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.5rem;
+  margin: 0.5rem 0;
+}
+.busca-momento label,
+.campo-bloco {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.busca-momento label {
+  flex: 1;
+  min-width: 10rem;
+}
+.campo-bloco textarea {
+  width: 100%;
+  font: inherit;
+}
+.aprovado {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 44px;
+}
+.noticia-imagem {
+  max-width: 100%;
+  height: auto;
+  border-radius: 6px;
+}
 @media (min-width: 768px) {
   .cartoes {
     grid-template-columns: repeat(2, 1fr);
