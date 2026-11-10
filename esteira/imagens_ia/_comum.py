@@ -13,10 +13,12 @@ def limpar(texto: str, chave: str) -> str:
 
 
 def decodificar_imagem(nome: str, b64: object) -> bytes:
-    if not isinstance(b64, str) or not b64:
+    # Quebras de linha e espaços são só formatação: uma imagem paga não pode ser descartada por isso.
+    texto = "".join(b64.split()) if isinstance(b64, str) else ""
+    if not texto:
         raise ErroImagem(f"{nome} não devolveu imagem")
     try:
-        return base64.b64decode(b64, validate=True)
+        return base64.b64decode(texto, validate=True)
     except (binascii.Error, ValueError):
         raise ErroImagem(f"{nome} devolveu uma imagem ilegível") from None
 

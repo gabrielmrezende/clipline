@@ -35,10 +35,9 @@ def _montar_real(pasta: Path, numero: int) -> str:
 
 
 def _pessoas_do_glossario() -> list[str]:
-    try:
-        return pessoas_do_glossario(CONTEXTO / "glossario.md")
-    except (OSError, UnicodeDecodeError):
-        return []
+    """Lido a cada pedido. Ausente ou ilegível levanta (OSError, UnicodeDecodeError): o painel recusa
+    aprovar e gerar em vez de aceitar qualquer nome (a regra de pessoa real não falha aberta)."""
+    return pessoas_do_glossario(CONTEXTO / "glossario.md")
 
 
 def criar_app(

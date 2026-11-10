@@ -5,11 +5,15 @@ from pathlib import Path
 
 from esteira.fluxo_imagens import resumir_episodio, sugerir_episodio
 from esteira.imagens_ia.config import Config
-from esteira.imagens_ia.gerar import gerar_cortes, gerar_momento
+from esteira.imagens_ia.gerar import RegistroIncompleto, gerar_cortes, gerar_momento
 from esteira.imagens_ia.provedor import ErroImagem, Provedor
 from esteira.painel.troca_musica import Resultado
 
 Progresso = Callable[[str], None]
+Pessoas = Callable[[], list[str]]
+
+GLOSSARIO_ILEGIVEL = "Não consegui ler o glossário (Contexto/glossario.md): nada foi aprovado nem gerado."
+ERROS_DO_GLOSSARIO = (OSError, UnicodeDecodeError)
 
 
 def avisos_dos_cortes(resultados: dict[int, str]) -> list[str]:
@@ -51,23 +55,48 @@ def executar_fotos(
     return executar
 
 
+def _ler_pessoas(pessoas: Pessoas) -> list[str] | None:
+    """O glossário lido de novo na hora de gerar (pode ter mudado com o pedido na fila); None se ilegível."""
+    try:
+        return pessoas()
+    except ERROS_DO_GLOSSARIO:
+        return None
+
+
 def executar_ia(
-    pastas_corte: list[Path], provedor: Provedor, config: Config, pessoas: list[str], base: Path
+    pastas_corte: list[Path],
+    provedor: Provedor,
+    config: Config,
+    pessoas: Pessoas,
+    base: Path,
+    permitidos: set[tuple[Path, str]],
 ) -> Callable[[Progresso], Resultado]:
+    """Gera só os pendentes que o dono confirmou (`permitidos`: pasta do corte, chave)."""
+
     def executar(progresso: Progresso) -> Resultado:
-        arquivos, avisos = gerar_cortes(pastas_corte, provedor, config, pessoas, base=base, progresso=progresso)
+        lista = _ler_pessoas(pessoas)
+        if lista is None:
+            return Resultado("erro", GLOSSARIO_ILEGIVEL, [], None)
+        arquivos, avisos = gerar_cortes(
+            pastas_corte, provedor, config, lista, base=base, progresso=progresso, permitidos=permitidos
+        )
         return Resultado("pronto", f"{_plural(len(arquivos), 'imagem gerada', 'imagens geradas')}.", avisos, None)
 
     return executar
 
 
 def executar_momento_ia(
-    pasta_corte: Path, chave: str, provedor: Provedor, config: Config, pessoas: list[str], base: Path
+    pasta_corte: Path, chave: str, provedor: Provedor, config: Config, pessoas: Pessoas, base: Path
 ) -> Callable[[Progresso], Resultado]:
     def executar(progresso: Progresso) -> Resultado:
         progresso("Gerando 1 de 1…")
+        lista = _ler_pessoas(pessoas)
+        if lista is None:
+            return Resultado("erro", GLOSSARIO_ILEGIVEL, [], None)
         try:
-            arquivo = gerar_momento(pasta_corte, chave, provedor, config, pessoas, base)
+            arquivo = gerar_momento(pasta_corte, chave, provedor, config, lista, base)
+        except RegistroIncompleto as aviso:  # a imagem foi paga e salva: não é erro
+            return Resultado("pronto", aviso.arquivo, [str(aviso)], None)
         except (ErroImagem, OSError, ValueError) as erro:
             return Resultado("erro", str(erro), [], None)
         return Resultado("pronto", arquivo, [], None)

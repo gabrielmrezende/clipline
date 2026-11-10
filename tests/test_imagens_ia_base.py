@@ -44,6 +44,33 @@ def test_config_ida_e_volta(tmp_path):
     assert lido.provedores["google"]["preco_usd"] == 0.5
 
 
+def test_gravar_em_lf(tmp_path):
+    caminho = tmp_path / "imagens-ia.json"
+    config.gravar_config(config.padrao(), caminho, base=tmp_path)
+    conteudo = caminho.read_bytes()
+    assert b"\n" in conteudo and b"\r\n" not in conteudo
+
+
+def test_gravar_so_campos_conhecidos(tmp_path):
+    caminho = tmp_path / "imagens-ia.json"
+    cfg = config.padrao()
+    cfg.provedores["openai"]["chave"] = "sk-x"
+    cfg.provedores["google"]["token"] = "sk-y"
+    config.gravar_config(cfg, caminho, base=tmp_path)
+    texto = caminho.read_text(encoding="utf-8")
+    assert "sk-x" not in texto and "sk-y" not in texto
+    assert json.loads(texto)["provedores"] == config.padrao().provedores
+
+
+@pytest.mark.parametrize("campo", ["modelo", "qualidade"])
+def test_gravar_modelo_e_qualidade_sao_texto(tmp_path, campo):
+    cfg = config.padrao()
+    cfg.provedores["openai"][campo] = 5
+    with pytest.raises(ErroImagem, match="de openai deve ser texto"):
+        config.gravar_config(cfg, tmp_path / "c.json", base=tmp_path)
+    assert not (tmp_path / "c.json").exists()
+
+
 def test_gravar_provedor_invalido(tmp_path):
     cfg = config.Config("midjourney", {})
     with pytest.raises(ErroImagem):

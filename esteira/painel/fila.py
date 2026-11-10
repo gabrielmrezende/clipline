@@ -12,10 +12,17 @@ from esteira.painel.troca_musica import Resultado, resumir_erro
 ATIVOS = ("na fila", "montando")
 LIMITE_LISTA = 50
 FECHADO_ANTES = "o painel foi fechado antes de montar este pedido"
+FECHADO_NO_MEIO = "o painel foi fechado no meio deste pedido"
 
 
 class PedidoAtivo(Exception):
     pass
+
+
+class Interrompido(BaseException):
+    """O painel está fechando: a tarefa para no próximo `progresso`, antes de começar outro passo pago.
+
+    Herda de BaseException para atravessar os `except Exception` que isolam um item (um download, por exemplo)."""
 
 
 @dataclass
@@ -156,12 +163,16 @@ class Fila:
                 self._pedidos[id].estado = "montando"
 
             def progresso(texto: str, id: str = id) -> None:
+                if self._parando.is_set():
+                    raise Interrompido(FECHADO_NO_MEIO)
                 with self._trava:
                     self._pedidos[id].progresso = texto
 
             resultado = Resultado("erro", "a montagem parou sem resposta", [], None)
             try:
                 resultado = executar(progresso)
+            except Interrompido:
+                resultado = Resultado("erro", FECHADO_NO_MEIO, [], None)
             except Exception as erro:
                 resultado = Resultado("erro", resumir_erro(str(erro) or type(erro).__name__), [], None)
             except BaseException as erro:  # SystemExit e afins: o pedido não fica "montando" e a fila segue

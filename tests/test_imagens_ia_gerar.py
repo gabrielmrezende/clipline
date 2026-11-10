@@ -6,7 +6,9 @@ from PIL import Image
 
 from esteira.fluxo_imagens import chave_momento, ler_ia
 from esteira.imagens_ia.config import padrao
-from esteira.imagens_ia.gerar import ErroPrompt, gerar_cortes, gerar_momento, orcamento, pendentes
+from esteira.imagens_ia.gerar import (
+    ErroPrompt, RegistroIncompleto, gerar_cortes, gerar_momento, orcamento, orcamento_com_itens, pendentes,
+)
 from esteira.imagens_ia.provedor import ConteudoRecusado, ErroImagem, SemChave
 from esteira.pedidos import Momento, gravar_pedidos
 from esteira.planos import Plano
@@ -204,6 +206,86 @@ def test_gerar_cortes_segue_depois_de_recusa_e_informa_progresso(tmp_path):
     assert mensagens == ["Gerando 1 de 2…", "Gerando 2 de 2…"]
     assert arquivos == ["0110-praia-ia-1.jpg"]
     assert avisos == ["01-corte 0052-turistas: política de segurança"]
+
+
+def _falha_ao_registrar(monkeypatch):
+    def falha(*args, **kwargs):
+        raise OSError("ia.json travado")
+
+    monkeypatch.setattr("esteira.imagens_ia.gerar.registrar_ia", falha)
+
+
+def test_imagem_paga_com_registro_falho_vira_aviso_e_nao_volta_a_ser_cobrada(tmp_path, monkeypatch):
+    corte = _corte(tmp_path, [_ia(52.0, "Turistas"), _ia(70.0, "Praia")])
+    _falha_ao_registrar(monkeypatch)
+    provedor = Falso()
+    arquivos, avisos = gerar_cortes([corte], provedor, padrao(), [], base=tmp_path)
+    assert arquivos == ["0052-turistas-ia-1.jpg", "0110-praia-ia-1.jpg"]
+    assert avisos == [
+        "01-corte 0052-turistas: imagem salva, mas não consegui atualizar o registro: ia.json travado",
+        "01-corte 0110-praia: imagem salva, mas não consegui atualizar o registro: ia.json travado",
+    ]
+    assert (corte / "imagens-sugeridas" / "0052-turistas-ia-1.jpg").is_file()
+    assert not (corte / "trabalho" / "ia.json").exists()
+    assert pendentes(corte) == []
+    assert orcamento([corte], padrao())["imagens"] == 0
+    assert gerar_cortes([corte], provedor, padrao(), [], base=tmp_path) == ([], [])
+    assert len(provedor.chamadas) == 2
+
+
+def test_gerar_momento_com_registro_falho_devolve_o_arquivo_no_aviso(tmp_path, monkeypatch):
+    corte = _corte(tmp_path, [_ia()])
+    _falha_ao_registrar(monkeypatch)
+    with pytest.raises(RegistroIncompleto) as erro:
+        _gerar(corte, tmp_path)
+    assert erro.value.arquivo == "0052-turistas-ia-1.jpg"
+    assert str(erro.value) == "imagem salva, mas não consegui atualizar o registro: ia.json travado"
+    assert not isinstance(erro.value, (ErroImagem, OSError, ValueError))  # não é erro do momento
+
+
+def test_guia_que_falha_nao_vira_erro_do_momento(tmp_path, monkeypatch):
+    corte = _corte(tmp_path, [_ia()])
+
+    def falha(*args, **kwargs):
+        raise OSError("guia.md aberto")
+
+    monkeypatch.setattr("esteira.imagens_ia.gerar.escrever_guia", falha)
+    arquivos, avisos = gerar_cortes([corte], Falso(), padrao(), [], base=tmp_path)
+    assert arquivos == ["0052-turistas-ia-1.jpg"]
+    assert avisos == ["01-corte 0052-turistas: imagem salva, mas não consegui atualizar o registro: guia.md aberto"]
+    assert [i["arquivo"] for i in ler_ia(corte / "trabalho")] == ["0052-turistas-ia-1.jpg"]
+
+
+def test_arquivo_de_ia_sem_registro_conta_como_versao(tmp_path):
+    corte = _corte(tmp_path, [_ia(52.0, "Turistas"), _ia(70.0, "Praia")])
+    (corte / "imagens-sugeridas").mkdir()
+    (corte / "imagens-sugeridas" / "0110-praia-ia-2.jpg").write_bytes(b"paga")
+    assert [m.nome for m in pendentes(corte)] == ["Turistas"]
+
+
+def test_gerar_cortes_so_os_permitidos(tmp_path):
+    a = _corte(tmp_path, [_ia(52.0, "Turistas"), _ia(70.0, "Praia")], "01-a")
+    b = _corte(tmp_path, [_ia(52.0, "Turistas")], "02-b")
+    provedor = Falso()
+    mensagens = []
+    arquivos, avisos = gerar_cortes(
+        [a, b], provedor, padrao(), [], base=tmp_path, progresso=mensagens.append,
+        permitidos={(a, "0110-praia"), (b, "0052-turistas"), (b, "9999-nada")},
+    )
+    assert arquivos == ["0110-praia-ia-1.jpg", "0052-turistas-ia-1.jpg"] and avisos == []
+    assert mensagens == ["Gerando 1 de 2…", "Gerando 2 de 2…"]
+    assert [m.nome for m in pendentes(a)] == ["Turistas"]
+    assert gerar_cortes([a], provedor, padrao(), [], base=tmp_path, permitidos=set()) == ([], [])
+    assert len(provedor.chamadas) == 2
+
+
+def test_orcamento_com_itens(tmp_path):
+    a = _corte(tmp_path, [_ia(52.0, "Turistas"), _ia(70.0, "Praia", aprovado=False)], "01-a")
+    b = _corte(tmp_path, [_ia(70.0, "Praia")], "02-b")
+    assert orcamento_com_itens([(1, a), (2, b)], padrao()) == {
+        "imagens": 2, "provedor": "openai", "modelo": "gpt-image-2", "custo_usd": 0.082,
+        "itens": [{"corte": 1, "chave": "0052-turistas"}, {"corte": 2, "chave": "0110-praia"}],
+    }
 
 
 def test_gerar_cortes_conta_todos_os_cortes(tmp_path):

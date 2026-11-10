@@ -2,6 +2,7 @@ import os
 import re
 from dataclasses import asdict
 from pathlib import Path
+from typing import Any, Literal
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
@@ -13,12 +14,14 @@ from esteira.fluxo_imagens import (
     _arquivos, _ler_sugeridas, chave_momento, cortes_com_pedidos, ler_ia, resumir_episodio,
 )
 from esteira.imagens_ia.config import PROVEDORES, Config, gravar_config, ler_config, provedor_atual
-from esteira.imagens_ia.gerar import orcamento, pendentes
+from esteira.imagens_ia.gerar import MAXIMO_VERSOES, arquivo_de_versao, orcamento_com_itens, pendentes
 from esteira.imagens_ia.provedor import ErroImagem
 from esteira.painel.fila import PedidoAtivo
 from esteira.painel.leitura import NaoEncontrado, resolver_episodio
 from esteira.painel.rotas import _TRAVA_GRAVACAO, _pasta_do_corte
-from esteira.painel.tarefas_imagens import avisos_dos_cortes, executar_fotos, executar_ia, executar_momento_ia
+from esteira.painel.tarefas_imagens import (
+    ERROS_DO_GLOSSARIO, GLOSSARIO_ILEGIVEL, avisos_dos_cortes, executar_fotos, executar_ia, executar_momento_ia,
+)
 from esteira.pedidos import ARQUIVO, MAXIMO_ESCOLHAS, Momento, _pessoa_citada, pedidos_dos_bytes, texto_dos_pedidos
 from esteira.publicar.post import versao_dos_bytes
 
@@ -48,9 +51,40 @@ class PedidoBusca(BaseModel):
     busca: str
 
 
+class Confirmacao(BaseModel):
+    """Corpo JSON obrigatório dos POSTs que baixam ou custam dinheiro.
+
+    O FastAPI só lê corpo JSON com `Content-Type: application/json`, que o navegador só manda de outra
+    origem depois de um preflight: assim uma página qualquer aberta no navegador do dono não dispara
+    o pedido (CSRF), nem no modo sem login."""
+
+    confirmado: Literal[True]
+
+
+class ItemConfirmado(BaseModel):
+    corte: StrictInt
+    chave: str
+
+
+class ImagensConfirmadas(BaseModel):
+    """Os itens do orçamento que o dono viu e confirmou: só eles são gerados."""
+
+    itens: list[ItemConfirmado]
+
+
+class DadosProvedor(BaseModel):
+    """Só os campos conhecidos: qualquer outro (uma chave, por exemplo) é descartado antes de gravar.
+
+    Os tipos são conferidos pelo `gravar_config`, que dá a mensagem certa para cada campo."""
+
+    modelo: Any = None
+    qualidade: Any = None
+    preco_usd: Any = None
+
+
 class ConfigIa(BaseModel):
     provedor: str
-    provedores: dict[str, dict]
+    provedores: dict[str, DadosProvedor]
 
 
 def _miniatura(url: str) -> str:
@@ -87,14 +121,21 @@ def _ia_do_momento(m: Momento, imagens: Path, ia: list[dict]) -> list[dict]:
         if i.get("momento") == chave and isinstance(i.get("arquivo"), str)
         and Path(i["arquivo"]).name == i["arquivo"] and (imagens / i["arquivo"]).is_file()
     ]
-    itens.sort(key=lambda i: i["versao"] if isinstance(i.get("versao"), int) else 0)
-    return [
+    saida = [
         {"arquivo": i["arquivo"], "versao": i.get("versao"), "provedor": i.get("provedor", ""), "data": i.get("data", "")}
         for i in itens
     ]
+    registrados = {i["arquivo"] for i in ia if i.get("momento") == chave}
+    for k in range(1, MAXIMO_VERSOES + 1):  # imagem paga cujo registro falhou: aparece, sem provedor e data
+        nome = arquivo_de_versao(chave, k)
+        if nome not in registrados and (imagens / nome).is_file():
+            saida.append({"arquivo": nome, "versao": k, "provedor": "", "data": ""})
+    saida.sort(key=lambda i: i["versao"] if isinstance(i["versao"], int) else 0)
+    return saida
 
 
-def _json_do_momento(m: Momento, destino: Path, pessoas: list[str]) -> dict:
+def _json_do_momento(m: Momento, destino: Path, pessoas: list[str] | None) -> dict:
+    """`pessoas` None: glossário ilegível, a pessoa citada fica desconhecida (null)."""
     imagens = destino / IMAGENS_SUGERIDAS
     sugeridas = set(_ler_sugeridas(destino / TRABALHO))
     return {
@@ -106,12 +147,24 @@ def _json_do_momento(m: Momento, destino: Path, pessoas: list[str]) -> dict:
         "escolhas": list(m.escolhas),
         "fotos_prontas": _fotos_prontas(m, imagens, sugeridas),
         "ia": _ia_do_momento(m, imagens, ler_ia(destino / TRABALHO)),
-        "pessoa_citada": _pessoa_citada(m.prompt, pessoas) if m.prompt else None,
+        "pessoa_citada": _pessoa_citada(m.prompt, pessoas) if m.prompt and pessoas is not None else None,
     }
 
 
 def _pessoas(requisicao: Request) -> list[str]:
-    return requisicao.app.state.pessoas()
+    """As pessoas reais do glossário; ilegível vira 422: a regra de pessoa real não falha aberta."""
+    try:
+        return requisicao.app.state.pessoas()
+    except ERROS_DO_GLOSSARIO as erro:
+        raise HTTPException(422, GLOSSARIO_ILEGIVEL) from erro
+
+
+def _pessoas_ou_nada(requisicao: Request) -> list[str] | None:
+    """Para só mostrar: com o glossário ilegível a tela abre, sem pessoa citada e com o aviso."""
+    try:
+        return requisicao.app.state.pessoas()
+    except ERROS_DO_GLOSSARIO:
+        return None
 
 
 def _contexto(requisicao: Request, ep: str, n: int) -> tuple[str, Path, Path]:
@@ -165,18 +218,23 @@ def _bloqueio_das_fotos() -> JSONResponse:
 
 
 def _resposta(requisicao: Request, destino: Path, m: Momento, versao: str) -> dict:
-    return {"momento": _json_do_momento(m, destino, _pessoas(requisicao)), "versao": versao}
+    return {"momento": _json_do_momento(m, destino, _pessoas_ou_nada(requisicao)), "versao": versao}
 
 
 @roteador.get("/episodios/{ep}/cortes/{n}/momentos")
 def momentos(ep: str, n: int, requisicao: Request) -> dict:
     _, destino, caminho = _contexto(requisicao, ep, n)
+    pessoas = _pessoas_ou_nada(requisicao)
+    aviso = None if pessoas is not None else GLOSSARIO_ILEGIVEL
     lido = _ler(caminho)
     if lido is None:
-        return {"versao": "", "momentos": []}
+        return {"versao": "", "momentos": [], "aviso_glossario": aviso}
     versao, lista = lido
-    pessoas = _pessoas(requisicao)
-    return {"versao": versao, "momentos": [_json_do_momento(m, destino, pessoas) for m in lista]}
+    return {
+        "versao": versao,
+        "momentos": [_json_do_momento(m, destino, pessoas) for m in lista],
+        "aviso_glossario": aviso,
+    }
 
 
 def _aplicar_tipo(m: Momento, tipo: str) -> None:
@@ -212,7 +270,8 @@ def _aprovar(m: Momento, pessoas: list[str]) -> None:
     m.aprovado = True
 
 
-def _aplicar(m: Momento, corpo: AlteracaoMomento, pessoas: list[str]) -> None:
+def _aplicar(m: Momento, corpo: AlteracaoMomento, pessoas: list[str] | None) -> None:
+    """`pessoas` só é usado (e só chega lido) quando o corpo aprova."""
     if corpo.tipo is not None:
         _aplicar_tipo(m, corpo.tipo)
     if corpo.escolhas is not None:
@@ -232,7 +291,7 @@ def _aplicar(m: Momento, corpo: AlteracaoMomento, pessoas: list[str]) -> None:
 @roteador.put("/episodios/{ep}/cortes/{n}/momentos/{chave}")
 def alterar_momento(ep: str, n: int, chave: str, corpo: AlteracaoMomento, requisicao: Request):
     episodio, destino, caminho = _contexto(requisicao, ep, n)
-    pessoas = _pessoas(requisicao)
+    pessoas = _pessoas(requisicao) if corpo.aprovado is True else None  # aprovar com glossário ilegível: 422
     with _TRAVA_GRAVACAO:  # o trabalhador de fotos e o Claude regravam o mesmo arquivo
         if _fotos_ativas(requisicao, episodio, n):
             return _bloqueio_das_fotos()
@@ -333,12 +392,12 @@ def _pedir_fotos(requisicao: Request, ep: str, n: int | None):
 
 
 @roteador.post("/episodios/{ep}/cortes/{n}/fotos", status_code=202)
-def baixar_fotos_do_corte(ep: str, n: int, requisicao: Request):
+def baixar_fotos_do_corte(ep: str, n: int, corpo: Confirmacao, requisicao: Request):
     return _pedir_fotos(requisicao, ep, n)
 
 
 @roteador.post("/episodios/{ep}/fotos", status_code=202)
-def baixar_fotos_do_episodio(ep: str, requisicao: Request):
+def baixar_fotos_do_episodio(ep: str, corpo: Confirmacao, requisicao: Request):
     return _pedir_fotos(requisicao, ep, None)
 
 
@@ -363,7 +422,7 @@ def _destinos(requisicao: Request, ep: str, n: int | None) -> list[tuple[int, Pa
 def _orcamento(requisicao: Request, ep: str, n: int | None) -> dict:
     config = _config(requisicao)
     try:
-        return orcamento([destino for _, destino in _destinos(requisicao, ep, n)], config)
+        return orcamento_com_itens(_destinos(requisicao, ep, n), config)
     except (KeyError, TypeError) as erro:
         raise HTTPException(422, "Configuração de imagens inválida: confira o preço.") from erro
 
@@ -393,40 +452,52 @@ def _pedir_ia(requisicao: Request, pasta: Path, cortes: list[int], montar):
     return pedido.como_dict()
 
 
-def _gerar_aprovadas(requisicao: Request, ep: str, n: int | None):
+def _gerar_aprovadas(requisicao: Request, ep: str, n: int | None, corpo: ImagensConfirmadas):
+    """Gera só os pendentes que estão na lista confirmada; o `_conferir` vale de novo na hora de gerar."""
+    _pessoas(requisicao)  # glossário ilegível: nada vai para a fila
     pasta, _ = _alvo(requisicao, ep, n)
-    com_pendentes = [(numero, destino) for numero, destino in _destinos(requisicao, ep, n) if pendentes(destino)]
-    if not com_pendentes:
+    confirmados = {(item.corte, item.chave) for item in corpo.itens}
+    cortes: list[int] = []
+    pastas: list[Path] = []
+    permitidos: set[tuple[Path, str]] = set()
+    for numero, destino in _destinos(requisicao, ep, n):
+        chaves = {chave_momento(m) for m in pendentes(destino) if (numero, chave_momento(m)) in confirmados}
+        if chaves:
+            cortes.append(numero)
+            pastas.append(destino)
+            permitidos |= {(destino, chave) for chave in chaves}
+    if not permitidos:
         raise HTTPException(422, SEM_PENDENTES)
-    pessoas, base = _pessoas(requisicao), requisicao.app.state.cortes
+    estado = requisicao.app.state
     return _pedir_ia(
-        requisicao, pasta, [numero for numero, _ in com_pendentes],
-        lambda provedor, config: executar_ia([d for _, d in com_pendentes], provedor, config, pessoas, base),
+        requisicao, pasta, cortes,
+        lambda provedor, config: executar_ia(pastas, provedor, config, estado.pessoas, estado.cortes, permitidos),
     )
 
 
 @roteador.post("/episodios/{ep}/cortes/{n}/ia", status_code=202)
-def gerar_ia_do_corte(ep: str, n: int, requisicao: Request):
-    return _gerar_aprovadas(requisicao, ep, n)
+def gerar_ia_do_corte(ep: str, n: int, corpo: ImagensConfirmadas, requisicao: Request):
+    return _gerar_aprovadas(requisicao, ep, n, corpo)
 
 
 @roteador.post("/episodios/{ep}/ia", status_code=202)
-def gerar_ia_do_episodio(ep: str, requisicao: Request):
-    return _gerar_aprovadas(requisicao, ep, None)
+def gerar_ia_do_episodio(ep: str, corpo: ImagensConfirmadas, requisicao: Request):
+    return _gerar_aprovadas(requisicao, ep, None, corpo)
 
 
 @roteador.post("/episodios/{ep}/cortes/{n}/momentos/{chave}/ia", status_code=202)
-def gerar_de_novo(ep: str, n: int, chave: str, requisicao: Request):
+def gerar_de_novo(ep: str, n: int, chave: str, corpo: Confirmacao, requisicao: Request):
+    _pessoas(requisicao)  # glossário ilegível: nada vai para a fila
     pasta, bloco = _pasta_do_corte(requisicao, ep, n)
     destino = pasta / bloco.pasta
     lido = _ler(destino / TRABALHO / ARQUIVO)
     if lido is None:
         raise NaoEncontrado("pedidos.json não encontrado")
     _achar(lido[1], chave)
-    pessoas, base = _pessoas(requisicao), requisicao.app.state.cortes
+    estado = requisicao.app.state
     return _pedir_ia(
         requisicao, pasta, [n],
-        lambda provedor, config: executar_momento_ia(destino, chave, provedor, config, pessoas, base),
+        lambda provedor, config: executar_momento_ia(destino, chave, provedor, config, estado.pessoas, estado.cortes),
     )
 
 
@@ -455,7 +526,7 @@ def configuracao_de_imagens(requisicao: Request) -> dict:
 
 @roteador.put("/configuracoes/imagens")
 def gravar_configuracao_de_imagens(corpo: ConfigIa, requisicao: Request) -> dict:
-    config = Config(corpo.provedor, corpo.provedores)
+    config = Config(corpo.provedor, {nome: d.model_dump(exclude_unset=True) for nome, d in corpo.provedores.items()})
     try:
         gravar_config(config, caminho=requisicao.app.state.config_ia, base=requisicao.app.state.cortes)
     except ErroImagem as erro:

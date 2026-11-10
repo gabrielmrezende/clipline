@@ -137,7 +137,7 @@ def test_get_sem_pedidos_e_ilegivel(ambiente):
     assert resposta.status_code == 422
     assert resposta.json()["detail"].startswith("pedidos.json ilegível: ")
     (trabalho / "pedidos.json").unlink()
-    assert cliente.get(_url()).json() == {"versao": "", "momentos": []}
+    assert cliente.get(_url()).json() == {"versao": "", "momentos": [], "aviso_glossario": None}
 
 
 def test_get_fotos_prontas_e_ia(ambiente):
@@ -372,8 +372,10 @@ import threading
 
 from PIL import Image
 
+from esteira.fluxo_imagens import ler_ia
 from esteira.imagens_ia import chaves
 from esteira.imagens_ia.provedor import ErroTemporario, SemChave
+from esteira.painel.troca_musica import Resultado
 
 
 def _png(tamanho=(1024, 1536)) -> bytes:
@@ -461,6 +463,16 @@ def _pedido_pronto(cliente, id):
     return _esperar(terminou)
 
 
+CONFIRMADO = {"confirmado": True}
+CHAVE_UM = chave_momento(_ia_aprovada(20.0, "Um"))
+CHAVE_DOIS = chave_momento(_ia_aprovada(24.0, "Dois"))
+
+
+def _confirmados(cliente, url_orcamento) -> dict:
+    """O corpo que a tela manda: os itens do orçamento que o dono confirmou."""
+    return {"itens": cliente.get(url_orcamento).json()["itens"]}
+
+
 def test_resumo_de_fotos_nao_grava(ambiente):
     cortes, _, trabalho = ambiente
     _gravar_momentos(trabalho, [_foto()])
@@ -497,12 +509,12 @@ def test_post_fotos_baixa_e_bloqueia_edicao(ambiente):
 
     cliente = _cliente_ia(cortes, baixar=baixar)
     versao = cliente.get(_url()).json()["versao"]
-    r = cliente.post(_fotos_url())
+    r = cliente.post(_fotos_url(), json=CONFIRMADO)
     assert r.status_code == 202
     pedido = r.json()
     assert pedido["tipo"] == "fotos" and pedido["cortes"] == [1]
     assert entrou.wait(10)
-    r = cliente.post(_fotos_url())
+    r = cliente.post(_fotos_url(), json=CONFIRMADO)
     assert r.status_code == 409
     assert r.json() == {"detail": "Já há um pedido de fotos em andamento para este corte."}
     r = cliente.put(_url(f"/{CHAVE_FOTO}"), json={"versao": versao, "escolhas": [2]})
@@ -521,7 +533,7 @@ def test_post_fotos_do_episodio(ambiente):
     cortes, _, trabalho = ambiente
     _gravar_momentos(trabalho, [_foto()])
     cliente = _cliente_ia(cortes)
-    r = cliente.post(f"/api/episodios/{quote(NOME)}/fotos")
+    r = cliente.post(f"/api/episodios/{quote(NOME)}/fotos", json=CONFIRMADO)
     assert r.status_code == 202 and r.json()["tipo"] == "fotos"
     assert _pedido_pronto(cliente, r.json()["id"])["estado"] == "pronto"
     _fechar(cliente)
@@ -532,7 +544,7 @@ def test_post_fotos_sem_pedidos_da_422(ambiente):
     (trabalho / "pedidos.json").unlink()
     cliente = _cliente_ia(cortes)
     for url in (_fotos_url(), f"/api/episodios/{quote(NOME)}/fotos"):
-        r = cliente.post(url)
+        r = cliente.post(url, json=CONFIRMADO)
         assert r.status_code == 422 and r.json()["detail"] == "Nenhum corte com momentos de imagem."
     _fechar(cliente)
 
@@ -545,7 +557,7 @@ def test_fotos_com_wikimedia_fora_termina_em_erro(ambiente):
         raise OSError("sem internet")
 
     cliente = _cliente_ia(cortes, consultar=cai)
-    r = cliente.post(_fotos_url())
+    r = cliente.post(_fotos_url(), json=CONFIRMADO)
     final = _pedido_pronto(cliente, r.json()["id"])
     assert final["estado"] == "erro" and "Wikimedia indisponível" in final["mensagem"]
     _fechar(cliente)
@@ -558,7 +570,10 @@ def test_orcamento_de_dois_aprovados(ambiente):
         "provedor": "openai", "provedores": {"openai": {"preco_usd": 0.05}},
     }), "utf-8")
     cliente = _cliente_ia(cortes)
-    esperado = {"imagens": 2, "provedor": "openai", "modelo": "gpt-image-2", "custo_usd": 0.10}
+    esperado = {
+        "imagens": 2, "provedor": "openai", "modelo": "gpt-image-2", "custo_usd": 0.10,
+        "itens": [{"corte": 1, "chave": CHAVE_UM}, {"corte": 1, "chave": CHAVE_DOIS}],
+    }
     assert cliente.get(_ia_url("/orcamento")).json() == esperado
     assert cliente.get(f"/api/episodios/{quote(NOME)}/ia/orcamento").json() == esperado
     _fechar(cliente)
@@ -579,10 +594,10 @@ def test_post_ia_gera_e_bloqueia_repetido(ambiente):
     entrou, solto = threading.Event(), threading.Event()
     provedor = ProvedorFalso(entrou=entrou, solto=solto)
     cliente = _cliente_ia(cortes, provedores=_fabricas(provedor))
-    r = cliente.post(_ia_url())
+    r = cliente.post(_ia_url(), json=_confirmados(cliente, _ia_url("/orcamento")))
     assert r.status_code == 202 and r.json()["tipo"] == "ia"
     assert entrou.wait(10)
-    r2 = cliente.post(_ia_url())
+    r2 = cliente.post(_ia_url(), json=_confirmados(cliente, _ia_url("/orcamento")))
     assert r2.status_code == 409
     assert r2.json() == {"detail": "Já há um pedido de imagens em andamento para este corte."}
     solto.set()
@@ -591,7 +606,7 @@ def test_post_ia_gera_e_bloqueia_repetido(ambiente):
     assert len(list((destino / IMAGENS_SUGERIDAS).glob("*-ia-1.jpg"))) == 2
     dados = cliente.get(_url()).json()
     assert [len(m["ia"]) for m in dados["momentos"] if m["tipo"] == "ia"] == [1, 1]
-    r = cliente.post(_ia_url())
+    r = cliente.post(_ia_url(), json=_confirmados(cliente, _ia_url("/orcamento")))
     assert r.status_code == 422 and r.json()["detail"] == "Nenhuma imagem aprovada para gerar."
     _fechar(cliente)
 
@@ -600,10 +615,10 @@ def test_post_ia_do_episodio(ambiente):
     cortes, _, trabalho = ambiente
     _gravar_momentos(trabalho, [_foto(), _ia_aprovada(20.0, "Um")])
     cliente = _cliente_ia(cortes, provedores=_fabricas(ProvedorFalso()))
-    r = cliente.post(f"/api/episodios/{quote(NOME)}/ia")
+    r = cliente.post(f"/api/episodios/{quote(NOME)}/ia", json=_confirmados(cliente, f"/api/episodios/{quote(NOME)}/ia/orcamento"))
     assert r.status_code == 202
     assert _pedido_pronto(cliente, r.json()["id"])["estado"] == "pronto"
-    r = cliente.post(f"/api/episodios/{quote(NOME)}/ia")
+    r = cliente.post(f"/api/episodios/{quote(NOME)}/ia", json={"itens": [{"corte": 1, "chave": CHAVE_UM}]})
     assert r.status_code == 422 and r.json()["detail"] == "Nenhuma imagem aprovada para gerar."
     _fechar(cliente)
 
@@ -612,7 +627,7 @@ def test_sem_chave_termina_com_aviso(ambiente):
     cortes, destino, trabalho = ambiente
     _gravar_momentos(trabalho, [_foto(), _ia_aprovada(20.0, "Um"), _ia_aprovada(24.0, "Dois")])
     cliente = _cliente_ia(cortes, provedores=_fabricas(ProvedorFalso(erro=SemChave("openai"))))
-    r = cliente.post(_ia_url())
+    r = cliente.post(_ia_url(), json=_confirmados(cliente, _ia_url("/orcamento")))
     final = _pedido_pronto(cliente, r.json()["id"])
     assert final["estado"] == "pronto"
     assert len(final["avisos"]) == 2
@@ -627,9 +642,9 @@ def test_gerar_de_novo_cria_a_versao_2(ambiente):
     _gravar_momentos(trabalho, [_foto(), _ia_aprovada(20.0, "Um")])
     chave = chave_momento(_ia_aprovada(20.0, "Um"))
     cliente = _cliente_ia(cortes, provedores=_fabricas(ProvedorFalso()))
-    r = cliente.post(_ia_url())
+    r = cliente.post(_ia_url(), json=_confirmados(cliente, _ia_url("/orcamento")))
     _pedido_pronto(cliente, r.json()["id"])
-    r = cliente.post(_url(f"/{chave}/ia"))
+    r = cliente.post(_url(f"/{chave}/ia"), json=CONFIRMADO)
     assert r.status_code == 202 and r.json()["tipo"] == "ia"
     final = _pedido_pronto(cliente, r.json()["id"])
     assert final["estado"] == "pronto" and final["mensagem"] == f"{chave}-ia-2.jpg"
@@ -644,10 +659,10 @@ def test_gerar_de_novo_com_erro_do_provedor(ambiente):
     chave = chave_momento(_ia_aprovada(20.0, "Um"))
     erro = ErroTemporario("openai", "limite")
     cliente = _cliente_ia(cortes, provedores=_fabricas(ProvedorFalso(erro=erro)))
-    r = cliente.post(_url(f"/{chave}/ia"))
+    r = cliente.post(_url(f"/{chave}/ia"), json=CONFIRMADO)
     final = _pedido_pronto(cliente, r.json()["id"])
     assert final["estado"] == "erro" and final["mensagem"] == str(erro)
-    assert cliente.post(_url("/9999-nada/ia")).status_code == 404
+    assert cliente.post(_url("/9999-nada/ia"), json=CONFIRMADO).status_code == 404
     _fechar(cliente)
 
 
@@ -657,13 +672,220 @@ def test_gerar_de_novo_repetido_da_409(ambiente):
     chave = chave_momento(_ia_aprovada(20.0, "Um"))
     entrou, solto = threading.Event(), threading.Event()
     cliente = _cliente_ia(cortes, provedores=_fabricas(ProvedorFalso(entrou=entrou, solto=solto)))
-    r = cliente.post(_url(f"/{chave}/ia"))
+    r = cliente.post(_url(f"/{chave}/ia"), json=CONFIRMADO)
     assert entrou.wait(10)
-    r2 = cliente.post(_url(f"/{chave}/ia"))
+    r2 = cliente.post(_url(f"/{chave}/ia"), json=CONFIRMADO)
     assert r2.status_code == 409
     assert r2.json() == {"detail": "Já há um pedido de imagens em andamento para este corte."}
     solto.set()
     _pedido_pronto(cliente, r.json()["id"])
+    _fechar(cliente)
+
+
+def test_gera_so_o_que_foi_confirmado(ambiente):
+    cortes, destino, trabalho = ambiente
+    dois = _ia_aprovada(24.0, "Dois")
+    dois.aprovado = False
+    _gravar_momentos(trabalho, [_foto(), _ia_aprovada(20.0, "Um"), dois])
+    provedor = ProvedorFalso()
+    cliente = _cliente_ia(cortes, provedores=_fabricas(provedor))
+    mostrado = cliente.get(_ia_url("/orcamento")).json()
+    assert mostrado["imagens"] == 1 and mostrado["itens"] == [{"corte": 1, "chave": CHAVE_UM}]
+    versao = cliente.get(_url()).json()["versao"]
+    r = cliente.put(_url(f"/{CHAVE_DOIS}"), json={"versao": versao, "aprovado": True})  # depois do orçamento
+    assert r.status_code == 200
+    r = cliente.post(_ia_url(), json={"itens": mostrado["itens"]})
+    assert r.status_code == 202
+    final = _pedido_pronto(cliente, r.json()["id"])
+    assert final["estado"] == "pronto" and final["mensagem"] == "1 imagem gerada."
+    assert provedor.prompts == ["Ruas vazias ao amanhecer Um"]
+    assert sorted(p.name for p in (destino / IMAGENS_SUGERIDAS).glob("*-ia-*")) == [f"{CHAVE_UM}-ia-1.jpg"]
+    assert cliente.get(_ia_url("/orcamento")).json()["itens"] == [{"corte": 1, "chave": CHAVE_DOIS}]
+    _fechar(cliente)
+
+
+@pytest.mark.parametrize("itens", [
+    [],
+    [{"corte": 2, "chave": CHAVE_UM}],
+    [{"corte": 1, "chave": "9999-nada"}],
+])
+def test_post_ia_sem_nenhum_pendente_confirmado(ambiente, itens):
+    cortes, _, trabalho = ambiente
+    _gravar_momentos(trabalho, [_ia_aprovada(20.0, "Um")])
+    provedor = ProvedorFalso()
+    cliente = _cliente_ia(cortes, provedores=_fabricas(provedor))
+    for url in (_ia_url(), f"/api/episodios/{quote(NOME)}/ia"):
+        r = cliente.post(url, json={"itens": itens})
+        assert r.status_code == 422 and r.json()["detail"] == "Nenhuma imagem aprovada para gerar."
+    assert provedor.prompts == [] and cliente.get("/api/tarefas").json() == []
+    _fechar(cliente)
+
+
+def test_posts_que_custam_exigem_corpo_json(ambiente):
+    # Sem corpo JSON, uma página qualquer aberta no navegador do dono não dispara o pedido (CSRF).
+    cortes, _, trabalho = ambiente
+    _gravar_momentos(trabalho, [_foto(), _ia_aprovada(20.0, "Um")])
+    provedor = ProvedorFalso()
+    cliente = _cliente_ia(cortes, provedores=_fabricas(provedor))
+    itens = {"itens": [{"corte": 1, "chave": CHAVE_UM}]}
+    corpos = {
+        _ia_url(): itens,
+        f"/api/episodios/{quote(NOME)}/ia": itens,
+        _url(f"/{CHAVE_UM}/ia"): CONFIRMADO,
+        _fotos_url(): CONFIRMADO,
+        f"/api/episodios/{quote(NOME)}/fotos": CONFIRMADO,
+    }
+    for url, corpo in corpos.items():
+        assert cliente.post(url).status_code == 422, url
+        for tipo in ("text/plain", "application/x-www-form-urlencoded", None):
+            cabecalhos = {"Content-Type": tipo} if tipo else {}
+            r = cliente.post(url, content=json.dumps(corpo), headers=cabecalhos)
+            assert r.status_code == 422, (url, tipo)
+    for url in (_url(f"/{CHAVE_UM}/ia"), _fotos_url(), f"/api/episodios/{quote(NOME)}/fotos"):
+        assert cliente.post(url, json={"confirmado": False}).status_code == 422, url
+        assert cliente.post(url, json={}).status_code == 422, url
+    assert provedor.prompts == [] and cliente.get("/api/tarefas").json() == []
+    _fechar(cliente)
+
+
+def test_gerar_de_novo_com_registro_falho_termina_pronto_com_aviso(ambiente, monkeypatch):
+    cortes, _, trabalho = ambiente
+    _gravar_momentos(trabalho, [_ia_aprovada(20.0, "Um")])
+
+    def falha(*args, **kwargs):
+        raise OSError("ia.json travado")
+
+    monkeypatch.setattr("esteira.imagens_ia.gerar.registrar_ia", falha)
+    cliente = _cliente_ia(cortes, provedores=_fabricas(ProvedorFalso()))
+    r = cliente.post(_url(f"/{CHAVE_UM}/ia"), json=CONFIRMADO)
+    final = _pedido_pronto(cliente, r.json()["id"])
+    assert final["estado"] == "pronto" and final["mensagem"] == f"{CHAVE_UM}-ia-1.jpg"
+    assert final["avisos"] == ["imagem salva, mas não consegui atualizar o registro: ia.json travado"]
+    momento = _momento(cliente.get(_url()).json(), CHAVE_UM)
+    assert [(i["arquivo"], i["versao"]) for i in momento["ia"]] == [(f"{CHAVE_UM}-ia-1.jpg", 1)]  # a imagem paga aparece
+    assert cliente.get(_ia_url("/orcamento")).json()["imagens"] == 0
+    _fechar(cliente)
+
+
+def test_fechar_o_painel_no_meio_nao_comeca_a_proxima_geracao(ambiente):
+    cortes, _, trabalho = ambiente
+    _gravar_momentos(trabalho, [_ia_aprovada(20.0, "Um"), _ia_aprovada(24.0, "Dois")])
+    entrou, solto = threading.Event(), threading.Event()
+    provedor = ProvedorFalso(entrou=entrou, solto=solto)
+    cliente = _cliente_ia(cortes, provedores=_fabricas(provedor))
+    r = cliente.post(_ia_url(), json=_confirmados(cliente, _ia_url("/orcamento")))
+    assert entrou.wait(10)
+    fila = cliente.app.state.fila
+    parada = threading.Thread(target=fila.parar, kwargs={"timeout": 10})
+    parada.start()
+    assert _esperar(fila._parando.is_set)
+    solto.set()
+    parada.join(10)
+    assert not parada.is_alive()
+    final = fila.pedido(r.json()["id"])
+    assert final.estado == "erro" and final.mensagem == "o painel foi fechado no meio deste pedido"
+    assert provedor.prompts == ["Ruas vazias ao amanhecer Um"]  # a segunda geração paga não começou
+    assert [i["arquivo"] for i in ler_ia(trabalho)] == [f"{CHAVE_UM}-ia-1.jpg"]  # a primeira ficou registrada
+
+
+GLOSSARIO = "Não consegui ler o glossário (Contexto/glossario.md): nada foi aprovado nem gerado."
+
+
+def _sem_permissao():
+    raise PermissionError("glossario.md travado")
+
+
+def _utf8_ruim():
+    raise UnicodeDecodeError("utf-8", b"\xff", 0, 1, "byte inválido")
+
+
+@pytest.mark.parametrize("pessoas", [_sem_permissao, _utf8_ruim])
+def test_glossario_ilegivel_recusa_aprovar_e_gerar(ambiente, pessoas):
+    cortes, _, trabalho = ambiente
+    dois = _ia_aprovada(24.0, "Dois")
+    dois.aprovado = False
+    _gravar_momentos(trabalho, [_foto(), _ia_aprovada(20.0, "Um"), dois])
+    provedor = ProvedorFalso()
+    cliente = _cliente_ia(cortes, pessoas=pessoas, provedores=_fabricas(provedor))
+    r = cliente.get(_url())
+    assert r.status_code == 200
+    dados = r.json()
+    assert dados["aviso_glossario"] == GLOSSARIO
+    assert [m["pessoa_citada"] for m in dados["momentos"]] == [None, None, None]
+    antes = (trabalho / "pedidos.json").read_bytes()
+    r = cliente.put(_url(f"/{CHAVE_DOIS}"), json={"versao": dados["versao"], "aprovado": True})
+    assert r.status_code == 422 and r.json()["detail"] == GLOSSARIO
+    assert (trabalho / "pedidos.json").read_bytes() == antes
+    r = cliente.put(_url(f"/{CHAVE_FOTO}"), json={"versao": dados["versao"], "escolhas": [2]})
+    assert r.status_code == 200 and r.json()["momento"]["pessoa_citada"] is None  # o resto da revisão segue
+    itens = {"itens": [{"corte": 1, "chave": CHAVE_UM}]}
+    for url, corpo in ((_ia_url(), itens), (f"/api/episodios/{quote(NOME)}/ia", itens), (_url(f"/{CHAVE_UM}/ia"), CONFIRMADO)):
+        r = cliente.post(url, json=corpo)
+        assert r.status_code == 422 and r.json()["detail"] == GLOSSARIO, url
+    assert provedor.prompts == [] and cliente.get("/api/tarefas").json() == []
+    _fechar(cliente)
+
+
+def test_padrao_do_painel_fecha_sem_glossario(ambiente, monkeypatch, tmp_path):
+    from esteira.painel import app as modulo_app
+
+    cortes, _, trabalho = ambiente
+    contexto = tmp_path / "contexto"
+    contexto.mkdir()
+    monkeypatch.setattr(modulo_app, "CONTEXTO", contexto)  # sem glossario.md
+    dois = _ia_aprovada(24.0, "Dois")
+    dois.aprovado = False
+    _gravar_momentos(trabalho, [dois])
+    cliente = TestClient(criar_app(cortes, buscar_candidatas=lambda busca: []))
+    dados = cliente.get(_url()).json()
+    assert dados["aviso_glossario"] == GLOSSARIO
+    r = cliente.put(_url(f"/{CHAVE_DOIS}"), json={"versao": dados["versao"], "aprovado": True})
+    assert r.status_code == 422 and r.json()["detail"] == GLOSSARIO
+    (contexto / "glossario.md").write_bytes(b"## Pessoas\n- Dois\n")
+    dados = cliente.get(_url()).json()
+    assert dados["aviso_glossario"] is None and dados["momentos"][0]["pessoa_citada"] == "Dois"
+    (contexto / "glossario.md").write_bytes(b"## Pessoas\n- Dois\xff\n")
+    assert cliente.get(_url()).json()["aviso_glossario"] == GLOSSARIO
+    cliente.app.state.fila.parar(5)
+
+
+def test_get_com_glossario_legivel_nao_tem_aviso(ambiente):
+    cortes, _, _ = ambiente
+    assert _cliente(cortes).get(_url()).json()["aviso_glossario"] is None
+
+
+@pytest.mark.parametrize("sufixo", ["", "/{chave}/ia"])
+def test_trabalhador_recusa_gerar_se_o_glossario_ficar_ilegivel(ambiente, sufixo):
+    cortes, _, trabalho = ambiente
+    _gravar_momentos(trabalho, [_ia_aprovada(20.0, "Um")])
+    legivel = {"sim": True}
+
+    def pessoas():
+        if not legivel["sim"]:
+            _utf8_ruim()
+        return ["Lula"]
+
+    provedor = ProvedorFalso()
+    cliente = _cliente_ia(cortes, pessoas=pessoas, provedores=_fabricas(provedor))
+    ocupada, solta = threading.Event(), threading.Event()
+
+    def segura(progresso):  # ocupa o trabalhador até o glossário ficar ilegível
+        ocupada.set()
+        assert solta.wait(10)
+        return Resultado("pronto", "ok", [], None)
+
+    cliente.app.state.fila.pedir_tarefa("fotos", trabalho.parent.parent, [1], segura)
+    assert ocupada.wait(10)
+    if sufixo:
+        r = cliente.post(_url(sufixo.format(chave=CHAVE_UM)), json=CONFIRMADO)
+    else:
+        r = cliente.post(_ia_url(), json={"itens": [{"corte": 1, "chave": CHAVE_UM}]})
+    assert r.status_code == 202
+    legivel["sim"] = False
+    solta.set()
+    final = _pedido_pronto(cliente, r.json()["id"])
+    assert final["estado"] == "erro" and final["mensagem"] == GLOSSARIO
+    assert provedor.prompts == []
     _fechar(cliente)
 
 
@@ -701,6 +923,19 @@ def test_configuracoes_put(ambiente):
     assert r.json()["chaves"] == {"openai": False, "google": True}
     assert cliente.get("/api/configuracoes/imagens").json() == r.json()
     assert json.loads((cortes / "imagens-ia.json").read_text("utf-8"))["provedor"] == "google"
+    _fechar(cliente)
+
+
+def test_configuracoes_put_nunca_grava_campo_extra(ambiente):
+    cortes, _, _ = ambiente
+    cliente = _cliente_ia(cortes)
+    atual = cliente.get("/api/configuracoes/imagens").json()
+    novos = {**atual["provedores"], "openai": {**atual["provedores"]["openai"], "chave": "sk-x"}}
+    r = cliente.put("/api/configuracoes/imagens", json={"provedor": "openai", "provedores": novos, "token": "sk-x"})
+    assert r.status_code in (200, 422)
+    assert "sk-x" not in r.text
+    arquivo = cortes / "imagens-ia.json"
+    assert not arquivo.exists() or "sk-x" not in arquivo.read_text("utf-8")
     _fechar(cliente)
 
 

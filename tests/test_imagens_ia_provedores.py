@@ -220,6 +220,29 @@ def test_base64_invalido(nome):
         FABRICAS[nome](PedirFalso(resposta)).gerar("x")
 
 
+@pytest.mark.parametrize("nome", ["openai", "google"])
+def test_base64_com_quebras_de_linha_e_espacos(nome):
+    grande = bytes(range(256)) * 4
+    texto = base64.encodebytes(grande).decode()  # quebra a cada 76 caracteres
+    assert "\n" in texto
+    com_espacos = " " + texto.replace("\n", "\r\n ") + "\t"
+    resposta = {
+        "openai": {"data": [{"b64_json": com_espacos}]},
+        "google": {"steps": [{"type": "model_output", "content": [{"type": "image", "data": com_espacos}]}]},
+    }[nome]
+    assert FABRICAS[nome](PedirFalso(resposta)).gerar("x") == grande
+
+
+@pytest.mark.parametrize("nome", ["openai", "google"])
+def test_base64_so_com_espacos_nao_e_imagem(nome):
+    resposta = {
+        "openai": {"data": [{"b64_json": " \n "}]},
+        "google": {"steps": [{"type": "model_output", "content": [{"type": "image", "data": " \n "}]}]},
+    }[nome]
+    with pytest.raises(ErroImagem, match=f"{nome} não devolveu imagem"):
+        FABRICAS[nome](PedirFalso(resposta)).gerar("x")
+
+
 def test_provedor_atual_sem_fabricas_devolve_os_adaptadores():
     cfg = config.padrao()
     assert isinstance(config.provedor_atual(cfg), OpenAI)

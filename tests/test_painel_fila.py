@@ -272,6 +272,56 @@ def test_progresso_aparece_enquanto_roda(fabrica):
     assert fila.ultimo_pronto("ep1", 3, "ia").id == p.id
 
 
+def test_parar_interrompe_a_tarefa_no_proximo_progresso(fabrica):
+    passou, solto = threading.Event(), threading.Event()
+    passos = []
+
+    def gera_em_passos(progresso):
+        for i in (1, 2, 3):
+            progresso(f"Gerando {i} de 3…")  # ao fechar o painel, o passo seguinte não começa
+            passos.append(i)
+            passou.set()
+            assert solto.wait(LIMITE)
+        return Resultado("pronto", "3 geradas", [], None)
+
+    fila = fabrica()
+    p = fila.pedir_tarefa("ia", Path("ep1"), [1], gera_em_passos)
+    assert passou.wait(LIMITE)
+    parada = threading.Thread(target=fila.parar, kwargs={"timeout": LIMITE})
+    parada.start()
+    assert esperar(fila._parando.is_set)
+    solto.set()
+    parada.join(LIMITE)
+    assert not parada.is_alive() and not fila._trabalhador.is_alive()
+    final = fila.pedido(p.id)
+    assert final.estado == "erro" and final.mensagem == "o painel foi fechado no meio deste pedido"
+    assert passos == [1] and final.terminado is not None
+
+
+def test_interrompido_passa_por_except_exception(fabrica):
+    passou, solto = threading.Event(), threading.Event()
+
+    def engole(progresso):
+        progresso("Baixando 1 de 2…")
+        passou.set()
+        assert solto.wait(LIMITE)
+        try:
+            progresso("Baixando 2 de 2…")
+        except Exception:  # um item isolado (como o download de uma foto) não segura o fechamento
+            return Resultado("pronto", "engoliu", [], None)
+        return Resultado("pronto", "seguiu", [], None)
+
+    fila = fabrica()
+    p = fila.pedir_tarefa("fotos", Path("ep1"), [1], engole)
+    assert passou.wait(LIMITE)
+    parada = threading.Thread(target=fila.parar, kwargs={"timeout": LIMITE})
+    parada.start()
+    assert esperar(fila._parando.is_set)
+    solto.set()
+    parada.join(LIMITE)
+    assert fila.pedido(p.id).mensagem == "o painel foi fechado no meio deste pedido"
+
+
 def test_tarefa_com_excecao_vira_erro_e_a_fila_segue(fabrica):
     def quebra(progresso):
         raise RuntimeError("falhou a geração")

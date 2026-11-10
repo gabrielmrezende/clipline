@@ -9,6 +9,7 @@ from esteira.caminhos import AUTOMACAO, garantir_escrita
 from esteira.imagens_ia.provedor import ErroImagem, Provedor
 
 PROVEDORES = ("openai", "google")
+CAMPOS = ("modelo", "qualidade", "preco_usd")  # os únicos gravados por provedor
 ARQUIVO = AUTOMACAO / "imagens-ia.json"
 
 _PADRAO = {
@@ -58,6 +59,9 @@ def _validar(config: Config) -> None:
     for nome, dados in config.provedores.items():
         if nome not in PROVEDORES:
             raise ErroImagem(f"Provedor desconhecido: {nome}")
+        for campo, rotulo in (("modelo", "Modelo"), ("qualidade", "Qualidade")):
+            if campo in dados and not isinstance(dados[campo], str):
+                raise ErroImagem(f"{rotulo} de {nome} deve ser texto")
         preco = dados.get("preco_usd")
         if isinstance(preco, bool) or not isinstance(preco, (int, float)):
             raise ErroImagem(f"Preço de {nome} deve ser um número")
@@ -66,11 +70,15 @@ def _validar(config: Config) -> None:
 
 
 def gravar_config(config: Config, caminho: Path = ARQUIVO, base: Path | None = None) -> None:
+    """Grava só os campos conhecidos: o imagens-ia.json vai para o git e nunca pode levar uma chave."""
     _validar(config)
     destino = garantir_escrita(Path(caminho), base_extra=base)
-    texto = json.dumps({"provedor": config.provedor, "provedores": config.provedores}, ensure_ascii=False, indent=2)
+    provedores = {
+        nome: {campo: dados[campo] for campo in CAMPOS if campo in dados} for nome, dados in config.provedores.items()
+    }
+    texto = json.dumps({"provedor": config.provedor, "provedores": provedores}, ensure_ascii=False, indent=2)
     temporario = destino.with_name(destino.name + ".tmp")
-    temporario.write_text(texto + "\n", encoding="utf-8")
+    temporario.write_text(texto + "\n", encoding="utf-8", newline="\n")  # o arquivo está no git em LF
     os.replace(temporario, destino)
 
 

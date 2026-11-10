@@ -20,12 +20,30 @@ class ErroPrompt(ErroImagem):
     """O momento não pode gerar imagem (regra da esteira, antes de chamar o provedor)."""
 
 
+class RegistroIncompleto(Exception):
+    """A imagem foi paga e salva, mas o ia.json ou o guia não foram atualizados.
+
+    Não é erro do momento: quem chama trata como aviso e conta o `arquivo` como gerado."""
+
+    def __init__(self, arquivo: str, motivo: str) -> None:
+        super().__init__(f"imagem salva, mas não consegui atualizar o registro: {motivo}")
+        self.arquivo = arquivo
+
+
 def _momentos(pasta_corte: Path) -> list[Momento]:
     return ler_pedidos(Path(pasta_corte) / TRABALHO)
 
 
-def _chaves_com_versao(trabalho: Path) -> set[str]:
-    return {i["momento"] for i in ler_ia(trabalho) if isinstance(i.get("momento"), str)}
+def arquivo_de_versao(chave: str, versao: int) -> str:
+    return f"{chave}-ia-{versao}.jpg"
+
+
+def _tem_versao(pasta_corte: Path, chave: str, registradas: set[str]) -> bool:
+    """Versão no ia.json ou arquivo no disco (R11): um arquivo sem registro também foi pago."""
+    imagens = Path(pasta_corte) / IMAGENS_SUGERIDAS
+    return chave in registradas or any(
+        (imagens / arquivo_de_versao(chave, k)).exists() for k in range(1, MAXIMO_VERSOES + 1)
+    )
 
 
 def pendentes(pasta_corte: Path) -> list[Momento]:
@@ -34,15 +52,15 @@ def pendentes(pasta_corte: Path) -> list[Momento]:
         momentos = _momentos(pasta_corte)
     except (OSError, ValueError, KeyError, TypeError):
         return []
-    geradas = _chaves_com_versao(Path(pasta_corte) / TRABALHO)
+    registradas = {i["momento"] for i in ler_ia(Path(pasta_corte) / TRABALHO) if isinstance(i.get("momento"), str)}
     return [
         m for m in momentos
-        if m.tipo == "ia" and m.aprovado and not m.descartar and m.prompt.strip() and chave_momento(m) not in geradas
+        if m.tipo == "ia" and m.aprovado and not m.descartar and m.prompt.strip()
+        and not _tem_versao(pasta_corte, chave_momento(m), registradas)
     ]
 
 
-def orcamento(pastas_corte: list[Path], config: Config) -> dict:
-    imagens = sum(len(pendentes(p)) for p in pastas_corte)
+def _preco(imagens: int, config: Config) -> dict:
     dados = config.provedores[config.provedor]
     return {
         "imagens": imagens,
@@ -52,10 +70,20 @@ def orcamento(pastas_corte: list[Path], config: Config) -> dict:
     }
 
 
+def orcamento(pastas_corte: list[Path], config: Config) -> dict:
+    return _preco(sum(len(pendentes(p)) for p in pastas_corte), config)
+
+
+def orcamento_com_itens(cortes: list[tuple[int, Path]], config: Config) -> dict:
+    """O orçamento e os itens contados (corte, chave): a lista exata que o dono confirma no painel."""
+    itens = [{"corte": numero, "chave": chave_momento(m)} for numero, pasta in cortes for m in pendentes(pasta)]
+    return {**_preco(len(itens), config), "itens": itens}
+
+
 def _versao_livre(pasta_corte: Path, chave: str) -> int:
     usadas = {i.get("versao") for i in ler_ia(pasta_corte / TRABALHO) if i.get("momento") == chave}
     for k in range(1, MAXIMO_VERSOES + 1):
-        if k not in usadas and not (pasta_corte / IMAGENS_SUGERIDAS / f"{chave}-ia-{k}.jpg").exists():
+        if k not in usadas and not (pasta_corte / IMAGENS_SUGERIDAS / arquivo_de_versao(chave, k)).exists():
             return k
     raise ErroPrompt(JA_TEM_TODAS)
 
@@ -99,7 +127,7 @@ def gerar_momento(
     momentos = _momentos(pasta_corte)
     m = _conferir(next((x for x in momentos if chave_momento(x) == chave), None), pessoas)
     versao = _versao_livre(pasta_corte, chave)
-    nome = f"{chave}-ia-{versao}.jpg"
+    nome = arquivo_de_versao(chave, versao)
     saida = caminhos.garantir_escrita(pasta_corte / IMAGENS_SUGERIDAS / nome, base_extra=base)
 
     conteudo = provedor.gerar(m.prompt)
@@ -112,16 +140,26 @@ def gerar_momento(
         except Exception:  # Pillow levanta vários tipos para bytes que não são imagem
             saida.unlink(missing_ok=True)
             raise ErroImagem("O provedor devolveu algo que não é uma imagem; nada foi guardado.") from None
-    registrar_ia(trabalho, {
-        "arquivo": nome,
-        "momento": chave,
-        "versao": versao,
-        "provedor": provedor.nome,
-        "modelo": config.provedores.get(provedor.nome, {}).get("modelo", ""),
-        "prompt": m.prompt,
-        "data": agora().isoformat(timespec="seconds"),
-    }, base=base)
-    escrever_guia(pasta_corte, _momentos_do_guia(pasta_corte, momentos))
+    # A imagem já foi paga e está salva: daqui em diante nenhuma falha vira erro do momento.
+    motivos = []
+    try:
+        registrar_ia(trabalho, {
+            "arquivo": nome,
+            "momento": chave,
+            "versao": versao,
+            "provedor": provedor.nome,
+            "modelo": config.provedores.get(provedor.nome, {}).get("modelo", ""),
+            "prompt": m.prompt,
+            "data": agora().isoformat(timespec="seconds"),
+        }, base=base)
+    except Exception as erro:  # fronteira: o arquivo no disco já conta como versão (pendentes, R11)
+        motivos.append(str(erro) or type(erro).__name__)
+    try:
+        escrever_guia(pasta_corte, _momentos_do_guia(pasta_corte, momentos))
+    except Exception as erro:  # fronteira: o guia é refeito na próxima rodada
+        motivos.append(str(erro) or type(erro).__name__)
+    if motivos:
+        raise RegistroIncompleto(nome, "; ".join(motivos))
     return nome
 
 
@@ -132,8 +170,15 @@ def gerar_cortes(
     pessoas: list[str],
     base: Path | None = None,
     progresso: Callable[[str], None] = lambda _: None,
+    permitidos: set[tuple[Path, str]] | None = None,
 ) -> tuple[list[str], list[str]]:
-    lotes = [(Path(p), pendentes(p)) for p in pastas_corte]
+    """Gera os pendentes; com `permitidos` (pasta do corte, chave), só os que o dono confirmou.
+
+    `progresso` é chamado antes de cada imagem: se ele levantar, a próxima geração paga não começa."""
+    lotes = [
+        (Path(p), [m for m in pendentes(p) if permitidos is None or (Path(p), chave_momento(m)) in permitidos])
+        for p in pastas_corte
+    ]
     total = sum(len(ms) for _, ms in lotes)
     arquivos: list[str] = []
     avisos: list[str] = []
@@ -145,6 +190,9 @@ def gerar_cortes(
             chave = chave_momento(m)
             try:
                 arquivos.append(gerar_momento(pasta, chave, provedor, config, pessoas, base))
+            except RegistroIncompleto as aviso:
+                arquivos.append(aviso.arquivo)
+                avisos.append(f"{pasta.name} {chave}: {aviso}")
             except (ErroImagem, OSError, ValueError) as erro:
                 avisos.append(f"{pasta.name} {chave}: {erro}")
     return arquivos, avisos
