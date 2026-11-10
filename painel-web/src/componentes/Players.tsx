@@ -1,4 +1,4 @@
-import { RefObject, useState } from "react";
+import { Ref, useState } from "react";
 import { caminhoCorte } from "../api";
 
 interface Props {
@@ -6,7 +6,7 @@ interface Props {
   n: number | string;
   videoFinal: string[];
   /** Dá acesso ao <video> (tempo atual para a prévia da música). */
-  videoRef?: RefObject<HTMLVideoElement>;
+  videoRef?: Ref<HTMLVideoElement>;
   /** Muda quando o corte.mp4 foi refeito, para o navegador não usar o cache. */
   versao?: string | null;
   /** Há troca de música em andamento: o <video> do corte sai da tela para soltar o arquivo. */
@@ -38,13 +38,15 @@ export function Players({ ep, n, videoFinal, videoRef, versao, montando = false 
           </button>
         ))}
       </div>
-      {montando && escolhido === null ? (
-        <p role="status" className="montando-corte">
-          Montando o corte…
-        </p>
-      ) : (
-        <video key={src} ref={videoRef} src={src} controls playsInline preload="metadata" />
-      )}
+      <div className="tela">
+        {montando && escolhido === null ? (
+          <p role="status" className="montando-corte">
+            Montando o corte…
+          </p>
+        ) : (
+          <video key={src} ref={videoRef} src={src} controls playsInline preload="metadata" />
+        )}
+      </div>
     </section>
   );
 }

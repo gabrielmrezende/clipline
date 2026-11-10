@@ -1,25 +1,18 @@
-/* Imagens no vídeo e aprovação (Fase B). */
+/* Imagens no vídeo (Fase B): o selo "No vídeo" e o botão "Usar no vídeo" de cada imagem pronta. */
 .no-video {
-  display: inline-block;
-  padding: 0.1rem 0.4rem;
-  border-radius: 0.4rem;
-  background: var(--destaque);
-  color: var(--superficie);
-  font-weight: 700;
-  font-size: 0.85rem;
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.5rem;
+  padding: 0 0.55rem;
+  border-radius: 999px;
+  background: var(--azul);
+  color: var(--sobre-azul);
+  font-weight: 650;
+  font-size: 0.8125rem;
+  animation: brotar 0.3s var(--curva) both;
 }
 .usar-no-video {
-  font-size: 0.85rem;
-}
-.selo-e-aprovacao {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.5rem;
-}
-.aprovacao {
-  display: inline-flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.5rem;
+  min-height: 36px;
+  padding: 0 0.7rem;
+  font-size: 0.8125rem;
 }

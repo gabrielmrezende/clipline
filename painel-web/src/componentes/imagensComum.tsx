@@ -135,7 +135,7 @@ export function AndamentoPedido({ pedido }: { pedido: Pedido }) {
     erro: `Erro: ${pedido.mensagem}`,
   };
   return (
-    <div className="andamento" role="status">
+    <div className={ativo(pedido) ? "andamento ativo" : "andamento"} role="status">
       <p className={pedido.estado === "erro" ? "mensagem-erro" : undefined}>{texto[pedido.estado]}</p>
       {pedido.estado === "pronto" && pedido.mensagem ? <p>{pedido.mensagem}</p> : null}
       {pedido.avisos.length > 0 ? (

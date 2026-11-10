@@ -21,8 +21,12 @@ interface Props {
 export function Aprovacao({ ep, n, aprovacao, montando, aoMudar }: Props) {
   const [erro, setErro] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
+  // Só carimba quando a aprovação acabou de acontecer nesta tela, não ao abrir um corte já aprovado.
+  const [carimbar, setCarimbar] = useState(false);
   if (!aprovacao) return null;
-  if (aprovacao.estado === "aprovado") return <span className="selo selo-pronto">Aprovado</span>;
+  if (aprovacao.estado === "aprovado") {
+    return <span className={carimbar ? "selo selo-pronto carimbo" : "selo selo-pronto"}>Aprovado</span>;
+  }
   if (aprovacao.estado === "bloqueado") return <span className="suave">{aprovacao.motivo}</span>;
   const rotulo = aprovacao.estado === "aprovar de novo" ? "Aprovar de novo" : "Aprovar este vídeo";
 
@@ -35,6 +39,7 @@ export function Aprovacao({ ep, n, aprovacao, montando, aoMudar }: Props) {
       const texto = atual.montagem_desatualizada ? `${DESATUALIZADA}\n${CONFIRMA}` : CONFIRMA;
       if (!window.confirm(texto)) return;
       await aprovarCorte(ep, n);
+      setCarimbar(true);
       aoMudar();
     } catch (x) {
       setErro(mensagem(x));
@@ -45,7 +50,7 @@ export function Aprovacao({ ep, n, aprovacao, montando, aoMudar }: Props) {
 
   return (
     <span className="aprovacao">
-      <button type="button" disabled={montando || enviando} onClick={() => void aprovar()}>
+      <button type="button" className="primario" disabled={montando || enviando} onClick={() => void aprovar()}>
         {rotulo}
       </button>
       {erro ? (

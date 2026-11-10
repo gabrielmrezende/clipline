@@ -256,7 +256,7 @@ export function EditorPost({ ep, n, recarregarSinal }: Props) {
         <div className="credito">
           <h3>Crédito</h3>
           <pre>{post.credito}</pre>
-          <button type="button" onClick={copiarCredito}>
+          <button type="button" className="discreto" onClick={copiarCredito}>
             Copiar crédito
           </button>
           <span role="status" className="suave">
@@ -265,7 +265,7 @@ export function EditorPost({ ep, n, recarregarSinal }: Props) {
         </div>
       ) : null}
       <div className="acoes-post">
-        <button type="button" onClick={() => void salvar(versao)} disabled={quebrado || salvando}>
+        <button type="button" className="primario" onClick={() => void salvar(versao)} disabled={quebrado || salvando}>
           Salvar
         </button>
         <span role="status">{salvo ? "Salvo." : ""}</span>

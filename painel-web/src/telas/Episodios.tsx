@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { CSSProperties, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { ErroApi, Resumo, pedir } from "../api";
 
@@ -14,11 +14,6 @@ export function Episodios() {
 
   return (
     <main className="coluna">
-      <p>
-        <Link to="/configuracoes" className="alvo-inline">
-          Configurações
-        </Link>
-      </p>
       <h1>Episódios</h1>
       {erro ? (
         <p role="alert" className="mensagem-erro">
@@ -27,16 +22,25 @@ export function Episodios() {
       ) : null}
       {!lista && !erro ? <p>Carregando…</p> : null}
       {lista && lista.length === 0 ? <p>Nenhum episódio em 2 - Cortes.</p> : null}
-      <ul className="cartoes">
+      <ul className="episodios">
         {lista?.map((r) => (
-          <li key={r.nome} className="cartao">
-            <Link to={`/episodios/${encodeURIComponent(r.nome)}`} className="alvo">
+          <li key={r.nome}>
+            <Link to={`/episodios/${encodeURIComponent(r.nome)}`} className="episodio-link">
               <h2>{r.nome}</h2>
-              <p>
+              <span className="episodio-conta">
                 {r.prontos} de {r.total} cortes prontos
-              </p>
-              {r.proxima_data ? <p>Próxima publicação: {r.proxima_data}</p> : null}
-              {r.aviso ? <p className="aviso">⚠ {r.aviso}</p> : null}
+              </span>
+              <span
+                className="progresso"
+                aria-hidden="true"
+                style={{ "--feito": r.total > 0 ? r.prontos / r.total : 0 } as CSSProperties}
+              />
+              {r.proxima_data || r.aviso ? (
+                <span className="episodio-extra">
+                  {r.proxima_data ? <span>Próxima publicação: {r.proxima_data}</span> : null}
+                  {r.aviso ? <span className="aviso">⚠ {r.aviso}</span> : null}
+                </span>
+              ) : null}
             </Link>
           </li>
         ))}

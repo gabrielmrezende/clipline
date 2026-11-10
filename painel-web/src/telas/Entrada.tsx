@@ -23,7 +23,7 @@ export function Entrada() {
   }
 
   return (
-    <main className="coluna estreita">
+    <main className="coluna estreita entrada">
       <h1>Entrar</h1>
       <form onSubmit={entrar}>
         <label htmlFor="codigo">Código de acesso</label>

@@ -45,6 +45,8 @@ interface Props {
   irPara: (segundos: number) => void;
   /** Avisa a tela se há momentos: com eles, o bloco substitui o guia e a lista de miniaturas. */
   aoCarregar?: (temMomentos: boolean) => void;
+  /** Os momentos como estão na tela agora (a linha do corte desenha onde entra cada imagem). */
+  aoMudarMomentos?: (momentos: Momento[]) => void;
   /** Solta o corte.mp4 do player antes de montar (no Windows, arquivo aberto não pode ser trocado). */
   soltarVideo?: () => void;
   /** true ao pedir a montagem; false quando ela termina (ou falha). */
@@ -70,6 +72,7 @@ export function BlocoImagens({
   n,
   irPara,
   aoCarregar,
+  aoMudarMomentos,
   soltarVideo,
   aoMudarAndamento,
   aoTerminarMontagem,
@@ -100,6 +103,12 @@ export function BlocoImagens({
   aoCarregarRef.current = aoCarregar;
   const montagemRef = useRef({ aoMudarAndamento, aoTerminarMontagem });
   montagemRef.current = { aoMudarAndamento, aoTerminarMontagem };
+  const aoMudarMomentosRef = useRef(aoMudarMomentos);
+  aoMudarMomentosRef.current = aoMudarMomentos;
+
+  useEffect(() => {
+    if (momentos) aoMudarMomentosRef.current?.(momentos);
+  }, [momentos]);
 
   /** Fim (ou perda) de uma montagem pedida aqui: devolve o player à tela e manda recarregar o corte. */
   const terminarMontagem = useCallback(() => {
@@ -344,7 +353,7 @@ export function BlocoImagens({
         <button type="button" disabled={ocupado || !orcamento || orcamento.imagens === 0} onClick={() => void gerar()}>
           {rotuloDeIa(orcamento)}
         </button>
-        <button type="button" disabled={ocupado || montandoNaTela} onClick={() => void montarDeNovo()}>
+        <button type="button" className="primario" disabled={ocupado || montandoNaTela} onClick={() => void montarDeNovo()}>
           Montar com as imagens
         </button>
       </div>

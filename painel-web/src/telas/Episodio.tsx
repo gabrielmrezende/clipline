@@ -1,4 +1,4 @@
-import { KeyboardEvent, useEffect, useState } from "react";
+import { KeyboardEvent, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import {
   Bloco,
@@ -40,8 +40,8 @@ function Cortes({ ep, cortes }: { ep: string; cortes: Bloco[] }) {
       {cortes.map((c) => (
         <li key={c.numero} className="cartao">
           <Link to={`/episodios/${encodeURIComponent(ep)}/cortes/${c.numero}`} className="alvo">
-            <h3>
-              {c.numero}. {c.titulo}
+            <h3 className="corte-titulo">
+              <span className="corte-num">{c.numero}.</span> {c.titulo}
             </h3>
             <p>{c.montando ? <span className="suave">montando…</span> : <Selo valor={c.selo} />}</p>
             <p>{c.data ? `Publica em ${c.data}` : "Sem data"}</p>
@@ -86,6 +86,20 @@ export function Episodio() {
   const aba: AbaId = ABAS.find((a) => a.id === params.get("aba"))?.id ?? "cortes";
   const [detalhe, setDetalhe] = useState<EpisodioDetalhe | null>(null);
   const [erro, setErro] = useState<string | null>(null);
+  const lista = useRef<HTMLDivElement>(null);
+  const [indicador, setIndicador] = useState<{ x: number; w: number } | null>(null);
+
+  // A linha azul embaixo da aba escolhida desliza até a nova aba.
+  useLayoutEffect(() => {
+    function medir() {
+      const ativa = lista.current?.querySelector<HTMLElement>('[aria-selected="true"]');
+      if (ativa) setIndicador({ x: ativa.offsetLeft, w: ativa.offsetWidth });
+    }
+    medir();
+    window.addEventListener("resize", medir);
+    void document.fonts?.ready.then(medir);
+    return () => window.removeEventListener("resize", medir);
+  }, [aba]);
 
   useEffect(() => {
     setDetalhe(null);
@@ -113,14 +127,14 @@ export function Episodio() {
 
   return (
     <main className="coluna">
-      <p>
+      <p className="voltar">
         <Link to="/" className="alvo-inline">
           ← Episódios
         </Link>
       </p>
       <h1>{ep}</h1>
       {detalhe?.resumo.aviso ? <p className="aviso">⚠ {detalhe.resumo.aviso}</p> : null}
-      <div role="tablist" aria-label="Seções do episódio" className="abas">
+      <div role="tablist" aria-label="Seções do episódio" className="abas" ref={lista}>
         {ABAS.map((a, i) => (
           <button
             key={a.id}
@@ -135,6 +149,13 @@ export function Episodio() {
             {a.rotulo}
           </button>
         ))}
+        {indicador ? (
+          <span
+            className="abas-indicador"
+            aria-hidden="true"
+            style={{ transform: `translateX(${indicador.x}px)`, width: indicador.w }}
+          />
+        ) : null}
       </div>
       <div role="tabpanel" id={`painel-${aba}`} aria-labelledby={`aba-${aba}`}>
         {erro ? <Erro texto={erro} /> : null}

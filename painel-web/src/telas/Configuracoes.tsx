@@ -75,7 +75,7 @@ export function Configuracoes() {
 
   return (
     <main className="coluna">
-      <p>
+      <p className="voltar">
         <Link to="/" className="alvo-inline">
           ← Episódios
         </Link>

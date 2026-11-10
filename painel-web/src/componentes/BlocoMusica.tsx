@@ -282,7 +282,7 @@ export function BlocoMusica({
           {erroLeitura}
         </p>
       ) : null}
-      <p>
+      <p className="musica-agora">
         <strong>Agora:</strong>{" "}
         <span>{atual ? `${atual.titulo} · ${atual.volume_db} dB` : "Sem música"}</span>
       </p>
@@ -323,7 +323,7 @@ export function BlocoMusica({
       )}
       <audio ref={audio} controls hidden={srcAudio === null} onEnded={() => setTocando(null)} />
       {tituloEscolhido ? (
-        <p>
+        <p className="escolhida">
           Escolhida: <strong>{tituloEscolhido}</strong>
         </p>
       ) : null}
@@ -366,7 +366,12 @@ export function BlocoMusica({
         </p>
       ) : null}
       <div className="acoes-musica">
-        <button type="button" disabled={!arquivoEscolhido || ocupado || montandoNaTela} onClick={montarComEsta}>
+        <button
+          type="button"
+          className="primario"
+          disabled={!arquivoEscolhido || ocupado || montandoNaTela}
+          onClick={montarComEsta}
+        >
           Montar com esta música
         </button>
       </div>
@@ -376,7 +381,7 @@ export function BlocoMusica({
         </p>
       ) : null}
       {pedido ? (
-        <div className="andamento" role="status">
+        <div className={ativo(pedido) ? "andamento ativo" : "andamento"} role="status">
           <p className={pedido.estado === "erro" ? "mensagem-erro" : undefined}>
             {textoEstado[pedido.estado]}
           </p>

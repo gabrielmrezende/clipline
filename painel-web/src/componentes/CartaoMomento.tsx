@@ -158,7 +158,7 @@ function CorpoIa({
         Aprovado
       </label>
       {m.ia.length > 0 ? (
-        <ul className="candidatas">
+        <ul className="candidatas versoes">
           {m.ia.map((v) => (
             <li key={v.arquivo} className="candidata">
               <img loading="lazy" src={urlImagem(ep, n, v.arquivo)} alt={`Versão ${v.versao ?? ""}`} />
@@ -203,56 +203,69 @@ export function CartaoMomento(props: Props) {
 
   return (
     <li className={m.descartar ? "momento descartado" : "momento"}>
-      <div className="momento-topo">
-        <button type="button" className="faixa-tocar" aria-label={`Ir para ${tempo}`} onClick={() => irPara(tela)}>
+      <div className="momento-marca">
+        <button type="button" className="momento-play" aria-label={`Ir para ${tempo}`} onClick={() => irPara(tela)}>
           ▶
         </button>
         <span className="momento-tempo" data-testid="tempo-momento">
           {proposto === tempo ? tempo : `${tempo} (proposto ${proposto})`}
         </span>
-        <span className="momento-tipo">{ROTULO_TIPO[m.tipo] ?? m.tipo}</span>
       </div>
-      <p className="momento-fala">{m.fala}</p>
-      {m.descartar ? null : m.tipo === "foto" ? (
-        <CorpoFoto m={m} bloqueado={bloqueado} alterar={alterar} buscar={props.buscar} />
-      ) : m.tipo === "ia" ? (
-        <CorpoIa
-          m={m}
-          ep={ep}
-          n={n}
-          bloqueado={bloqueado}
-          alterar={alterar}
-          gerando={props.gerando}
-          precoIa={props.precoIa}
-          gerarDeNovo={props.gerarDeNovo}
-        />
-      ) : m.tipo === "noticia" ? (
-        <CorpoNoticia m={m} ep={ep} n={n} bloqueado={bloqueado} alterar={alterar} />
-      ) : null}
-      {erro ? (
-        <p role="alert" className="mensagem-erro">
-          {erro}
-        </p>
-      ) : null}
-      <div className="acoes-musica">
-        {trocaveis && !m.descartar ? (
-          <button
-            type="button"
-            disabled={bloqueado}
-            onClick={() => alterar({ tipo: destino }, { tipo: destino, aprovado: false })}
-          >
-            {destino === "ia" ? "Trocar para IA" : "Trocar para foto"}
-          </button>
+      <div className="momento-corpo">
+        <span className="momento-tipo">{ROTULO_TIPO[m.tipo] ?? m.tipo}</span>
+        <p className="momento-fala">{m.fala}</p>
+        {m.descartar ? null : m.tipo === "foto" ? (
+          <CorpoFoto m={m} bloqueado={bloqueado} alterar={alterar} buscar={props.buscar} />
+        ) : m.tipo === "ia" ? (
+          <CorpoIa
+            m={m}
+            ep={ep}
+            n={n}
+            bloqueado={bloqueado}
+            alterar={alterar}
+            gerando={props.gerando}
+            precoIa={props.precoIa}
+            gerarDeNovo={props.gerarDeNovo}
+          />
+        ) : m.tipo === "noticia" ? (
+          <CorpoNoticia m={m} ep={ep} n={n} bloqueado={bloqueado} alterar={alterar} />
         ) : null}
-        {m.descartar ? (
-          <button type="button" disabled={bloqueado} onClick={() => alterar({ descartar: false }, { descartar: false })}>
-            Restaurar
-          </button>
-        ) : (
-          <button type="button" disabled={bloqueado} onClick={() => alterar({ descartar: true }, { descartar: true })}>
-            Descartar
-          </button>
-        )}
+        {erro ? (
+          <p role="alert" className="mensagem-erro">
+            {erro}
+          </p>
+        ) : null}
+        <div className="acoes-musica">
+          {trocaveis && !m.descartar ? (
+            <button
+              type="button"
+              className="discreto"
+              disabled={bloqueado}
+              onClick={() => alterar({ tipo: destino }, { tipo: destino, aprovado: false })}
+            >
+              {destino === "ia" ? "Trocar para IA" : "Trocar para foto"}
+            </button>
+          ) : null}
+          {m.descartar ? (
+            <button
+              type="button"
+              className="discreto"
+              disabled={bloqueado}
+              onClick={() => alterar({ descartar: false }, { descartar: false })}
+            >
+              Restaurar
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="discreto"
+              disabled={bloqueado}
+              onClick={() => alterar({ descartar: true }, { descartar: true })}
+            >
+              Descartar
+            </button>
+          )}
+        </div>
       </div>
     </li>
   );
