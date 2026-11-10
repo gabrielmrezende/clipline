@@ -1,11 +1,15 @@
 import threading
+from dataclasses import asdict
 from pathlib import Path
+from typing import Literal
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse, Response
 from pydantic import BaseModel
 
+from esteira.aprovacao import ErroAprovacao, aprovar, estado_aprovacao
 from esteira.cortar import CORTE_MP4, IMAGENS_SUGERIDAS, VIDEO_FINAL, ler_aprovados
+from esteira.imagens_no_video import montagem_desatualizada
 from esteira.painel.acesso import COOKIE, DURACAO_SESSAO, CodigoErrado, Travado
 from esteira.painel.leitura import (
     NaoEncontrado,
@@ -131,11 +135,32 @@ def corte(ep: str, n: int, requisicao: Request) -> dict:
             key=str.lower,
         )
     guia = imagens / "guia.md"
+    destino = pasta / bloco.pasta
+    montando = requisicao.app.state.fila.montando_corte(pasta.name, n)
     return {
         "bloco": _bloco_com_avisos(pasta, bloco),
         "guia": _ler_texto(guia) if guia.is_file() else None,
         "imagens": nomes,
+        "aprovacao": asdict(estado_aprovacao(destino, montando)),
+        "montagem_desatualizada": montagem_desatualizada(destino),
     }
+
+
+class ConfirmarAprovacao(BaseModel):
+    """Corpo JSON obrigatório: um formulário de outra página não aprova o corte (ver Confirmacao nas imagens)."""
+
+    confirmado: Literal[True]
+
+
+@roteador.post("/episodios/{ep}/cortes/{n}/aprovar")
+def aprovar_corte(ep: str, n: int, corpo: ConfirmarAprovacao, requisicao: Request):
+    pasta, bloco = _pasta_do_corte(requisicao, ep, n)
+    estado = requisicao.app.state
+    try:
+        aprovacao = aprovar(pasta / bloco.pasta, estado.fila.montando_corte(pasta.name, n), base=estado.cortes)
+    except ErroAprovacao as erro:
+        return JSONResponse({"detail": str(erro)}, status_code=erro.status)
+    return asdict(aprovacao)
 
 
 @roteador.get("/episodios/{ep}/cortes/{n}/video")

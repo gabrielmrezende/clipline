@@ -196,3 +196,57 @@ def test_aprovados_ilegivel_nao_da_500(tmp_path):
     assert cliente.get(_url()).status_code == 200
     assert cliente.get(_url("/calendario")).status_code == 200
     assert cliente.get(_url("/cortes/1")).status_code == 404
+
+
+def test_api_aprovar_e_detalhe_do_corte(tmp_path):
+    _ep(tmp_path, [Corte(1, "Um", 10, 20, "tenso")], {1})
+    cliente = _cliente(tmp_path)
+    detalhe = cliente.get(_url("/cortes/1")).json()
+    assert detalhe["aprovacao"] == {"estado": "aprovar", "motivo": None}
+    assert detalhe["montagem_desatualizada"] is False
+    assert cliente.post(_url("/cortes/1/aprovar")).status_code == 422  # sem a confirmação
+    resposta = cliente.post(_url("/cortes/1/aprovar"), json={"confirmado": True})
+    assert resposta.status_code == 200 and resposta.json() == {"estado": "aprovado", "motivo": None}
+    detalhe = cliente.get(_url("/cortes/1")).json()
+    assert detalhe["bloco"]["video_final"] == ["corte-aprovado.mp4"]
+    assert detalhe["aprovacao"]["estado"] == "aprovado"
+
+
+def test_api_aprovar_com_video_do_dono_409(tmp_path):
+    corte = Corte(1, "Um", 10, 20, "tenso")
+    destino = pasta_do_corte(_ep(tmp_path, [corte], {1}), corte)
+    (destino / VIDEO_FINAL).mkdir()
+    (destino / VIDEO_FINAL / "Corte 1.mp4").write_bytes(b"x")
+    resposta = _cliente(tmp_path).post(_url("/cortes/1/aprovar"), json={"confirmado": True})
+    assert resposta.status_code == 409 and resposta.json()["detail"].startswith("video-final/ já tem um vídeo seu")
+    assert sorted(p.name for p in (destino / VIDEO_FINAL).iterdir()) == ["Corte 1.mp4"]
+
+
+def test_api_aprovar_corte_nao_montado_422(tmp_path):
+    _ep(tmp_path, [Corte(1, "Um", 10, 20, "tenso")], set())
+    resposta = _cliente(tmp_path).post(_url("/cortes/1/aprovar"), json={"confirmado": True})
+    assert resposta.status_code == 422 and resposta.json()["detail"] == "corte não montado"
+
+
+def test_api_aprovar_durante_a_montagem_409(tmp_path):
+    import threading
+
+    _ep(tmp_path, [Corte(1, "Um", 10, 20, "tenso")], {1})
+    entrou, solto = threading.Event(), threading.Event()
+
+    def montar(pasta, numero):
+        entrou.set()
+        assert solto.wait(10)
+        return "ok"
+
+    cliente = TestClient(criar_app(tmp_path / "cortes", agora=lambda: AGORA, montar=montar))
+    try:
+        assert cliente.post(_url("/cortes/1/montar"), json={"confirmado": True}).status_code == 202
+        assert entrou.wait(10)
+        assert cliente.get(_url("/cortes/1")).json()["aprovacao"] == {
+            "estado": "bloqueado", "motivo": "o corte está sendo montado"}
+        resposta = cliente.post(_url("/cortes/1/aprovar"), json={"confirmado": True})
+        assert resposta.status_code == 409 and resposta.json()["detail"] == "o corte está sendo montado"
+    finally:
+        solto.set()
+        cliente.app.state.fila.parar(5)
