@@ -155,7 +155,7 @@ def gerar_momento(
     except Exception as erro:  # fronteira: o arquivo no disco já conta como versão (pendentes, R11)
         motivos.append(str(erro) or type(erro).__name__)
     try:
-        escrever_guia(pasta_corte, _momentos_do_guia(pasta_corte, momentos))
+        escrever_guia(pasta_corte, momentos, _momentos_do_guia(pasta_corte, momentos))
     except Exception as erro:  # fronteira: o guia é refeito na próxima rodada
         motivos.append(str(erro) or type(erro).__name__)
     if motivos:

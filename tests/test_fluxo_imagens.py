@@ -1,3 +1,4 @@
+import copy
 import io
 import json
 
@@ -6,7 +7,7 @@ from PIL import Image
 
 from esteira.fluxo_imagens import (
     ErroBusca, buscar_episodio, chave_momento, escrever_guia, ler_ia, registrar_ia, resumir_episodio, sugerir_episodio)
-from esteira.pedidos import Momento, gravar_pedidos, ler_pedidos
+from esteira.pedidos import Momento, ajustar_tempos, gravar_pedidos, ler_pedidos
 from esteira.planos import Plano
 from esteira.receita import Receita, gravar_receita
 
@@ -466,3 +467,45 @@ def test_sugerir_nao_apaga_ia(tmp_path):
     pasta = corte / "imagens-sugeridas"
     assert (pasta / f"{chave}-ia-1.jpg").exists()
     assert f"Imagem de IA: {chave}-ia-1.jpg" in (pasta / "guia.md").read_text("utf-8")
+
+
+def _apertados(tmp_path, primeiro):
+    """O 1º momento não cabe para frente (o próximo começa 0,5 s depois do fim): o ajuste puxa o início 1 s para trás."""
+    seguinte = Momento(primeiro.fim + 0.5, primeiro.fim + 3.5, "outra", "ia", "Depois", prompt="Céu azul")
+    return _episodio(tmp_path, [primeiro, seguinte])
+
+
+def test_sugerir_nomeia_pela_chave_proposta_quando_o_ajuste_puxa_o_inicio(tmp_path):
+    foto = Momento(10.0, 10.5, "a placa", "foto", "Placa", busca="placa", candidatas=[_candidata(1, "Fulano")], escolhas=[1])
+    ep, corte = _apertados(tmp_path, foto)
+    resumir_episodio(ep, None, falso, lambda u: 1)
+    assert sugerir_episodio(ep, None, [], falso, baixar_cor) == {1: "ok"}
+    pasta = corte / "imagens-sugeridas"
+    assert (pasta / "0010-placa-1.jpg").exists()
+    assert not (pasta / "0009-placa-1.jpg").exists()
+    assert json.loads((corte / "trabalho" / "sugeridas.json").read_text("utf-8")) == ["0010-placa-1.jpg"]
+    guia = (pasta / "guia.md").read_text("utf-8")
+    assert "## 0:09 a 0:11 · Placa (foto)" in guia
+    assert "Opções: 0010-placa-1.jpg" in guia
+
+
+def test_guia_acha_imagem_de_ia_quando_o_ajuste_muda_o_inicio(tmp_path):
+    ep, corte = _apertados(tmp_path, Momento(20.0, 20.5, "chovia", "ia", "Chuva", prompt="Chuva numa pista vazia"))
+    pasta = corte / "imagens-sugeridas"
+    pasta.mkdir()
+    registrar_ia(corte / "trabalho", _item_ia(1, "0020-chuva"), tmp_path)
+    Image.new("RGB", (10, 10)).save(pasta / "0020-chuva-ia-1.jpg")
+    momentos = ler_pedidos(corte / "trabalho")
+    ajustados = copy.deepcopy(momentos)
+    ajustar_tempos(ajustados, 60.0)
+    escrever_guia(corte, momentos, ajustados)
+    guia = (pasta / "guia.md").read_text("utf-8")
+    assert "## 0:19 a 0:21 · Chuva (IA)" in guia
+    assert "Imagem de IA: 0020-chuva-ia-1.jpg (openai, 2026-11-09)" in guia
+
+
+def test_guia_explica_que_a_esteira_ja_poe_as_imagens(tmp_path):
+    ep, corte = _episodio(tmp_path, [_foto()])
+    escrever_guia(corte, ler_pedidos(corte / "trabalho"))
+    guia = (corte / "imagens-sugeridas" / "guia.md").read_text("utf-8")
+    assert "A esteira já põe no corte.mp4 a imagem marcada de cada momento." in guia

@@ -31,6 +31,8 @@ ERRO_SEM_MONTAGEM = f"erro: {NOME_ARQUIVO} não encontrado, rode preparar"
 ERRO_SEM_RESUMO = "erro: rode imagens resumo"
 LEMBRETES = """# Imagens sugeridas
 
+A esteira já põe no corte.mp4 a imagem marcada de cada momento. Este guia serve para quem for editar no CapCut.
+
 - Cada imagem fica de 2 a 5 s na tela.
 - Entrada e saída em corte seco, sem transição.
 - Zoom lento de cerca de 8% enquanto a imagem está na tela.
@@ -226,8 +228,8 @@ def registrar_ia(trabalho: Path, item: dict, base: Path | None = None) -> None:
     os.replace(temporario, caminho)
 
 
-def _linha_ia(pasta: Path, m: Momento, ia: list[dict]) -> str:
-    itens = [i for i in ia if i.get("momento") == chave_momento(m) and isinstance(i.get("arquivo"), str)
+def _linha_ia(pasta: Path, chave: str, ia: list[dict]) -> str:
+    itens = [i for i in ia if i.get("momento") == chave and isinstance(i.get("arquivo"), str)
              and Path(i["arquivo"]).name == i["arquivo"] and (pasta / i["arquivo"]).exists()]
     if not itens:
         return ""
@@ -237,21 +239,26 @@ def _linha_ia(pasta: Path, m: Momento, ia: list[dict]) -> str:
     return f"Imagem de IA: {', '.join(i['arquivo'] for i in itens)} ({ultimo.get('provedor', '')}, {data})"
 
 
-def _arquivos(m: Momento) -> list[str]:
+def _arquivos(m: Momento, chave: str | None = None) -> list[str]:
+    """Os arquivos do momento em imagens-sugeridas/, pela chave do tempo proposto (sem `chave`, a do próprio `m`)."""
+    base = chave if chave is not None else _base(m)
     if m.tipo == "foto":
-        return [f"{_base(m)}-{k}.jpg" for k in range(1, len(m.escolhas) + 1)]
-    return [f"{_base(m)}.png"] if m.tipo == "noticia" else []
+        return [f"{base}-{k}.jpg" for k in range(1, len(m.escolhas) + 1)]
+    return [f"{base}.png"] if m.tipo == "noticia" else []
 
 
-def _bloco_guia(pasta: Path, m: Momento, geradas: set[str], ia: list[dict], creditos: dict[str, dict]) -> str:
+def _bloco_guia(
+    pasta: Path, m: Momento, chave: str, geradas: set[str], ia: list[dict], creditos: dict[str, dict]
+) -> str:
+    """`m` traz os tempos de tela (ajustados); `chave`, o tempo proposto, dá os nomes dos arquivos."""
     linhas = [f"## {tempo_texto(m.inicio)} a {tempo_texto(m.fim)} · {m.nome} ({TIPOS_GUIA[m.tipo]})", f'Fala: "{m.fala}"']
     if m.tipo == "ia":
-        linha = _linha_ia(pasta, m, ia)
+        linha = _linha_ia(pasta, chave, ia)
         if linha:
             linhas.append(linha)
         linhas.append(f'Prompt (9:16): "{m.prompt}"')
         return "\n".join(linhas)
-    presentes = [(k, nome) for k, nome in enumerate(_arquivos(m), 1) if nome in geradas and (pasta / nome).exists()]
+    presentes = [(k, nome) for k, nome in enumerate(_arquivos(m, chave), 1) if nome in geradas and (pasta / nome).exists()]
     if presentes:
         linhas.append("Opções: " + ", ".join(nome for _, nome in presentes))
     if m.motivo or not presentes:
@@ -267,15 +274,23 @@ def _bloco_guia(pasta: Path, m: Momento, geradas: set[str], ia: list[dict], cred
     return "\n".join(linhas)
 
 
-def escrever_guia(destino: Path, momentos: list[Momento]) -> Path:
-    """Grava imagens-sugeridas/guia.md com um bloco por momento, em ordem de tempo."""
+def escrever_guia(destino: Path, momentos: list[Momento], ajustados: list[Momento] | None = None) -> Path:
+    """Grava imagens-sugeridas/guia.md com um bloco por momento, em ordem de tempo.
+
+    `momentos` são os do pedidos.json (a chave e os nomes saem do tempo proposto); `ajustados`, a lista
+    paralela com os tempos de tela e os descartes do ajuste de 2 a 5 s (sem ela, os próprios `momentos`)."""
     pasta = Path(destino) / IMAGENS_SUGERIDAS
     pasta.mkdir(parents=True, exist_ok=True)
-    ativos = sorted((m for m in momentos if not m.descartar), key=lambda m: m.inicio)
+    telas = ajustados if ajustados is not None else momentos
+    pares = sorted(
+        ((chave_momento(original), m) for original, m in zip(momentos, telas) if not m.descartar),
+        key=lambda par: par[1].inicio,
+    )
     geradas = set(_ler_sugeridas(Path(destino) / TRABALHO))
     ia = ler_ia(Path(destino) / TRABALHO)
     creditos = ler_creditos(Path(destino) / TRABALHO)
-    blocos = [_bloco_guia(pasta, m, geradas, ia, creditos) for m in ativos] or ["Nenhuma imagem sugerida neste corte."]
+    blocos = [_bloco_guia(pasta, m, chave, geradas, ia, creditos) for chave, m in pares] or [
+        "Nenhuma imagem sugerida neste corte."]
     caminho = pasta / GUIA
     _gravar_texto(caminho, LEMBRETES + "\n" + "\n\n".join(blocos) + "\n")
     return caminho
@@ -333,11 +348,14 @@ def _produzir(caminho: Path, produzir: Callable[[Path], object], falha: str) -> 
 
 def _sugerir_um(
     destino: Path,
+    originais: list[Momento],
     momentos: list[Momento],
     alertas: list[str],
     baixar: Callable[[str, Path], None],
     rotulos: list[str],
 ) -> str:
+    """`momentos` é a cópia com os tempos ajustados; os nomes dos arquivos saem da chave dos `originais`."""
+    chaves = [chave_momento(m) for m in originais]
     trabalho = pasta_de_trabalho(destino)
     pasta = destino / IMAGENS_SUGERIDAS
     pasta.mkdir(exist_ok=True)
@@ -355,7 +373,8 @@ def _sugerir_um(
             if m.descartar or m.tipo == "ia":
                 continue
             falhas: list[tuple[int, str]] = []
-            for k, nome in enumerate(_arquivos(m), 1):
+            arquivos = _arquivos(m, chaves[posicao - 1])
+            for k, nome in enumerate(arquivos, 1):
                 if m.tipo == "noticia":
                     def produzir(c: Path, m: Momento = m) -> None:
                         gerar_cartao(m.titulo, m.veiculo, m.data, c)
@@ -377,12 +396,12 @@ def _sugerir_um(
                     _gravar_sugeridas(trabalho, geradas)  # lista sempre em dia, mesmo se interromper
             if not falhas:
                 continue
-            if len(falhas) == len(_arquivos(m)) and len({motivo for _, motivo in falhas}) == 1:
+            if len(falhas) == len(arquivos) and len({motivo for _, motivo in falhas}) == 1:
                 m.motivo = falhas[0][1]
             else:
                 m.motivo = "; ".join(f"opção {k}: {motivo}" for k, motivo in falhas)
             alertas.append(f"{rotulos[posicao - 1]}: {m.motivo}")
-    escrever_guia(destino, momentos)
+    escrever_guia(destino, originais, momentos)
     return _resultado(alertas)
 
 
@@ -415,5 +434,5 @@ def sugerir_episodio(
         if any(not _resumido(m) for _, m in _fotos_ativas(copia)):
             resultados[corte.numero] = ERRO_SEM_RESUMO
             continue
-        resultados[corte.numero] = _sugerir_um(destino, copia, alertas, baixar, _rotulos(momentos, painel))
+        resultados[corte.numero] = _sugerir_um(destino, momentos, copia, alertas, baixar, _rotulos(momentos, painel))
     return resultados

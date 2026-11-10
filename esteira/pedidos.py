@@ -34,6 +34,7 @@ class Momento:
     bytes: list[int | None] = field(default_factory=list)  # paralela a escolhas
     resumidas: list[int] = field(default_factory=list)  # escolhas do último resumo
     aprovado: bool = False  # IA: o dono aprovou o prompt no painel
+    no_video: str = ""  # arquivo pronto que entra no corte.mp4; vazio = o padrão (imagens_no_video)
 
 
 def ler_pedidos(pasta: Path) -> list[Momento]:

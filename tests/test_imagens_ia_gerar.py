@@ -295,3 +295,14 @@ def test_gerar_cortes_conta_todos_os_cortes(tmp_path):
     arquivos, avisos = gerar_cortes([a, b], Falso(), padrao(), [], base=tmp_path, progresso=mensagens.append)
     assert mensagens == ["Gerando 1 de 2…", "Gerando 2 de 2…"]
     assert len(arquivos) == 2 and avisos == []
+
+
+def test_guia_lista_a_imagem_quando_o_ajuste_puxa_o_inicio(tmp_path):
+    curto = Momento(52.0, 52.5, "fala", "ia", "Turistas", prompt="turistas numa praia", aprovado=True)
+    seguinte = Momento(53.0, 56.0, "outra", "ia", "Depois", prompt="céu azul")
+    corte = _corte(tmp_path, [curto, seguinte])
+    gravar_receita(corte / "trabalho", Receita([(0.0, 90.0)], [Plano(0.0, 90.0)], []))
+    nome = _gerar(corte, tmp_path)
+    guia = (corte / "imagens-sugeridas" / "guia.md").read_text("utf-8")
+    assert "## 0:51 a 0:53 · Turistas (IA)" in guia
+    assert f"Imagem de IA: {nome}" in guia

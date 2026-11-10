@@ -166,3 +166,12 @@ def test_momento_aprovado_default_e_ida_e_volta(tmp_path):
     gravar_pedidos(tmp_path, antigo)
     assert json.loads((tmp_path / "pedidos.json").read_text("utf-8"))["momentos"][0]["aprovado"] is True
     assert ler_pedidos(tmp_path)[0].aprovado is True
+
+
+def test_no_video_vazio_por_padrao_e_ida_e_volta(tmp_path):
+    gravar_pedidos(tmp_path, [Momento(1, 3, "f", "foto", "A", busca="x")])
+    assert ler_pedidos(tmp_path)[0].no_video == ""
+    dados = json.loads((tmp_path / "pedidos.json").read_text("utf-8"))
+    dados["momentos"][0]["no_video"] = "0001-a-2.jpg"
+    (tmp_path / "pedidos.json").write_text(json.dumps(dados), "utf-8")
+    assert ler_pedidos(tmp_path)[0].no_video == "0001-a-2.jpg"
