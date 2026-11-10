@@ -217,6 +217,7 @@ export function BlocoImagens({ ep, n, irPara, aoCarregar, soltarVideo, aoMudarAn
       try {
         const r = await enviar();
         versao.current = r.versao;
+        if (r.montagem_desatualizada !== undefined) setDesatualizada(r.montagem_desatualizada);
         emVoo.current -= 1;
         // Só a última resposta da fila redesenha: as anteriores apagariam cliques que ainda estão a caminho.
         if (sempre || emVoo.current === 0) {

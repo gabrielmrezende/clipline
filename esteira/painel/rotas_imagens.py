@@ -220,7 +220,11 @@ def _conflito(versao_atual: str) -> JSONResponse:
 
 def _resposta(requisicao: Request, destino: Path, lista: list[Momento], m: Momento, versao: str) -> dict:
     jsons = _jsons(lista, destino, _pessoas_ou_nada(requisicao))
-    return {"momento": next(j for x, j in zip(lista, jsons) if x is m), "versao": versao}
+    return {
+        "momento": next(j for x, j in zip(lista, jsons) if x is m),
+        "versao": versao,
+        "montagem_desatualizada": montagem_desatualizada(destino),  # a tela avisa sem recarregar
+    }
 
 
 @roteador.get("/episodios/{ep}/cortes/{n}/momentos")

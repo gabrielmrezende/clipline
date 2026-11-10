@@ -253,6 +253,7 @@ export interface ListaMomentos {
 export interface RespostaMomento {
   momento: Momento;
   versao: string;
+  montagem_desatualizada?: boolean;
 }
 
 export interface AlteracaoMomento {

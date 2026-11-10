@@ -190,7 +190,7 @@ beforeEach(() => {
         const m = momentos.find((x) => x.chave === decodeURIComponent(mom[1]))!;
         aplicar(m, corpo);
         versao += 1;
-        return resposta({ momento: m, versao: `v${versao}` });
+        return resposta({ momento: m, versao: `v${versao}`, montagem_desatualizada: desatualizada });
       }
       if (url.endsWith("/fotos/resumo")) {
         if (resumo === "erro") return resposta({ detail: "Wikimedia fora do ar" }, 422);
@@ -807,6 +807,21 @@ describe("BlocoImagens", () => {
     await avancar(0);
     expect(chamadas.some((c) => c.url === `${BASE}/montar`)).toBe(false);
     expect(soltarVideo).not.toHaveBeenCalled();
+  });
+
+  it("depois de Usar no vídeo, avisa que as imagens mudaram sem recarregar a página", async () => {
+    momentos = [{ ...IA(), prontas: ["i1-v2.png", "i1-v1.png"], no_video: "i1-v2.png" }];
+    momentos[0].ia = [
+      { arquivo: "i1-v1.png", versao: 1, provedor: "openai", data: "2026-11-08" },
+      { arquivo: "i1-v2.png", versao: 2, provedor: "openai", data: "2026-11-09" },
+    ];
+    await montar();
+    expect(screen.queryByText("As imagens mudaram desde a última montagem.")).toBeNull();
+    desatualizada = true;
+    fireEvent.click(screen.getByRole("button", { name: "Usar no vídeo" }));
+    await avancar(0);
+    await avancar(0);
+    expect(screen.getByText("As imagens mudaram desde a última montagem.")).toBeTruthy();
   });
 
   it("avisa quando as imagens mudaram desde a última montagem", async () => {

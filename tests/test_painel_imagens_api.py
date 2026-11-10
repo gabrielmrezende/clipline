@@ -1199,6 +1199,7 @@ def test_put_no_video_valido_grava(ambiente):
     versao = cliente.get(_url()).json()["versao"]
     resposta = cliente.put(_url(f"/{CHAVE_IA}"), json={"versao": versao, "no_video": f"{CHAVE_IA}-ia-1.jpg"})
     assert resposta.status_code == 200 and resposta.json()["momento"]["no_video"] == f"{CHAVE_IA}-ia-1.jpg"
+    assert resposta.json()["montagem_desatualizada"] is True  # a tela avisa sem recarregar a página
     assert ler_pedidos(trabalho)[1].no_video == f"{CHAVE_IA}-ia-1.jpg"
     resposta = cliente.put(_url(f"/{CHAVE_IA}"), json={"versao": resposta.json()["versao"], "no_video": ""})
     assert resposta.json()["momento"]["no_video"] == f"{CHAVE_IA}-ia-2.jpg"  # vazio volta ao padrão
