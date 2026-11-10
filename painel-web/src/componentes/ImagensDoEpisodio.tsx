@@ -198,7 +198,7 @@ export function ImagensDoEpisodio({ ep, cortes }: Props) {
         </button>
       </div>
       <AvisosDoResumo resumo={resumo} />
-      <Alerta texto={erroResumo} />
+      <Alerta texto={erroResumo === avisoGlossario ? null : erroResumo} />
       <Alerta texto={erroOrcamento} />
       <Alerta texto={erroPedido} />
       {pedido ? <AndamentoPedido pedido={pedido} /> : null}

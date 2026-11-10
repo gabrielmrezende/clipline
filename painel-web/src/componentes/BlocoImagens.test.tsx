@@ -180,7 +180,11 @@ beforeEach(() => {
         versao += 1;
         return resposta({ momento: m, versao: `v${versao}` });
       }
-      if (url.endsWith("/fotos/resumo")) return resumo === "erro" ? resposta({ detail: "Wikimedia fora do ar" }, 422) : resposta(resumo);
+      if (url.endsWith("/fotos/resumo")) {
+        if (resumo === "erro") return resposta({ detail: "Wikimedia fora do ar" }, 422);
+        if (resumo === "glossario") return resposta({ detail: avisoGlossario }, 422);
+        return resposta(resumo);
+      }
       if (url.endsWith("/ia/orcamento"))
         return orcamento === "erro" ? resposta({ detail: "imagens-ia.json ilegível" }, 422) : resposta(orcamento);
       if (url === "/api/configuracoes/imagens") return resposta(config);
@@ -603,10 +607,11 @@ describe("BlocoImagens", () => {
     expect(screen.getByText("imagens-ia.json ilegível")).toBeTruthy();
   });
 
-  it("mostra o aviso do glossário", async () => {
+  it("mostra o aviso do glossário uma vez, mesmo com o resumo recusado pelo mesmo motivo", async () => {
     avisoGlossario = "Não consegui ler o glossário (Contexto/glossario.md): nada foi aprovado nem gerado.";
+    resumo = "glossario";
     await montar();
-    expect(screen.getByText(avisoGlossario)).toBeTruthy();
+    expect(screen.getAllByText(avisoGlossario)).toHaveLength(1);
   });
 
   it("clicar Aprovado e logo Gerar lê o orçamento depois do PUT e manda os itens dele", async () => {
