@@ -14,6 +14,11 @@ export function Episodios() {
 
   return (
     <main className="coluna">
+      <p>
+        <Link to="/configuracoes" className="alvo-inline">
+          Configurações
+        </Link>
+      </p>
       <h1>Episódios</h1>
       {erro ? (
         <p role="alert" className="mensagem-erro">

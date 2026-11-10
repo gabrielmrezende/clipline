@@ -12,18 +12,26 @@ import {
   baixarFotos,
   buscarOutras,
   configuracaoDeImagens,
-  consultarTarefa,
-  formatarDolar,
-  formatarMb,
   gerarDeNovoIa,
   gerarImagensIa,
   lerMomentos,
   listarTarefas,
   orcamentoDeIa,
-  plural,
   resumoDeFotos,
 } from "../api";
 import { CartaoMomento } from "./CartaoMomento";
+import {
+  AndamentoPedido,
+  PEDIDO_PERDIDO,
+  ativo,
+  ehDeImagens,
+  mensagem,
+  rotuloDeFotos,
+  rotuloDeIa,
+  textoDeFotos,
+  textoDeIa,
+  useAcompanhamento,
+} from "./imagensComum";
 
 interface Props {
   ep: string;
@@ -34,17 +42,8 @@ interface Props {
   aoCarregar?: (temMomentos: boolean) => void;
 }
 
-const ESPERA_CONSULTA_MS = 2000;
 const ESPERA_RESUMOS_MS = 500;
-const PEDIDO_PERDIDO = "O pedido se perdeu (o painel foi reiniciado?). Confira as imagens e peça de novo se precisar.";
 const SUBSTITUIDAS = "As fotos baixadas antes neste corte serão substituídas.";
-
-const ativo = (p: Pedido | null) => p !== null && (p.estado === "na fila" || p.estado === "montando");
-const ehDeImagens = (p: Pedido) => p.tipo === "fotos" || p.tipo === "ia";
-
-function mensagem(x: unknown): string {
-  return x instanceof ErroApi ? x.detail : "Erro inesperado.";
-}
 
 const emOrdem = (lista: Momento[]) => [...lista].sort((a, b) => a.inicio - b.inicio);
 
@@ -57,7 +56,6 @@ export function BlocoImagens({ ep, n, irPara, aoCarregar }: Props) {
   const [orcamento, setOrcamento] = useState<OrcamentoIa | null>(null);
   const [config, setConfig] = useState<ConfigImagens | null>(null);
   const [pedido, setPedido] = useState<Pedido | null>(null);
-  const [tick, setTick] = useState(0);
   const [erroPedido, setErroPedido] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
   const versao = useRef("");
@@ -65,7 +63,6 @@ export function BlocoImagens({ ep, n, irPara, aoCarregar }: Props) {
   const cadeia = useRef<Promise<void>>(Promise.resolve());
   const emVoo = useRef(0);
   const espera = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const terminados = useRef<Set<string>>(new Set());
   const aoCarregarRef = useRef(aoCarregar);
   aoCarregarRef.current = aoCarregar;
 
@@ -139,38 +136,20 @@ export function BlocoImagens({ ep, n, irPara, aoCarregar }: Props) {
     };
   }, [ep, n, carregar, lerResumo, lerOrcamento]);
 
-  // Consulta o pedido a cada 2 s até ele terminar; ao terminar, recarrega tudo uma vez.
-  useEffect(() => {
-    if (!pedido) return;
-    if (!ativo(pedido)) {
-      if (!terminados.current.has(pedido.id)) {
-        terminados.current.add(pedido.id);
-        void carregar();
-        void lerResumo();
-        void lerOrcamento();
-      }
-      return;
-    }
-    let vivo = true;
-    const id = setTimeout(() => {
-      consultarTarefa(pedido.id)
-        .then((novo) => vivo && setPedido(novo))
-        .catch((x) => {
-          if (!vivo) return;
-          if (x instanceof ErroApi && x.status === 404) {
-            setPedido(null);
-            setErroPedido(PEDIDO_PERDIDO);
-            void carregar();
-            return;
-          }
-          setTick((t) => t + 1);
-        });
-    }, ESPERA_CONSULTA_MS);
-    return () => {
-      vivo = false;
-      clearTimeout(id);
-    };
-  }, [pedido, tick, carregar, lerResumo, lerOrcamento]);
+  // Consulta o pedido até ele terminar; ao terminar, recarrega tudo uma vez.
+  useAcompanhamento(
+    pedido,
+    setPedido,
+    () => {
+      void carregar();
+      void lerResumo();
+      void lerOrcamento();
+    },
+    () => {
+      setErroPedido(PEDIDO_PERDIDO);
+      void carregar();
+    },
+  );
 
   function falhou(chave: string, x: unknown) {
     if (x instanceof ErroApi && x.status === 409) setAviso(x.detail);
@@ -235,12 +214,7 @@ export function BlocoImagens({ ep, n, irPara, aoCarregar }: Props) {
       return;
     }
     setResumo(r);
-    const texto = [
-      `Baixar ${plural(r.fotos, "foto", "fotos")} (${formatarMb(r.megabytes)}) de ${r.origem}?`,
-      ...r.avisos,
-      SUBSTITUIDAS,
-    ].join("\n");
-    if (window.confirm(texto)) await enviarPedido(() => baixarFotos(ep, n));
+    if (window.confirm(textoDeFotos(r, SUBSTITUIDAS))) await enviarPedido(() => baixarFotos(ep, n));
   }
 
   async function gerar() {
@@ -254,8 +228,7 @@ export function BlocoImagens({ ep, n, irPara, aoCarregar }: Props) {
     }
     setOrcamento(o);
     if (o.imagens === 0) return;
-    const texto = `Gerar ${plural(o.imagens, "imagem", "imagens")} com ${o.provedor} (${o.modelo}), ${formatarDolar(o.custo_usd)}?`;
-    if (window.confirm(texto)) await enviarPedido(() => gerarImagensIa(ep, n));
+    if (window.confirm(textoDeIa(o))) await enviarPedido(() => gerarImagensIa(ep, n));
   }
 
   if (momentos === null || momentos.length === 0) {
@@ -270,20 +243,6 @@ export function BlocoImagens({ ep, n, irPara, aoCarregar }: Props) {
   const fotosAtivas = ativo(pedido) && pedido?.tipo === "fotos";
   const iaAtiva = ativo(pedido) && pedido?.tipo === "ia";
   const precoIa = config?.provedores?.[config.provedor]?.preco_usd ?? null;
-
-  const rotuloFotos = resumo
-    ? `Baixar as fotos escolhidas (${plural(resumo.fotos, "foto", "fotos")}, ${formatarMb(resumo.megabytes)})`
-    : "Baixar as fotos escolhidas";
-  const rotuloIa = orcamento
-    ? `Gerar as aprovadas (${plural(orcamento.imagens, "imagem", "imagens")}, ${formatarDolar(orcamento.custo_usd)})`
-    : "Gerar as aprovadas";
-
-  const andamento: Record<Pedido["estado"], string> = {
-    "na fila": "Na fila",
-    montando: pedido?.progresso || (pedido?.tipo === "ia" ? "Gerando…" : "Baixando…"),
-    pronto: "Pronto",
-    erro: pedido ? `Erro: ${pedido.mensagem}` : "",
-  };
 
   return (
     <section aria-labelledby="titulo-imagens" className="bloco-imagens">
@@ -300,10 +259,10 @@ export function BlocoImagens({ ep, n, irPara, aoCarregar }: Props) {
       ) : null}
       <div className="acoes-musica">
         <button type="button" disabled={ocupado || !resumo || resumo.fotos === 0} onClick={() => void baixar()}>
-          {rotuloFotos}
+          {rotuloDeFotos(resumo)}
         </button>
         <button type="button" disabled={ocupado || !orcamento || orcamento.imagens === 0} onClick={() => void gerar()}>
-          {rotuloIa}
+          {rotuloDeIa(orcamento)}
         </button>
       </div>
       {erroPedido ? (
@@ -311,21 +270,7 @@ export function BlocoImagens({ ep, n, irPara, aoCarregar }: Props) {
           {erroPedido}
         </p>
       ) : null}
-      {pedido ? (
-        <div className="andamento" role="status">
-          <p className={pedido.estado === "erro" ? "mensagem-erro" : undefined}>{andamento[pedido.estado]}</p>
-          {pedido.estado === "pronto" && pedido.mensagem ? <p>{pedido.mensagem}</p> : null}
-          {pedido.avisos.length > 0 ? (
-            <ul className="alertas">
-              {pedido.avisos.map((a, i) => (
-                <li key={i} className="aviso">
-                  ⚠ {a}
-                </li>
-              ))}
-            </ul>
-          ) : null}
-        </div>
-      ) : null}
+      {pedido ? <AndamentoPedido pedido={pedido} /> : null}
       <ul className="momentos">
         {momentos.map((m) => (
           <CartaoMomento

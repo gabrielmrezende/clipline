@@ -62,4 +62,38 @@ describe("Episodio", () => {
     expect(segundo.textContent).toContain("pronto");
     expect(segundo.textContent).not.toContain("montando…");
   });
+
+  it("a aba Imagens só consulta o resumo de fotos quando é aberta", async () => {
+    const abrir = async (url: string) => {
+      const { unmount } = render(
+        <MemoryRouter initialEntries={[url]}>
+          <Routes>
+            <Route path="/episodios/:ep" element={<Episodio />} />
+          </Routes>
+        </MemoryRouter>,
+      );
+      await act(async () => {});
+      await act(async () => {});
+      unmount();
+    };
+    const base = (fetch as unknown as ReturnType<typeof vi.fn>).getMockImplementation()!;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((url: string, init?: RequestInit) => {
+        const vazio = (c: unknown) =>
+          Promise.resolve(new Response(JSON.stringify(c), { status: 200, headers: { "Content-Type": "application/json" } }));
+        if (url.endsWith("/fotos/resumo")) return vazio({ fotos: 0, megabytes: 0, origem: "Wikimedia", avisos: [] });
+        if (url.endsWith("/ia/orcamento")) return vazio({ imagens: 0, provedor: "openai", modelo: "m", custo_usd: 0 });
+        if (url.endsWith("/momentos")) return vazio({ versao: "v1", momentos: [] });
+        if (url === "/api/tarefas") return vazio([]);
+        return base(url, init);
+      }),
+    );
+    const consultou = () =>
+      (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls.some((c) => String(c[0]).endsWith("/fotos/resumo"));
+    await abrir("/episodios/Ep%201");
+    expect(consultou()).toBe(false);
+    await abrir("/episodios/Ep%201?aba=imagens");
+    expect(consultou()).toBe(true);
+  });
 });

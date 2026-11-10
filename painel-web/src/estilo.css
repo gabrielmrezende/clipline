@@ -549,3 +549,31 @@ input {
     align-items: start;
   }
 }
+
+.resumo-cortes {
+  list-style: none;
+  padding: 0;
+}
+.resumo-cortes li {
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--borda);
+}
+.resumo-cortes p {
+  margin: 0.25rem 0 0;
+}
+.configuracoes fieldset {
+  margin: 1rem 0;
+}
+.configuracoes label {
+  display: block;
+  margin: 0.5rem 0;
+}
+.configuracoes input,
+.configuracoes select {
+  display: block;
+  min-height: 44px;
+  margin-top: 0.25rem;
+}
+.configuracoes .chave {
+  margin: 0.5rem 0 0;
+}

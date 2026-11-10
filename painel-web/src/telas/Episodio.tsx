@@ -9,12 +9,14 @@ import {
   pedir,
 } from "../api";
 import { Calendario } from "../componentes/Calendario";
+import { ImagensDoEpisodio } from "../componentes/ImagensDoEpisodio";
 import { Markdown } from "../componentes/Markdown";
 import { Selo } from "../componentes/Selo";
 
 const ABAS = [
   { id: "cortes", rotulo: "Cortes" },
   { id: "calendario", rotulo: "Calendário" },
+  { id: "imagens", rotulo: "Imagens" },
   { id: "descartados", rotulo: "Descartados" },
 ] as const;
 type AbaId = (typeof ABAS)[number]["id"];
@@ -140,6 +142,9 @@ export function Episodio() {
           detalhe ? <Cortes ep={ep} cortes={detalhe.cortes} /> : <p>Carregando…</p>
         ) : null}
         {aba === "calendario" ? <PainelCalendario ep={ep} /> : null}
+        {aba === "imagens" && !erro ? (
+          detalhe ? <ImagensDoEpisodio ep={ep} cortes={detalhe.cortes} /> : <p>Carregando…</p>
+        ) : null}
         {aba === "descartados" ? <PainelDescartados ep={ep} /> : null}
       </div>
     </main>

@@ -304,6 +304,17 @@ export const gerarDeNovoIa = (ep: string, n: number | string, chave: string) =>
 
 export const configuracaoDeImagens = () => pedir<ConfigImagens>("/api/configuracoes/imagens");
 
+export const resumoDeFotosDoEpisodio = (ep: string) => pedir<ResumoFotos>(`${caminhoEpisodio(ep)}/fotos/resumo`);
+
+export const baixarFotosDoEpisodio = (ep: string) => enviarJson<Pedido>(`${caminhoEpisodio(ep)}/fotos`, "POST", {});
+
+export const orcamentoDeIaDoEpisodio = (ep: string) => pedir<OrcamentoIa>(`${caminhoEpisodio(ep)}/ia/orcamento`);
+
+export const gerarImagensIaDoEpisodio = (ep: string) => enviarJson<Pedido>(`${caminhoEpisodio(ep)}/ia`, "POST", {});
+
+export const gravarConfiguracaoDeImagens = (provedor: string, provedores: ConfigImagens["provedores"]) =>
+  enviarJson<ConfigImagens>("/api/configuracoes/imagens", "PUT", { provedor, provedores });
+
 export const listarTarefas = () => pedir<Pedido[]>("/api/tarefas");
 
 export const consultarTarefa = (id: string) => pedir<Pedido>(`/api/tarefas/${encodeURIComponent(id)}`);
