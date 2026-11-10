@@ -111,6 +111,8 @@ let avisoGlossario: string | null;
 let postFotos: () => Promise<Response>;
 let postIa: () => Promise<Response>;
 let confirmar: ReturnType<typeof vi.fn>;
+let desatualizada: boolean;
+let postMontar: () => Promise<Response>;
 
 function aplicar(m: Momento, c: any) {
   if (c.tipo !== undefined && c.tipo !== m.tipo) {
@@ -161,6 +163,8 @@ beforeEach(() => {
   postFotos = () => resposta(pedido(), 202);
   postIa = () => resposta(pedido({ tipo: "ia" }), 202);
   confirmar = vi.fn(() => true);
+  desatualizada = false;
+  postMontar = () => resposta(pedido({ tipo: "montar" }), 202);
   vi.stubGlobal("confirm", confirmar);
   vi.stubGlobal(
     "fetch",
@@ -168,7 +172,15 @@ beforeEach(() => {
       const metodo = init?.method ?? "GET";
       chamadas.push({ url, metodo, corpo: init?.body ? JSON.parse(String(init.body)) : null });
       const corpo = init?.body ? JSON.parse(String(init.body)) : null;
-      if (url === `${BASE}/momentos`) return resposta({ versao: `v${versao}`, momentos, aviso_glossario: avisoGlossario });
+      if (url === `${BASE}/momentos`)
+        return resposta({
+          versao: `v${versao}`,
+          momentos,
+          aviso_glossario: avisoGlossario,
+          no_corte: [],
+          montagem_desatualizada: desatualizada,
+        });
+      if (url === `${BASE}/montar` && metodo === "POST") return postMontar();
       const busca = url.match(/\/momentos\/([^/]+)\/buscar$/);
       if (busca && metodo === "POST") return postBuscar(decodeURIComponent(busca[1]), corpo);
       const mom = url.match(/\/momentos\/([^/]+)$/);
@@ -750,5 +762,56 @@ describe("BlocoImagens", () => {
     expect(screen.getAllByRole("button", { name: /^Candidata \d/ })).toHaveLength(1);
     expect(screen.getByRole("button", { name: /^Candidata 1: Foto 7/ })).toBeTruthy();
     expect(puts().map((c) => c.corpo)).toEqual([{ versao: "v2", aprovado: true }]);
+  });
+
+  it("Montar com as imagens confirma com a contagem e manda o pedido, soltando o vídeo", async () => {
+    momentos = [momento({ no_video: "f1-1.jpg" }), { ...IA(), no_video: "i1-v1.png" }, NOTICIA()];
+    tarefa = [pedido({ tipo: "montar", estado: "pronto", mensagem: "ok" })];
+    const soltarVideo = vi.fn();
+    const aoMudarAndamento = vi.fn();
+    const aoTerminarMontagem = vi.fn();
+    render(
+      <BlocoImagens
+        ep="Ep 1"
+        n={2}
+        irPara={vi.fn()}
+        soltarVideo={soltarVideo}
+        aoMudarAndamento={aoMudarAndamento}
+        aoTerminarMontagem={aoTerminarMontagem}
+      />,
+    );
+    await avancar(0);
+    await avancar(0);
+    fireEvent.click(screen.getByRole("button", { name: "Montar com as imagens" }));
+    await avancar(0);
+    await avancar(0);
+    expect(confirmar).toHaveBeenCalledWith(
+      "Montar o corte de novo com 2 imagens? O corte.mp4 atual será substituído (leva cerca de 1 minuto).",
+    );
+    expect(chamadas.find((c) => c.url === `${BASE}/montar`)?.corpo).toEqual({ confirmado: true });
+    expect(soltarVideo).toHaveBeenCalled();
+    expect(aoMudarAndamento).toHaveBeenCalledWith(true);
+    await avancar(2000);
+    await avancar(0);
+    expect(aoMudarAndamento).toHaveBeenLastCalledWith(false);
+    expect(aoTerminarMontagem).toHaveBeenCalledTimes(1);
+  });
+
+  it("Montar com confirm falso não envia nem solta o vídeo", async () => {
+    confirmar.mockReturnValue(false);
+    const soltarVideo = vi.fn();
+    render(<BlocoImagens ep="Ep 1" n={2} irPara={vi.fn()} soltarVideo={soltarVideo} />);
+    await avancar(0);
+    await avancar(0);
+    fireEvent.click(screen.getByRole("button", { name: "Montar com as imagens" }));
+    await avancar(0);
+    expect(chamadas.some((c) => c.url === `${BASE}/montar`)).toBe(false);
+    expect(soltarVideo).not.toHaveBeenCalled();
+  });
+
+  it("avisa quando as imagens mudaram desde a última montagem", async () => {
+    desatualizada = true;
+    await montar();
+    expect(screen.getByText("As imagens mudaram desde a última montagem.")).toBeTruthy();
   });
 });

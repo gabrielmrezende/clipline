@@ -16,7 +16,9 @@ import {
   gerarImagensIa,
   lerMomentos,
   listarTarefas,
+  montarCorte,
   orcamentoDeIa,
+  plural,
   resumoDeFotos,
 } from "../api";
 import { CartaoMomento } from "./CartaoMomento";
@@ -43,14 +45,25 @@ interface Props {
   irPara: (segundos: number) => void;
   /** Avisa a tela se há momentos: com eles, o bloco substitui o guia e a lista de miniaturas. */
   aoCarregar?: (temMomentos: boolean) => void;
+  /** Solta o corte.mp4 do player antes de montar (no Windows, arquivo aberto não pode ser trocado). */
+  soltarVideo?: () => void;
+  /** true ao pedir a montagem; false quando ela termina (ou falha). */
+  aoMudarAndamento?: (montando: boolean) => void;
+  /** A montagem terminou: a tela recarrega o vídeo e o selo. */
+  aoTerminarMontagem?: () => void;
 }
 
 const ESPERA_RESUMOS_MS = 500;
 const SUBSTITUIDAS = "As fotos baixadas antes neste corte serão substituídas.";
+const DESATUALIZADA = "As imagens mudaram desde a última montagem.";
+
+export function textoDeMontar(imagens: number): string {
+  return `Montar o corte de novo com ${plural(imagens, "imagem", "imagens")}? O corte.mp4 atual será substituído (leva cerca de 1 minuto).`;
+}
 
 const emOrdem = (lista: Momento[]) => [...lista].sort((a, b) => a.inicio - b.inicio);
 
-export function BlocoImagens({ ep, n, irPara, aoCarregar }: Props) {
+export function BlocoImagens({ ep, n, irPara, aoCarregar, soltarVideo, aoMudarAndamento, aoTerminarMontagem }: Props) {
   const [momentos, setMomentos] = useState<Momento[] | null>(null);
   const [erroLeitura, setErroLeitura] = useState<string | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
@@ -65,6 +78,8 @@ export function BlocoImagens({ ep, n, irPara, aoCarregar }: Props) {
   const [pedido, setPedido] = useState<Pedido | null>(null);
   const [erroPedido, setErroPedido] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
+  const [desatualizada, setDesatualizada] = useState(false);
+  const montandoAgora = useRef(false);
   const versao = useRef("");
   const carregou = useRef(false);
   const cadeia = useRef<Promise<void>>(Promise.resolve());
@@ -72,6 +87,16 @@ export function BlocoImagens({ ep, n, irPara, aoCarregar }: Props) {
   const espera = useRef<ReturnType<typeof setTimeout> | null>(null);
   const aoCarregarRef = useRef(aoCarregar);
   aoCarregarRef.current = aoCarregar;
+  const montagemRef = useRef({ aoMudarAndamento, aoTerminarMontagem });
+  montagemRef.current = { aoMudarAndamento, aoTerminarMontagem };
+
+  /** Fim (ou perda) de uma montagem pedida aqui: devolve o player à tela e manda recarregar o corte. */
+  const terminarMontagem = useCallback(() => {
+    if (!montandoAgora.current) return;
+    montandoAgora.current = false;
+    montagemRef.current.aoMudarAndamento?.(false);
+    montagemRef.current.aoTerminarMontagem?.();
+  }, []);
 
   const carregar = useCallback(async () => {
     try {
@@ -81,6 +106,7 @@ export function BlocoImagens({ ep, n, irPara, aoCarregar }: Props) {
       setMomentos(emOrdem(d.momentos));
       setErroLeitura(null);
       setAvisoGlossario(d.aviso_glossario ?? null);
+      setDesatualizada(Boolean(d.montagem_desatualizada));
       aoCarregarRef.current?.(d.momentos.length > 0);
     } catch (x) {
       setErroLeitura(mensagem(x));
@@ -137,7 +163,13 @@ export function BlocoImagens({ ep, n, irPara, aoCarregar }: Props) {
         const retomar = ts.find(
           (t) => ehDeImagens(t) && t.episodio === ep && (t.cortes ?? []).includes(Number(n)) && ativo(t),
         );
-        if (vivo && retomar) setPedido(retomar);
+        if (vivo && retomar) {
+          setPedido(retomar);
+          if (retomar.tipo === "montar") {
+            montandoAgora.current = true;
+            montagemRef.current.aoMudarAndamento?.(true);
+          }
+        }
       })
       .catch(() => {
         /* sem lista: o bloco abre sem andamento */
@@ -156,10 +188,12 @@ export function BlocoImagens({ ep, n, irPara, aoCarregar }: Props) {
       void carregar();
       void lerResumo();
       void lerOrcamento();
+      terminarMontagem();
     },
     () => {
       setErroPedido(PEDIDO_PERDIDO);
       void carregar();
+      terminarMontagem();
     },
   );
 
@@ -241,6 +275,29 @@ export function BlocoImagens({ ep, n, irPara, aoCarregar }: Props) {
     });
   }
 
+  /** Monta o corte de novo com as imagens marcadas; os cliques a caminho gravam antes da contagem. */
+  function montarDeNovo() {
+    return umaPorVez(async () => {
+      setErroPedido(null);
+      await cadeia.current;
+      const imagens = (momentos ?? []).filter((m) => !m.descartar && m.no_video).length;
+      if (!window.confirm(textoDeMontar(imagens))) return;
+      soltarVideo?.();
+      montandoAgora.current = true;
+      aoMudarAndamento?.(true);
+      setEnviando(true);
+      try {
+        setPedido(await montarCorte(ep, n));
+      } catch (x) {
+        setErroPedido(mensagem(x));
+        montandoAgora.current = false;
+        aoMudarAndamento?.(false);
+      } finally {
+        setEnviando(false);
+      }
+    });
+  }
+
   /** "Gerar (de novo)" de um cartão, já confirmado nele: a aprovação a caminho grava antes do pedido. */
   function gerarUma(chave: string) {
     return umaPorVez(async () => {
@@ -275,7 +332,11 @@ export function BlocoImagens({ ep, n, irPara, aoCarregar }: Props) {
         <button type="button" disabled={ocupado || !orcamento || orcamento.imagens === 0} onClick={() => void gerar()}>
           {rotuloDeIa(orcamento)}
         </button>
+        <button type="button" disabled={ocupado} onClick={() => void montarDeNovo()}>
+          Montar com as imagens
+        </button>
       </div>
+      {desatualizada && !ativo(pedido) ? <p className="aviso">{DESATUALIZADA}</p> : null}
       <AvisosDoResumo resumo={resumo} />
       <Alerta texto={erroResumo === avisoGlossario ? null : erroResumo} />
       <Alerta texto={erroOrcamento} />

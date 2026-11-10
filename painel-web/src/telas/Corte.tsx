@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { CorteDetalhe, ErroApi, caminhoCorte, pedir } from "../api";
 import { BlocoImagens } from "../componentes/BlocoImagens";
+import { Aprovacao } from "../componentes/Aprovacao";
 import { BlocoMusica } from "../componentes/BlocoMusica";
 import { EditorPost } from "../componentes/EditorPost";
 import { Markdown } from "../componentes/Markdown";
@@ -98,7 +99,10 @@ export function Corte() {
       <h1>
         {bloco.numero}. {bloco.titulo}
       </h1>
-      <p>{montando ? <span className="suave">montando…</span> : <Selo valor={bloco.selo} />}</p>
+      <p className="selo-e-aprovacao">
+        {montando ? <span className="suave">montando…</span> : <Selo valor={bloco.selo} />}{" "}
+        <Aprovacao ep={ep} n={n} aprovacao={dados.aprovacao} montando={montando} aoMudar={aoTerminarTroca} />
+      </p>
       <div className="corte-layout">
         <div className="corte-esquerda">
           <Players
@@ -148,7 +152,16 @@ export function Corte() {
               </ul>
             ) : null}
           </section>
-          <BlocoImagens key={`imagens-${ep}/${n}`} ep={ep} n={n} irPara={irPara} aoCarregar={setComMomentos} />
+          <BlocoImagens
+            key={`imagens-${ep}/${n}`}
+            ep={ep}
+            n={n}
+            irPara={irPara}
+            aoCarregar={setComMomentos}
+            soltarVideo={soltarVideo}
+            aoMudarAndamento={setMontando}
+            aoTerminarMontagem={aoTerminarTroca}
+          />
           {guia && !comMomentos ? (
             <section aria-label="Guia do corte">
               <Markdown texto={guia} />

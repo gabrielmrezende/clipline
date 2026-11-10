@@ -25,6 +25,18 @@ interface Props {
 
 const ROTULO_TIPO: Record<string, string> = { foto: "Foto", ia: "IA", noticia: "Notícia" };
 
+/** "No vídeo" no arquivo que entra no corte; "Usar no vídeo" nos outros prontos do momento. */
+function NoVideo({ m, arquivo, bloqueado, alterar }: { m: Momento; arquivo: string; bloqueado: boolean; alterar: Alterar }) {
+  if (m.descartar) return null;
+  if (m.no_video === arquivo) return <span className="no-video">No vídeo</span>;
+  if (!(m.prontas ?? []).includes(arquivo)) return null;
+  return (
+    <button type="button" className="usar-no-video" disabled={bloqueado} onClick={() => alterar({ no_video: arquivo }, { no_video: arquivo })}>
+      Usar no vídeo
+    </button>
+  );
+}
+
 function CorpoFoto({ m, bloqueado, alterar, buscar }: Pick<Props, "m" | "bloqueado" | "alterar" | "buscar">) {
   const [busca, setBusca] = useState(m.busca);
   useEffect(() => setBusca(m.busca), [m.busca]);
@@ -41,7 +53,8 @@ function CorpoFoto({ m, bloqueado, alterar, buscar }: Pick<Props, "m" | "bloquea
         {m.candidatas.map((c, i) => {
           const k = i + 1;
           const pos = m.escolhas.indexOf(k) + 1;
-          const pronta = pos > 0 && m.fotos_prontas.includes(`${m.chave}-${pos}.jpg`);
+          const arquivo = `${m.chave}-${pos}.jpg`;
+          const pronta = pos > 0 && m.fotos_prontas.includes(arquivo);
           return (
             <li key={k} className={pos > 0 ? "candidata escolhida" : "candidata"}>
               <button
@@ -56,6 +69,7 @@ function CorpoFoto({ m, bloqueado, alterar, buscar }: Pick<Props, "m" | "bloquea
               </button>
               <small className="suave-bloco">{[c.autor, c.licenca].filter(Boolean).join(" · ")}</small>
               {pronta ? <span className="pronta">Pronta</span> : null}
+              {pronta ? <NoVideo m={m} arquivo={arquivo} bloqueado={bloqueado} alterar={alterar} /> : null}
             </li>
           );
         })}
@@ -148,6 +162,7 @@ function CorpoIa({
             <li key={v.arquivo} className="candidata">
               <img loading="lazy" src={urlImagem(ep, n, v.arquivo)} alt={`Versão ${v.versao ?? ""}`} />
               <small className="suave-bloco">{[v.provedor, v.data].filter(Boolean).join(" · ")}</small>
+              <NoVideo m={m} arquivo={v.arquivo} bloqueado={bloqueado} alterar={alterar} />
             </li>
           ))}
         </ul>
@@ -161,7 +176,7 @@ function CorpoIa({
   );
 }
 
-function CorpoNoticia({ m, ep, n }: Pick<Props, "m" | "ep" | "n">) {
+function CorpoNoticia({ m, ep, n, bloqueado, alterar }: Pick<Props, "m" | "ep" | "n" | "bloqueado" | "alterar">) {
   const pronta = m.fotos_prontas[0];
   return (
     <>
@@ -172,24 +187,27 @@ function CorpoNoticia({ m, ep, n }: Pick<Props, "m" | "ep" | "n">) {
       {pronta ? (
         <img className="noticia-imagem" loading="lazy" src={urlImagem(ep, n, pronta)} alt={m.titulo} />
       ) : null}
+      {pronta ? <NoVideo m={m} arquivo={pronta} bloqueado={bloqueado} alterar={alterar} /> : null}
     </>
   );
 }
 
 export function CartaoMomento(props: Props) {
   const { m, ep, n, bloqueado, erro, irPara, alterar } = props;
-  const tempo = tempoTexto(m.inicio);
+  const tela = m.inicio_tela ?? m.inicio;
+  const tempo = tempoTexto(tela);
+  const proposto = tempoTexto(m.inicio);
   const trocaveis = m.tipo === "foto" || m.tipo === "ia";
   const destino = m.tipo === "foto" ? "ia" : "foto";
 
   return (
     <li className={m.descartar ? "momento descartado" : "momento"}>
       <div className="momento-topo">
-        <button type="button" className="faixa-tocar" aria-label={`Ir para ${tempo}`} onClick={() => irPara(m.inicio)}>
+        <button type="button" className="faixa-tocar" aria-label={`Ir para ${tempo}`} onClick={() => irPara(tela)}>
           ▶
         </button>
         <span className="momento-tempo" data-testid="tempo-momento">
-          {tempo}
+          {proposto === tempo ? tempo : `${tempo} (proposto ${proposto})`}
         </span>
         <span className="momento-tipo">{ROTULO_TIPO[m.tipo] ?? m.tipo}</span>
       </div>
@@ -208,7 +226,7 @@ export function CartaoMomento(props: Props) {
           gerarDeNovo={props.gerarDeNovo}
         />
       ) : m.tipo === "noticia" ? (
-        <CorpoNoticia m={m} ep={ep} n={n} />
+        <CorpoNoticia m={m} ep={ep} n={n} bloqueado={bloqueado} alterar={alterar} />
       ) : null}
       {erro ? (
         <p role="alert" className="mensagem-erro">

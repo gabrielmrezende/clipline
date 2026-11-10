@@ -51,10 +51,18 @@ export interface Calendario {
   texto: string;
 }
 
+export interface Aprovacao {
+  estado: "aprovar" | "aprovar de novo" | "aprovado" | "bloqueado";
+  motivo: string | null;
+}
+
 export interface CorteDetalhe {
   bloco: Bloco;
   guia: string | null;
   imagens: string[];
+  aprovacao?: Aprovacao;
+  /** As imagens previstas agora diferem das que estão no corte.mp4. */
+  montagem_desatualizada?: boolean;
 }
 
 export interface CamposPost {
@@ -175,7 +183,7 @@ export interface Pedido {
   /** Segundos desde 1970 (time.time() do painel). */
   criado: number;
   terminado: number | null;
-  /** "musica", "fotos" ou "ia". */
+  /** "musica", "montar", "fotos" ou "ia". */
   tipo?: string;
   cortes?: number[];
   progresso?: string;
@@ -224,6 +232,13 @@ export interface Momento {
   fotos_prontas: string[];
   ia: VersaoIa[];
   pessoa_citada: string | null;
+  /** O arquivo que entra no corte.mp4 (o marcado ou o padrão); null = fora do vídeo. */
+  no_video?: string | null;
+  /** Os arquivos prontos do momento, em ordem de preferência. */
+  prontas?: string[];
+  /** Tempos de tela (depois do ajuste de 2 a 5 s); null = descartado pelo ajuste. */
+  inicio_tela?: number | null;
+  fim_tela?: number | null;
 }
 
 export interface ListaMomentos {
@@ -231,6 +246,8 @@ export interface ListaMomentos {
   momentos: Momento[];
   /** Glossário ilegível: o painel não aprova nem gera, e a pessoa citada fica desconhecida. */
   aviso_glossario?: string | null;
+  no_corte?: unknown[];
+  montagem_desatualizada?: boolean;
 }
 
 export interface RespostaMomento {
@@ -244,6 +261,8 @@ export interface AlteracaoMomento {
   prompt?: string;
   aprovado?: boolean;
   descartar?: boolean;
+  /** Arquivo pronto que vai para o vídeo; "" volta ao padrão. */
+  no_video?: string;
 }
 
 export interface ResumoFotos {
@@ -313,6 +332,12 @@ export const gerarImagensIa = (ep: string, n: number | string, itens: ItemIa[]) 
 
 export const gerarDeNovoIa = (ep: string, n: number | string, chave: string) =>
   enviarJson<Pedido>(`${caminhoMomento(ep, n, chave)}/ia`, "POST", CONFIRMADO);
+
+export const montarCorte = (ep: string, n: number | string) =>
+  enviarJson<Pedido>(`${caminhoCorte(ep, n)}/montar`, "POST", CONFIRMADO);
+
+export const aprovarCorte = (ep: string, n: number | string) =>
+  enviarJson<Aprovacao>(`${caminhoCorte(ep, n)}/aprovar`, "POST", CONFIRMADO);
 
 export const configuracaoDeImagens = () => pedir<ConfigImagens>("/api/configuracoes/imagens");
 

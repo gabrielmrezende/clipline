@@ -5,7 +5,9 @@ const ESPERA_CONSULTA_MS = 2000;
 export const PEDIDO_PERDIDO = "O pedido se perdeu (o painel foi reiniciado?). Confira as imagens e peça de novo se precisar.";
 
 export const ativo = (p: Pedido | null) => p !== null && (p.estado === "na fila" || p.estado === "montando");
-export const ehDeImagens = (p: Pedido) => p.tipo === "fotos" || p.tipo === "ia";
+export const ehDeImagens = (p: Pedido) => p.tipo === "fotos" || p.tipo === "ia" || p.tipo === "montar";
+
+const EM_ANDAMENTO: Record<string, string> = { ia: "Gerando…", montar: "Montando…" };
 
 export function mensagem(x: unknown): string {
   return x instanceof ErroApi ? x.detail : "Erro inesperado.";
@@ -128,7 +130,7 @@ export function useAcompanhamento(
 export function AndamentoPedido({ pedido }: { pedido: Pedido }) {
   const texto: Record<Pedido["estado"], string> = {
     "na fila": "Na fila",
-    montando: pedido.progresso || (pedido.tipo === "ia" ? "Gerando…" : "Baixando…"),
+    montando: pedido.progresso || EM_ANDAMENTO[pedido.tipo ?? ""] || "Baixando…",
     pronto: "Pronto",
     erro: `Erro: ${pedido.mensagem}`,
   };

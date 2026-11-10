@@ -119,4 +119,62 @@ describe("CartaoMomento", () => {
     fireEvent.click(screen.getByRole("button", { name: "Trocar para foto" }));
     expect(p.alterar).toHaveBeenCalledWith({ tipo: "foto" }, { tipo: "foto", aprovado: false });
   });
+
+  it("marca No vídeo na imagem que entra e oferece Usar no vídeo nas outras prontas", () => {
+    const m = momento({
+      chave: "i1",
+      tipo: "ia",
+      prompt: "céu",
+      aprovado: true,
+      ia: [
+        { arquivo: "i1-ia-1.jpg", versao: 1, provedor: "openai", data: "2026-11-08" },
+        { arquivo: "i1-ia-2.jpg", versao: 2, provedor: "openai", data: "2026-11-09" },
+      ],
+      prontas: ["i1-ia-2.jpg", "i1-ia-1.jpg"],
+      no_video: "i1-ia-2.jpg",
+    });
+    const p = props(m);
+    render(<CartaoMomento {...p} />);
+    expect(screen.getAllByText("No vídeo")).toHaveLength(1);
+    fireEvent.click(screen.getByRole("button", { name: "Usar no vídeo" }));
+    expect(p.alterar).toHaveBeenCalledWith({ no_video: "i1-ia-1.jpg" }, { no_video: "i1-ia-1.jpg" });
+  });
+
+  it("na foto, a opção pronta que não entra ganha Usar no vídeo", () => {
+    const candidata = (k: number) => ({
+      titulo: `Foto ${k}`,
+      miniatura: `m${k}`,
+      autor: null,
+      licenca: null,
+      pagina: null,
+      largura: 1,
+      altura: 1,
+    });
+    const m = momento({
+      candidatas: [candidata(1), candidata(2)],
+      escolhas: [1, 2],
+      fotos_prontas: ["f1-1.jpg", "f1-2.jpg"],
+      prontas: ["f1-1.jpg", "f1-2.jpg"],
+      no_video: "f1-1.jpg",
+    });
+    const p = props(m);
+    render(<CartaoMomento {...p} />);
+    expect(screen.getAllByText("No vídeo")).toHaveLength(1);
+    fireEvent.click(screen.getByRole("button", { name: "Usar no vídeo" }));
+    expect(p.alterar).toHaveBeenCalledWith({ no_video: "f1-2.jpg" }, { no_video: "f1-2.jpg" });
+  });
+
+  it("notícia pronta mostra No vídeo", () => {
+    const m = momento({ tipo: "noticia", fotos_prontas: ["f1.png"], prontas: ["f1.png"], no_video: "f1.png" });
+    render(<CartaoMomento {...props(m)} />);
+    expect(screen.getByText("No vídeo")).toBeTruthy();
+  });
+
+  it("mostra o tempo de tela e o proposto quando o ajuste mudou o início", () => {
+    const p = props(momento({ inicio: 10, fim: 10.5, inicio_tela: 9, fim_tela: 11 }));
+    render(<CartaoMomento {...p} />);
+    expect(screen.getByTestId("tempo-momento").textContent).toBe("0:09 (proposto 0:10)");
+    fireEvent.click(screen.getByRole("button", { name: "Ir para 0:09" }));
+    expect(p.irPara).toHaveBeenCalledWith(9);
+  });
 });
