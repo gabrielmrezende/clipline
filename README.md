@@ -17,6 +17,7 @@
   <img alt="ffmpeg" src="https://img.shields.io/badge/ffmpeg-NVENC-007808?logo=ffmpeg&logoColor=white">
   <img alt="Windows" src="https://img.shields.io/badge/plataforma-Windows-0078D4?logo=windows&logoColor=white">
   <img alt="Em uso" src="https://img.shields.io/badge/status-em_uso_no_canal-0750D8">
+  <a href="LICENSE"><img alt="Licença MIT" src="https://img.shields.io/badge/licen%C3%A7a-MIT-green"></a>
 </p>
 
 ---
@@ -327,12 +328,12 @@ Automacao/
 - [x] Imagens: Wikimedia, cartões de notícia e IA com aprovação, já dentro do vídeo
 - [x] Painel de revisão: vídeos, posts, calendário, música, imagens e aprovação
 - [x] Publicação no YouTube, Instagram e TikTok com resumo e confirmação
+- [x] Licença MIT
 - [ ] Painel, fase 2: agendar pela tela e acompanhar a fila
 - [ ] Painel, fase 3: editor de cortes com a transcrição clicável
 - [ ] Configuração por canal (pastas, regras, encerramento) no lugar dos valores fixos
 - [ ] Instalação com um comando e suporte a Linux e macOS
 - [ ] Integração contínua com os testes
-- [ ] Licença de código aberto
 
 ## Contribuindo
 
@@ -367,9 +368,9 @@ O código, os comentários e a interface são em português.
 
 ## Licença
 
-Este repositório ainda não tem uma licença de código aberto. Até que um arquivo `LICENSE` seja
-adicionado, todos os direitos ficam reservados ao autor. As marcas **Tudo é Política** e
-**clipline** não fazem parte de nenhuma licença de código.
+O código está sob a [licença MIT](LICENSE). Os itens de terceiros listados acima seguem as
+próprias licenças. As marcas **Tudo é Política** (incluindo o encerramento em `assets/`) e
+**clipline** (`docs/marca/`) não fazem parte da licença do código.
 
 ---
 
