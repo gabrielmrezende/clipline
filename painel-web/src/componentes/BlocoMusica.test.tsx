@@ -208,7 +208,7 @@ describe("BlocoMusica", () => {
 
   it("com vídeo final pede confirmação com o texto da spec", async () => {
     const texto =
-      "Este corte já tem vídeo final. O vídeo final não muda; você vai precisar refazer no CapCut. Montar mesmo assim?";
+      "Este corte já tem vídeo final. O vídeo final não muda: depois, aprove de novo (ou refaça no CapCut). Montar mesmo assim?";
     const confirmar = vi.fn(() => false);
     vi.stubGlobal("confirm", confirmar);
     await montar({ videoFinal: ["a.mp4"] });

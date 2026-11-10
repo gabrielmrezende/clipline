@@ -2,8 +2,10 @@
 
 Página local para revisar os cortes de um episódio no navegador: vídeo final,
 informações, calendário e edição do `post.md`. O painel grava o
-`post.md` de cada corte e, quando você troca a música, remonta o `corte.mp4`
-(ver "Música"). Nada é publicado.
+`post.md` de cada corte e as escolhas de imagem; quando você troca a música ou
+monta com as imagens, remonta o `corte.mp4` (ver "Música" e "Imagens no vídeo");
+e o botão Aprovar copia o corte para `video-final/` (ver "Aprovar"). Nada é
+publicado.
 
 ## Instalar o FastAPI e o uvicorn
 
@@ -67,8 +69,8 @@ Na tela do corte, o bloco **Música** mostra a música de agora e deixa trocar:
 2. Clique em `Montar com esta música`. O painel monta o `corte.mp4` de novo; o
    andamento aparece no bloco e o cartão do episódio mostra `montando…`.
 3. Se o corte já tem vídeo final, o painel pede confirmação antes: o vídeo
-   final **não muda** e você vai precisar refazer no CapCut. Enquanto isso, o
-   corte fica com o selo `vídeo final desatualizado`.
+   final **não muda** e você vai precisar aprovar de novo (ou refazer no
+   CapCut). Enquanto isso, o corte fica com o selo `vídeo final desatualizado`.
 4. O crédito da música no `post.md` é atualizado sozinho. Se não der, o painel
    avisa e o editor do post mostra o aviso de crédito.
 
@@ -119,7 +121,39 @@ imagem sobre o vídeo (foto, notícia ou imagem de IA).
    imagem usado na estimativa. O painel só mostra se há chave conectada.
 
 O aviso de IA continua entrando na publicação: o `post.md` sai sem ele, e o
-aviso de imagens de IA é acrescentado ao post quando a publicação é feita.
+aviso de imagens de IA é acrescentado ao post quando a publicação é feita. Se o
+vídeo aprovado pelo painel tiver imagem de IA, o `publicar agendar` recusa os
+textos sem o aviso.
+
+## Imagens no vídeo
+
+O `corte.mp4` já sai com uma imagem por momento pronto: 2 a 5 s no tempo da fala,
+vertical em tela cheia, horizontal inteira na faixa central sobre ela mesma
+desfocada, sem legenda por baixo e com zoom lento de 8%.
+
+1. **Qual entra.** Em cada cartão, a imagem que vai para o vídeo leva o selo
+   `No vídeo`. As outras opções prontas (fotos baixadas, versões de IA) têm o
+   botão `Usar no vídeo`. Sem marca, entra a primeira foto escolhida, a versão
+   mais nova de IA ou o cartão de notícia. Momento descartado não entra.
+2. **Tempo.** O cartão mostra o tempo de tela. Quando o ajuste de 2 a 5 s mudou
+   o início, aparece também o tempo proposto (`0:09 (proposto 0:10)`). O ▶ leva
+   o player ao tempo de tela.
+3. **Montar.** `Montar com as imagens` monta o `corte.mp4` de novo, depois de
+   confirmar quantas imagens vão entrar (leva cerca de 1 minuto). O player sai
+   da tela enquanto monta. Se a montagem falhar, o corte volta ao que era antes.
+   Quando as imagens mudaram desde a última montagem, o bloco avisa.
+
+## Aprovar
+
+Junto do selo do corte, `Aprovar este vídeo` copia o `corte.mp4` para
+`video-final/corte-aprovado.mp4`, depois de confirmar. Esse passa a ser o vídeo que
+o `publicar agendar` publica.
+
+- Se o corte for montado de novo, o botão vira `Aprovar de novo` e substitui só a
+  cópia da esteira.
+- Com um vídeo seu em `video-final/` (do CapCut, por exemplo), o painel não
+  aprova e diz qual arquivo está lá. A esteira nunca apaga nem altera esse vídeo.
+- Enquanto o corte é montado, não dá para aprovar.
 
 A variável de ambiente `ESTEIRA_PAINEL_IMAGEM_FALSA=1` troca os provedores de
 IA por um de mentira (devolve uma imagem cinza 1024x1536, sem rede e sem

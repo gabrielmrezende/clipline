@@ -8,10 +8,11 @@ Nunca alterar pastas de episódios (`1 - Programas/`). A saída vai para
 `2 - Cortes/<Quadro NN - Convidado>/`.
 
 O dono do canal diz "faça os cortes do episódio X". O Claude Code segue as
-etapas 1 a 10 e entrega cada corte como `corte.mp4`, sem imagens. As imagens
-são colocadas pelo dono do canal no CapCut, a partir de `imagens-sugeridas/`.
-O vídeo final dele fica em `video-final/`. A única pausa é a confirmação do
-download das fotos (etapa 8). Nada é publicado.
+etapas 1 a 10 e entrega cada corte como `corte.mp4`, já com as imagens prontas
+de cada momento. O dono do canal revisa no painel, troca o que quiser e aprova
+com o botão Aprovar, que copia o corte para `video-final/`. O CapCut é opcional:
+quem editar lá salva o vídeo em `video-final/`. A única pausa é a confirmação do
+download das fotos (etapa 7). Nada é publicado.
 
 ## Pasta do corte
 
@@ -22,11 +23,13 @@ download das fotos (etapa 8). Nada é publicado.
   NN-titulo/
     corte.mp4
     imagens-sugeridas/   guia.md, MMSS-nome-K.jpg (fotos), MMSS-nome.png (notícia)
-    video-final/         do dono do canal; a esteira nunca grava nela
+    video-final/         do dono do canal; a esteira só grava nela pelo botão
+                         Aprovar do painel (corte-aprovado.mp4)
     post.md
     trabalho/            enquadramento.json, alertas-planos.json, rostos.json,
                          planos.jpg, montagem.json, legenda.srt, edicoes.md,
-                         registro.json, pedidos.json, sugeridas.json, candidatas/
+                         registro.json, pedidos.json, sugeridas.json, candidatas/,
+                         creditos.json, ia.json, aprovado.json
 ```
 
 Em `trabalho/`: `rostos.json` guarda os rostos detectados pelo `planos` (cache);
@@ -34,7 +37,12 @@ Em `trabalho/`: `rostos.json` guarda os rostos detectados pelo `planos` (cache);
 automáticas de pausas e repetições; `sugeridas.json`, a lista das fotos que a
 própria esteira gravou em `imagens-sugeridas/`.
 
-`MMSS` é o início do momento no `corte.mp4` (`0112` = 1:12).
+`MMSS` é o início proposto do momento no `pedidos.json` (`0112` = 1:12). Na tela,
+o tempo pode mudar um pouco com o ajuste de 2 a 5 s; o `guia.md` e o painel mostram
+o tempo de tela.
+
+Em `trabalho/`: `registro.json` traz as imagens que entraram no `corte.mp4`
+(`imagens`); `aprovado.json`, o que o botão Aprovar copiou para `video-final/`.
 
 ## 1. Transcrever
 
@@ -187,24 +195,7 @@ do corte). Ele monta o corte de novo e troca o crédito no `post.md`.
 
 A legenda é toda branca. Não marcar destaques.
 
-## 7. Montar
-
-```bash
-.venv\Scripts\python.exe -m esteira montar "<pasta do episódio>"
-```
-
-Gera `corte.mp4` em cada corte, com legenda, cortes de pausa, música (se
-houver), zoom em quem fala e encerramento. Não insere imagens. Cria
-`imagens-sugeridas/` e `video-final/` vazias. Um corte com erro não impede os
-outros: ver `registro.json`.
-
-Se `corte.mp4` já existir, a esteira não sobrescreve sem `--forcar`. Antes de
-usar `--forcar`, perguntar ao dono do canal.
-
-A pasta `video-final/` é do dono do canal. A esteira nunca grava, apaga ou
-altera nada nela, nem com `--forcar`.
-
-## 8. Imagens sugeridas
+## 7. Imagens
 
 Ler `trabalho/legenda.srt` de cada corte e gravar `trabalho/pedidos.json` com
 4 a 6 momentos. Os tempos ficam em segundos, na linha do tempo do `corte.mp4`.
@@ -255,7 +246,36 @@ imagem ampliada e desfocada. Foto que falhar no download vira bloco com
 "Sem imagem: motivo" no `guia.md`.
 
 O `guia.md` traz o segundo exato de cada imagem, a fala, os arquivos e os
-créditos das fotos. O dono do canal insere as imagens no CapCut.
+créditos das fotos. Ele serve para quem for editar no CapCut: a esteira já põe as
+imagens no corte na etapa 8.
+
+As imagens de IA são geradas depois, pelo dono no painel (ou pelo `imagens
+gerar`, com o sim dele). Elas entram no vídeo quando o dono clica em `Montar com
+as imagens` no painel.
+
+## 8. Montar
+
+```bash
+.venv\Scripts\python.exe -m esteira montar "<pasta do episódio>"
+```
+
+Gera `corte.mp4` em cada corte, com legenda, cortes de pausa, música (se
+houver), zoom em quem fala, encerramento e as imagens prontas de cada momento
+(regras em `Contexto/estilo-de-imagens.md`). De cada momento entra a imagem
+marcada no painel ou, sem marca, a primeira foto escolhida, a versão mais nova de
+IA ou o cartão de notícia. Momento sem imagem pronta fica de fora, com alerta no
+`registro.json` (por exemplo `imagem 0:52 Turistas fora do vídeo: IA ainda não
+gerada`). `--sem-imagens` monta sem elas, para editar no CapCut a partir do corte
+limpo. Cria `imagens-sugeridas/` e `video-final/` vazias. Um corte com erro não
+impede os outros: ver `registro.json`.
+
+Se `corte.mp4` já existir, a esteira não sobrescreve sem `--forcar`. Antes de
+usar `--forcar`, perguntar ao dono do canal.
+
+A pasta `video-final/` é do dono do canal. A esteira só grava nela pelo botão
+Aprovar do painel, e só substitui a própria cópia (`corte-aprovado.mp4`, conferida
+pelo `trabalho/aprovado.json`). Nunca apaga nem altera um vídeo do dono, nem com
+`--forcar`. Nem a CLI nem o Claude aprovam um corte: aprovar é um ato do dono.
 
 ## 9. Textos e calendário
 
@@ -298,9 +318,10 @@ Gera `revisao.md` na pasta do episódio, com um bloco por corte: links do
 posterior ao trecho, alertas de quem fala e se `video-final/` está vazia. No
 fim, os descartados e o motivo.
 
-Parar e esperar o dono do canal. Ele coloca as imagens no CapCut e salva o
-vídeo em `video-final/`. Corte sem vídeo ali não foi aprovado. Não existe
-`aprovacao.json`. Nada é publicado.
+Parar e esperar o dono do canal. Ele revisa o corte no painel e aprova com o
+botão Aprovar (que copia o `corte.mp4` para `video-final/corte-aprovado.mp4`), ou
+edita no CapCut e salva o vídeo em `video-final/`. Corte sem vídeo ali não foi
+aprovado. Nada é publicado.
 
 ## 11. Publicar
 
@@ -336,7 +357,12 @@ O `agendar` recusa, e diz o motivo, quando:
 - falta o crédito da música em algum texto;
 - a data já passou;
 - o corte já está agendado naquela rede.
-- o vídeo em `video-final/` é mais antigo que o `corte.mp4` (o corte foi montado de novo, por exemplo ao trocar a música no painel): refazer no CapCut e salvar o vídeo novo em `video-final/`.
+- o vídeo em `video-final/` é mais antigo que o `corte.mp4` (o corte foi montado de novo, por exemplo ao trocar a música ou as imagens no painel): aprovar de novo no painel, ou refazer no CapCut e salvar o vídeo novo em `video-final/`.
+- o vídeo foi aprovado pelo painel, tem imagem de IA e falta o aviso de IA em algum texto das redes pedidas.
+
+Com o vídeo aprovado pelo painel, o resumo diz quantas imagens de IA estão no vídeo
+e lista os créditos das fotos que estão nele (autor, licença e link). Com o vídeo
+do CapCut, o resumo lembra das imagens de IA geradas e pede para conferir.
 
 ### Acompanhar
 
@@ -438,6 +464,8 @@ Para zoom ou quem fala errado: editar `trabalho/enquadramento.json` do corte
 ligada à pessoa errada em todo o episódio, corrigir a `ligacao` em
 `transcricao/pessoas.json` e rodar `planos --forcar` (com `--numero N` para um
 corte só), que preserva a correção.
+Para trocar ou tirar uma imagem: no painel, bloco Imagens, marcar outra opção com
+`Usar no vídeo` ou descartar o momento, e clicar em `Montar com as imagens`.
 Para legenda, faixa ou outro ajuste: editar `trabalho/montagem.json`. Depois,
 remontar só esse corte:
 
@@ -475,6 +503,7 @@ não é baixada de novo.
 ## Painel de revisão
 
 Para revisar os cortes no navegador (notebook ou celular), abra o painel com
-`.venv\Scripts\python.exe -m esteira painel`. Ele mostra os vídeos, o calendário
-e deixa editar o `post.md`; é a única coisa que grava. Como gerar o build, usar
-na rede e os cuidados estão em `docs/painel.md`.
+`.venv\Scripts\python.exe -m esteira painel`. Ele mostra os vídeos e o
+calendário, deixa editar o `post.md`, trocar a música, revisar as imagens, montar
+o corte com as imagens e aprovar o vídeo. Como gerar o build, usar na rede e os
+cuidados estão em `docs/painel.md`.

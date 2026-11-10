@@ -26,7 +26,7 @@ interface Props {
 const VOLUME_PADRAO = -26;
 const ESPERA_MS = 2000;
 const CONFIRMACAO =
-  "Este corte já tem vídeo final. O vídeo final não muda; você vai precisar refazer no CapCut. Montar mesmo assim?";
+  "Este corte já tem vídeo final. O vídeo final não muda: depois, aprove de novo (ou refaça no CapCut). Montar mesmo assim?";
 const PEDIDO_PERDIDO =
   "O pedido se perdeu (o painel foi reiniciado?). Confira a música e monte de novo se precisar.";
 
