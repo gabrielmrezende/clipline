@@ -333,3 +333,46 @@ def test_tarefa_com_excecao_vira_erro_e_a_fila_segue(fabrica):
     b = fila.pedir_tarefa("ia", Path("ep1"), [1], tarefa(resultado=Resultado("pronto", "feito", ["a"], None)))
     assert esperar(lambda: fila.pedido(b.id).estado == "pronto")
     assert (fila.pedido(b.id).mensagem, fila.pedido(b.id).avisos) == ("feito", ["a"])
+
+
+def test_musica_e_montagem_se_bloqueiam(controle, fabrica):
+    liberar, iniciou = threading.Event(), threading.Event()
+    fila = fabrica()
+    try:
+        fila.pedir_tarefa("montar", Path("x/ep1"), [1], tarefa(liberar, iniciou))
+        assert iniciou.wait(LIMITE)
+        with pytest.raises(PedidoAtivo, match="o corte 1 já está sendo montado"):
+            fila.pedir(Path("x/ep1"), 1, FAIXA, -18.0)
+        with pytest.raises(PedidoAtivo, match="o corte 1 já está sendo montado"):
+            fila.pedir_tarefa("montar", Path("x/ep1"), [1], tarefa())
+        assert fila.pedir_tarefa("fotos", Path("x/ep1"), [1], tarefa()).tipo == "fotos"
+        assert fila.pedir(Path("x/ep1"), 2, FAIXA, -18.0).numero == 2
+    finally:
+        liberar.set()
+
+
+def test_montagem_recusada_com_troca_de_musica_ativa(controle, fabrica):
+    controle.preparar(1)
+    fila = fabrica()
+    fila.pedir(Path("x/ep1"), 1, FAIXA, -18.0)
+    assert controle.iniciou[1].wait(LIMITE)
+    with pytest.raises(PedidoAtivo, match="o corte 1 já está sendo montado"):
+        fila.pedir_tarefa("montar", Path("x/ep1"), [1], tarefa())
+    controle.liberar[1].set()
+
+
+def test_montando_corte_ve_os_dois_tipos(controle, fabrica):
+    liberar = threading.Event()
+    controle.preparar(2)
+    fila = fabrica()
+    try:
+        montar = fila.pedir_tarefa("montar", Path("x/ep1"), [1], tarefa(liberar))
+        fila.pedir(Path("x/ep1"), 2, FAIXA, -18.0)
+        fila.pedir_tarefa("fotos", Path("x/ep1"), [3], tarefa())
+        assert fila.montando_corte("ep1", 1) and fila.montando_corte("ep1", 2)
+        assert not fila.montando_corte("ep1", 3) and not fila.montando_corte("ep2", 1)
+    finally:
+        liberar.set()
+        controle.liberar[2].set()
+    assert esperar(lambda: fila.pedido(montar.id).estado == "pronto")
+    assert esperar(lambda: not fila.montando_corte("ep1", 1) and not fila.montando_corte("ep1", 2))

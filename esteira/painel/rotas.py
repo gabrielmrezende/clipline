@@ -97,7 +97,7 @@ def episodio(ep: str, requisicao: Request) -> dict:
     return {
         "resumo": resumo,
         "cortes": [
-            {**_bloco_com_avisos(pasta, b), "montando": fila.ativo(pasta.name, b.numero) is not None}
+            {**_bloco_com_avisos(pasta, b), "montando": fila.montando_corte(pasta.name, b.numero)}
             for b in _blocos(pasta)
         ],
     }

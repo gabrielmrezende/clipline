@@ -10,6 +10,7 @@ from esteira.musica import Faixa
 from esteira.painel.troca_musica import Resultado, resumir_erro
 
 ATIVOS = ("na fila", "montando")
+MONTAGEM = ("musica", "montar")  # os dois refazem o corte.mp4: um de cada vez por corte
 LIMITE_LISTA = 50
 FECHADO_ANTES = "o painel foi fechado antes de montar este pedido"
 FECHADO_NO_MEIO = "o painel foi fechado no meio deste pedido"
@@ -64,8 +65,8 @@ class Fila:
     def pedir(self, pasta_episodio: Path, numero: int, faixa: Faixa, volume_db: float) -> Pedido:
         pasta_episodio = Path(pasta_episodio)
         with self._trava:
-            if self._achar_ativo(pasta_episodio.name, numero) is not None:
-                raise PedidoAtivo(f"o corte {numero} já tem uma troca de música em andamento")
+            if self._achar_montagem(pasta_episodio.name, numero) is not None:
+                raise PedidoAtivo(f"o corte {numero} já está sendo montado")
             pedido = Pedido(
                 id=secrets.token_hex(4),
                 episodio=pasta_episodio.name,
@@ -95,6 +96,8 @@ class Fila:
             raise ValueError("o pedido precisa de ao menos um corte")
         with self._trava:
             for n in cortes:
+                if tipo in MONTAGEM and self._achar_montagem(pasta_episodio.name, n) is not None:
+                    raise PedidoAtivo(f"o corte {n} já está sendo montado")
                 if self._achar_ativo(pasta_episodio.name, n, tipo) is not None:
                     raise PedidoAtivo(f"o corte {n} já tem um pedido de {tipo} em andamento")
             pedido = Pedido(
@@ -134,6 +137,11 @@ class Fila:
                     return _copiar(p)
         return None
 
+    def montando_corte(self, episodio: str, numero: int) -> bool:
+        """O corte tem uma troca de música ou uma montagem na fila ou rodando."""
+        with self._trava:
+            return self._achar_montagem(episodio, numero) is not None
+
     def montando(self) -> bool:
         with self._trava:
             return any(p.estado == "montando" for p in self._pedidos.values())
@@ -143,6 +151,12 @@ class Fila:
         self._parando.set()
         self._fila.put(None)
         self._trabalhador.join(timeout)
+
+    def _achar_montagem(self, episodio: str, numero: int) -> Pedido | None:
+        for p in self._pedidos.values():
+            if p.episodio == episodio and p.tipo in MONTAGEM and numero in p.cortes and p.estado in ATIVOS:
+                return p
+        return None
 
     def _achar_ativo(self, episodio: str, numero: int, tipo: str = "musica") -> Pedido | None:
         for p in self._pedidos.values():

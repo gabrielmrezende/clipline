@@ -30,6 +30,76 @@ class Resultado:
     anterior: Musica | None = None
 
 
+class _Falhou(Exception):
+    """A montagem protegida não deu certo: o corte de antes já voltou. A mensagem vai para a tela."""
+
+
+def _corte_pronto_para_montar(pasta_episodio: Path, numero: int, base, substituir, dormir) -> Path | Resultado:
+    corte = next((c for c in ler_aprovados(pasta_episodio) if c.numero == numero), None)
+    if corte is None:
+        return Resultado("erro", f"corte {numero} não encontrado", [], None)
+    pasta_corte = pasta_do_corte(pasta_episodio, corte)
+    try:
+        _desfazer_troca_interrompida(pasta_corte, base, substituir, dormir)
+    except Exception as erro:
+        return Resultado("erro", f"não consegui desfazer a troca interrompida antes: {erro}", [], None)
+    return pasta_corte
+
+
+def _montar_protegido(
+    pasta_episodio: Path,
+    numero: int,
+    pasta_corte: Path,
+    montar: Callable[[Path, int], str],
+    base: Path | None,
+    substituir: Callable[[Path, Path], None],
+    dormir: Callable[[float], None],
+    antes: Callable[[], None] | None = None,
+) -> tuple[str, Path, Path]:
+    """Guarda montagem.json, registro.json e o corte.mp4, roda `antes` e o montar; se não der "ok", volta tudo
+    e levanta _Falhou. Devolve (resultado, marcador, corte-anterior.mp4): quem chama apaga os dois no fim."""
+    trabalho = pasta_corte / TRABALHO
+    montagem = trabalho / NOME_ARQUIVO
+    garantir_escrita(montagem, base_extra=base)
+    guardado = montagem.read_bytes()
+    video = pasta_corte / "corte.mp4"
+    anterior_video = trabalho / CORTE_ANTERIOR
+    registro = trabalho / "registro.json"
+    registro_guardado = registro.read_bytes() if registro.exists() else None
+    havia_video = video.exists()
+    for caminho in (video, anterior_video, registro):
+        garantir_escrita(caminho, base_extra=base)
+    marcador = _gravar_marcador(trabalho, guardado, registro_guardado, havia_video, base)
+    if havia_video and not _substituir_com_espera(video, anterior_video, substituir, dormir):
+        marcador.unlink(missing_ok=True)
+        raise _Falhou(VIDEO_ABERTO)
+    resultado = "erro: a montagem não terminou"
+    try:
+        if antes is not None:
+            antes()
+        retorno = montar(pasta_episodio, numero)
+        resultado = retorno if isinstance(retorno, str) else f"erro: resultado inesperado ({retorno!r})"
+    except Exception as erro:
+        resultado = f"erro: {erro}"
+    finally:
+        if not resultado.startswith("ok"):
+            _restaurar(
+                montagem, guardado, video, anterior_video, registro, registro_guardado, havia_video, substituir, dormir
+            )
+            marcador.unlink(missing_ok=True)
+    if not resultado.startswith("ok"):
+        raise _Falhou(resumir_erro(resultado))
+    return resultado, marcador, anterior_video
+
+
+def _limpar(marcador: Path, anterior_video: Path) -> None:
+    marcador.unlink(missing_ok=True)
+    try:
+        anterior_video.unlink(missing_ok=True)
+    except OSError:
+        pass
+
+
 def trocar_musica(
     pasta_episodio: Path,
     numero: int,
@@ -43,49 +113,21 @@ def trocar_musica(
     dormir: Callable[[float], None] = time.sleep,
 ) -> Resultado:
     pasta_episodio = Path(pasta_episodio)
-    corte = next((c for c in ler_aprovados(pasta_episodio) if c.numero == numero), None)
-    if corte is None:
-        return Resultado("erro", f"corte {numero} não encontrado", [], None)
-    pasta_corte = pasta_do_corte(pasta_episodio, corte)
-    try:
-        _desfazer_troca_interrompida(pasta_corte, base, substituir, dormir)
-    except Exception as erro:
-        return Resultado("erro", f"não consegui desfazer a troca interrompida antes: {erro}", [], None)
+    pasta_corte = _corte_pronto_para_montar(pasta_episodio, numero, base, substituir, dormir)
+    if isinstance(pasta_corte, Resultado):
+        return pasta_corte
     trabalho = pasta_corte / TRABALHO
-    montagem = trabalho / NOME_ARQUIVO
-    garantir_escrita(montagem, base_extra=base)
-    guardado = montagem.read_bytes()
     receita = ler_receita(trabalho)
     anterior = receita.musica
     nova = Musica(str(pasta_musicas / faixa.arquivo), volume_db, faixa.titulo, faixa.credito)
     receita.musica = nova
-
-    video = pasta_corte / "corte.mp4"
-    anterior_video = trabalho / CORTE_ANTERIOR
-    registro = trabalho / "registro.json"
-    registro_guardado = registro.read_bytes() if registro.exists() else None
-    havia_video = video.exists()
-    for caminho in (video, anterior_video, registro):
-        garantir_escrita(caminho, base_extra=base)
-    marcador = _gravar_marcador(trabalho, guardado, registro_guardado, havia_video, base)
-    if havia_video and not _substituir_com_espera(video, anterior_video, substituir, dormir):
-        marcador.unlink(missing_ok=True)
-        return Resultado("erro", VIDEO_ABERTO, [], anterior)
-    resultado = "erro: a montagem não terminou"
     try:
-        gravar_receita(trabalho, receita)
-        retorno = montar(pasta_episodio, numero)
-        resultado = retorno if isinstance(retorno, str) else f"erro: resultado inesperado ({retorno!r})"
-    except Exception as erro:
-        resultado = f"erro: {erro}"
-    finally:
-        if not resultado.startswith("ok"):
-            _restaurar(
-                montagem, guardado, video, anterior_video, registro, registro_guardado, havia_video, substituir, dormir
-            )
-            marcador.unlink(missing_ok=True)
-    if not resultado.startswith("ok"):
-        return Resultado("erro", resumir_erro(resultado), [], anterior)
+        resultado, marcador, anterior_video = _montar_protegido(
+            pasta_episodio, numero, pasta_corte, montar, base, substituir, dormir,
+            antes=lambda: gravar_receita(trabalho, receita),
+        )
+    except _Falhou as falha:
+        return Resultado("erro", str(falha), [], anterior)
 
     avisos: list[str] = _alertas_da_montagem(resultado)
     post = pasta_corte / "post.md"
@@ -97,11 +139,7 @@ def trocar_musica(
                 avisos += trocar_credito(post, anterior, nova, base=base)
         except Exception as erro:
             avisos.append(f"crédito não atualizado: {erro}")
-    marcador.unlink(missing_ok=True)  # corte.mp4, montagem.json e post.md já falam da música nova
-    try:
-        anterior_video.unlink(missing_ok=True)
-    except OSError:
-        pass
+    _limpar(marcador, anterior_video)  # corte.mp4, montagem.json e post.md já falam da música nova
     if anterior is None or anterior.arquivo != nova.arquivo:
         try:
             garantir_escrita(Path(pasta_musicas) / "uso.json", base_extra=base)
@@ -109,6 +147,29 @@ def trocar_musica(
         except Exception as erro:
             avisos.append(f"uso da música não registrado: {erro}")
     return Resultado("pronto", resultado, avisos, anterior)
+
+
+def remontar(
+    pasta_episodio: Path,
+    numero: int,
+    montar: Callable[[Path, int], str],
+    base: Path | None = None,
+    substituir: Callable[[Path, Path], None] = os.replace,
+    dormir: Callable[[float], None] = time.sleep,
+) -> Resultado:
+    """Monta o corte de novo (com as imagens de agora), com a mesma proteção da troca de música."""
+    pasta_episodio = Path(pasta_episodio)
+    pasta_corte = _corte_pronto_para_montar(pasta_episodio, numero, base, substituir, dormir)
+    if isinstance(pasta_corte, Resultado):
+        return pasta_corte
+    try:
+        resultado, marcador, anterior_video = _montar_protegido(
+            pasta_episodio, numero, pasta_corte, montar, base, substituir, dormir
+        )
+    except _Falhou as falha:
+        return Resultado("erro", str(falha), [], None)
+    _limpar(marcador, anterior_video)
+    return Resultado("pronto", resultado, _alertas_da_montagem(resultado), None)
 
 
 def resumir_erro(texto: str) -> str:

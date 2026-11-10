@@ -368,3 +368,64 @@ def test_ok_com_alertas_vira_avisos(cenario):
     resultado = _chamar(cenario, lambda p, n: "ok com alertas: sem música; áudio perto de saturar: -0.2 dB")
     assert resultado.estado == "pronto"
     assert resultado.avisos[:2] == ["sem música", "áudio perto de saturar: -0.2 dB"]
+
+
+# --- remontar (montar de novo com as imagens, sem trocar a música) -------------
+
+from esteira.painel.troca_musica import VIDEO_ABERTO as _VIDEO_ABERTO, remontar  # noqa: E402
+
+
+def test_remontar_ok_devolve_alertas(cenario):
+    pasta, corte, _, _, tmp = cenario
+    video = corte / "corte.mp4"
+    video.write_bytes(b"velho")
+
+    def montar(p, n):
+        assert (p, n) == (pasta, 1) and not video.exists()
+        video.write_bytes(b"novo")
+        return "ok com alertas: a; b"
+
+    assert remontar(pasta, 1, montar, base=tmp) == Resultado("pronto", "ok com alertas: a; b", ["a", "b"], None)
+    assert video.read_bytes() == b"novo"
+    assert not (corte / TRABALHO / "corte-anterior.mp4").exists() and not (corte / TRABALHO / MARCADOR).exists()
+
+
+def test_remontar_nao_mexe_na_musica_nem_no_post(cenario):
+    pasta, corte, musicas, _, tmp = cenario
+    montagem, post = corte / TRABALHO / NOME_ARQUIVO, corte / "post.md"
+    antes = (montagem.read_bytes(), post.read_bytes())
+    assert remontar(pasta, 1, lambda p, n: "ok", base=tmp).estado == "pronto"
+    assert (montagem.read_bytes(), post.read_bytes()) == antes
+    assert not (musicas / "uso.json").exists()
+
+
+def test_remontar_falha_devolve_corte_e_registro(cenario):
+    pasta, corte, _, _, tmp = cenario
+    video, registro = corte / "corte.mp4", corte / TRABALHO / "registro.json"
+    video.write_bytes(b"velho")
+    original = registro.read_bytes()
+
+    def montar(p, n):
+        video.write_bytes(b"pela metade")
+        registro.write_text('{"resultado": "erro: x"}', "utf-8")
+        return "erro: ffmpeg falhou"
+
+    assert remontar(pasta, 1, montar, base=tmp) == Resultado("erro", "ffmpeg falhou", [], None)
+    assert video.read_bytes() == b"velho" and registro.read_bytes() == original
+    assert not (corte / TRABALHO / MARCADOR).exists()
+
+
+def test_remontar_com_video_aberto(cenario):
+    pasta, corte, _, _, tmp = cenario
+    (corte / "corte.mp4").write_bytes(b"velho")
+    resultado = remontar(
+        pasta, 1, lambda p, n: pytest.fail("não devia montar"), base=tmp,
+        substituir=ReplacePreso(falhas=10**6), dormir=lambda s: None,
+    )
+    assert resultado == Resultado("erro", _VIDEO_ABERTO, [], None)
+    assert (corte / "corte.mp4").read_bytes() == b"velho"
+
+
+def test_remontar_corte_inexistente(cenario):
+    pasta, _, _, _, tmp = cenario
+    assert remontar(pasta, 9, lambda p, n: "ok", base=tmp) == Resultado("erro", "corte 9 não encontrado", [], None)
