@@ -15,6 +15,7 @@ export default defineConfig({
     env: {
       ESTEIRA_PAINEL_MONTAGEM_FALSA: "1",
       ESTEIRA_PAINEL_PASTA_MUSICAS: "painel-web/e2e/.musicas",
+      ESTEIRA_PAINEL_IMAGEM_FALSA: "1",
     },
     reuseExistingServer: false,
     timeout: 60_000,
