@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/gabrielmrezende/clipline/docs/esquemas/pedidos.schema.json",
+  "title": "trabalho/pedidos.json",
+  "description": "Momentos de imagem de um corte. Tempos na linha do tempo do corte.mp4. Campos além dos listados em `required` são preenchidos pela esteira e pelo painel.",
+  "type": "object",
+  "required": ["momentos"],
+  "properties": {
+    "origem": { "$ref": "aprovados.schema.json#/$defs/origem" },
+    "momentos": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["inicio", "fim", "fala", "tipo", "nome"],
+        "additionalProperties": false,
+        "properties": {
+          "inicio": { "type": "number", "minimum": 0 },
+          "fim": { "type": "number" },
+          "fala": { "type": "string" },
+          "tipo": { "enum": ["foto", "noticia", "ia"] },
+          "nome": { "type": "string", "description": "Rótulo curto; entra no nome do arquivo." },
+          "busca": { "type": "string", "description": "foto: termo de busca no Wikimedia Commons." },
+          "titulo": { "type": "string", "description": "noticia: manchete conferida na fonte." },
+          "veiculo": { "type": "string" },
+          "data": { "type": "string" },
+          "prompt": { "type": "string", "description": "ia: nunca cita pessoa real, por nome, cargo ou apelido." },
+          "escolhas": { "type": "array", "items": { "type": "integer", "minimum": 1 }, "maxItems": 3 },
+          "descartar": { "type": "boolean" },
+          "aprovado": { "type": "boolean", "description": "ia: só o dono aprova, pelo painel." },
+          "candidatas": { "type": "array" },
+          "motivo": { "type": "string" },
+          "url": { "type": "array" },
+          "bytes": { "type": "array" },
+          "resumidas": { "type": "array" },
+          "no_video": { "type": "string" },
+          "escolha": { "description": "Formato antigo; convertido para escolhas." },
+          "numero": { "description": "Formato antigo; ignorado." }
+        }
+      }
+    }
+  }
+}

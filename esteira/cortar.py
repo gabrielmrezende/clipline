@@ -1,15 +1,16 @@
 import json
 import re
+from collections.abc import Callable
 from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
 
-from esteira.caminhos import CONTEXTO, ENCERRAMENTOS, MUSICAS
+from esteira.caminhos import CONTEXTO, ENCERRAMENTOS, MUSICAS, gravar_atomico
 from esteira.enquadrar import _mmss
 from esteira.episodio import slug
 from esteira.legenda import corrigir_palavras, escrever_srt, montar_cues
-from esteira.limpeza import planejar_limpeza, remapear
-from esteira.midia import ErroMidia, versao_ffmpeg
+from esteira.limpeza import TemSom, planejar_limpeza, remapear, tem_som_pelos_silencios
+from esteira.midia import ErroMidia, silencios, versao_ffmpeg
 from esteira.modelos import Corte, Edicao, Palavra
 from esteira.musica import atualizar_musica
 from esteira.planos import ler_planos
@@ -31,7 +32,17 @@ def pasta_de_trabalho(destino: Path) -> Path:
 
 
 def ler_aprovados(pasta: Path) -> list[Corte]:
-    dados = json.loads((Path(pasta) / "aprovados.json").read_text("utf-8"))
+    """Os cortes do aprovados.json. Formato errado vira ErroContrato (um ValueError) com arquivo, campo e correção."""
+    from esteira.contrato import ErroContrato, conferir_aprovados
+
+    texto = (Path(pasta) / "aprovados.json").read_text("utf-8")  # ausente: FileNotFoundError, como antes
+    try:
+        dados = json.loads(texto)
+    except json.JSONDecodeError as erro:
+        raise ErroContrato(f"aprovados.json: linha {erro.lineno}, coluna {erro.colno}: JSON inválido: {erro.msg}") from None
+    problemas = conferir_aprovados(dados)
+    if problemas:
+        raise ErroContrato("; ".join(str(p) for p in problemas[:5]))
     return [Corte(**c) for c in dados["cortes"]]
 
 
@@ -75,13 +86,13 @@ def registrar(
         dados["alertas_preparar"] = alertas_preparar
     if imagens is not None:
         dados["imagens"] = imagens
-    (pasta_de_trabalho(destino) / "registro.json").write_text(
-        json.dumps(dados, ensure_ascii=False, indent=2), "utf-8"
-    )
+    gravar_atomico(pasta_de_trabalho(destino) / "registro.json", json.dumps(dados, ensure_ascii=False, indent=2))
 
 
-def _preparar_um(destino: Path, corte: Corte, palavras: list[Palavra], nomes: list[str]) -> list:
-    faixas, edicoes = planejar_limpeza(palavras, corte.inicio, corte.fim)
+def _preparar_um(
+    destino: Path, corte: Corte, palavras: list[Palavra], nomes: list[str], tem_som: TemSom | None = None
+) -> list:
+    faixas, edicoes = planejar_limpeza(palavras, corte.inicio, corte.fim, tem_som)
     trecho = [p for p in palavras if p.fim > corte.inicio and p.inicio < corte.fim]
     cues = montar_cues(corrigir_palavras(trecho, nomes), faixas, nomes)
     trabalho = pasta_de_trabalho(destino)
@@ -122,13 +133,38 @@ def _no_tempo_do_corte(alerta: str, corte: Corte, faixas: list[tuple[float, floa
     return f"{_mmss(novo)} {texto}"
 
 
+SEM_MEDIR_SILENCIO = "não consegui medir o silêncio do áudio: pausas cortadas só pela transcrição; confira edicoes.md"
+MedirSilencio = Callable[[Path, float, float], list[tuple[float, float]]]
+
+
+def _vozes_do_episodio(pasta: Path) -> list[tuple[float, float]]:
+    try:
+        dados = json.loads((Path(pasta) / "transcricao" / "vozes.json").read_text("utf-8"))
+        return [(float(t["inicio"]), float(t["fim"])) for t in dados["trechos"]]
+    except (OSError, ValueError, KeyError, TypeError):
+        return []
+
+
+def _tem_som(medir: MedirSilencio | None, video: Path, corte: Corte, vozes) -> tuple[TemSom | None, str | None]:
+    if medir is None:
+        return None, None
+    try:
+        intervalos = medir(video, corte.inicio, corte.fim)
+    except (ErroMidia, OSError, ValueError) as erro:
+        return None, f"{SEM_MEDIR_SILENCIO} ({str(erro)[:120]})"
+    dentro = [(a, b) for a, b in vozes if b > corte.inicio and a < corte.fim]
+    return tem_som_pelos_silencios(intervalos, dentro), None
+
+
 def preparar_episodio(
     pasta: Path,
     numeros: set[int] | None = None,
     forcar: bool = False,
     nomes: list[str] | None = None,
     pasta_musicas: Path = MUSICAS,
+    medir_silencio: MedirSilencio | None = silencios,
 ) -> dict[int, str]:
+    """`medir_silencio`: confere no áudio cada pausa antes de cortar (None: só pela transcrição, como antes)."""
     pasta = Path(pasta)
     episodio = json.loads((pasta / "episodio.json").read_text("utf-8"))
     video = Path(episodio["video"])
@@ -137,6 +173,7 @@ def preparar_episodio(
         nomes = carregar_glossario(CONTEXTO / "glossario.md")
 
     resultados: dict[int, str] = {}
+    vozes = _vozes_do_episodio(pasta)
     for corte in ler_aprovados(pasta):
         if numeros is not None and corte.numero not in numeros:
             continue
@@ -151,7 +188,10 @@ def preparar_episodio(
         try:
             if problemas:
                 raise ErroMidia("; ".join(problemas))
-            faixas = _preparar_um(destino, corte, palavras, nomes)
+            tem_som, aviso_silencio = _tem_som(medir_silencio, video, corte, vozes)
+            if aviso_silencio:
+                alertas.append(aviso_silencio)
+            faixas = _preparar_um(destino, corte, palavras, nomes, tem_som)
             alertas = [_no_tempo_do_corte(a, corte, faixas) for a in alertas]
             if not (destino / TRABALHO / "enquadramento.json").exists():
                 alertas.append(SEM_ENQUADRAMENTO)

@@ -2,6 +2,7 @@ import shutil
 from collections.abc import Callable, Sequence
 from pathlib import Path
 
+from esteira import config
 from esteira.caminhos import FONTES
 from esteira.legenda import escrever_ass, ocultar_durante
 from esteira.midia import ErroMidia, executar_ffmpeg, pico_de_audio, sondar
@@ -48,6 +49,16 @@ def _filtro_segmentos(
         )
         rotulos += f"[v{i}][a{i}]"
     return partes, rotulos
+
+
+def filtro_voz_normalizada(entrada: str, saida: str, lufs: float) -> str:
+    """A voz no mesmo volume percebido em todos os cortes (EBU R128, uma passada), de volta a 44,1 kHz estéreo.
+
+    O loudnorm trabalha a 192 kHz por dentro; o aresample devolve a taxa que o resto do filtro espera."""
+    return (
+        f"[{entrada}]loudnorm=I={lufs:g}:TP=-1.5:LRA=11,aresample=44100,"
+        f"aformat=sample_fmts=fltp:channel_layouts=stereo[{saida}]"
+    )
 
 
 def _filtro_cartao(cartao: int, logo: int | None, tem_audio: bool, duracao: float) -> list[str]:
@@ -143,7 +154,12 @@ def renderizar_final(
         ["-ss", f"{deslocamento:.3f}", "-t", f"{faixas[-1][1] - deslocamento + FOLGA_BUSCA:.3f}", "-i", str(video)]
     ]
     partes, rotulos = _filtro_segmentos(segmentos, origem.largura, origem.altura, deslocamento)
-    partes.append(f"{rotulos}concat=n={len(segmentos)}:v=1:a=1[vprin][aprin]")
+    ajustes = config.atual()
+    if ajustes.normalizar_voz:
+        partes.append(f"{rotulos}concat=n={len(segmentos)}:v=1:a=1[vprin][abruto]")
+        partes.append(filtro_voz_normalizada("abruto", "aprin", ajustes.voz_lufs))
+    else:
+        partes.append(f"{rotulos}concat=n={len(segmentos)}:v=1:a=1[vprin][aprin]")
 
     partes.append("[vprin]ass=.legenda_tmp/legenda.ass:fontsdir=.legenda_tmp[vass]")
     rotulo_video = "vass"
@@ -202,7 +218,7 @@ def renderizar_final(
 
     try:
         legenda = ocultar_durante(receita.legenda, [(i.inicio, i.fim) for i in imagens])
-        escrever_ass(legenda, temporaria / "legenda.ass")
+        escrever_ass(legenda, temporaria / "legenda.ass", ajustes.legenda_estilo, ajustes.legenda_cor_destaque)
         shutil.copy(FONTES / "Montserrat-Bold.ttf", temporaria / "Montserrat-Bold.ttf")
         _codificar(args, saida, esperado, cwd=saida.parent, verificar=medir)
     finally:

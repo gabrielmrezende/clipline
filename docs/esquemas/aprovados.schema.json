@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/gabrielmrezende/clipline/docs/esquemas/aprovados.schema.json",
+  "title": "aprovados.json",
+  "description": "Cortes escolhidos para um episódio. Gravado pelo Claude Code (skill escolher-cortes) ou à mão. A esteira confere com `esteira validar`.",
+  "type": "object",
+  "required": ["cortes"],
+  "additionalProperties": false,
+  "properties": {
+    "origem": { "$ref": "#/$defs/origem" },
+    "cortes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["numero", "titulo", "inicio", "fim", "clima"],
+        "additionalProperties": false,
+        "properties": {
+          "numero": { "type": "integer", "minimum": 1, "description": "Único no episódio; vira o prefixo da pasta do corte." },
+          "titulo": { "type": "string", "minLength": 1 },
+          "inicio": { "type": "number", "minimum": 0, "description": "Segundos no episódio; começo de uma palavra de palavras.json." },
+          "fim": { "type": "number", "description": "Segundos no episódio; fim de uma palavra; maior que inicio." },
+          "clima": { "type": "string", "description": "Um dos climas da biblioteca de música (padrão: leve, tenso, inspirador, reflexivo)." },
+          "instagram": { "type": "boolean", "default": false },
+          "data": { "type": "string", "pattern": "^$|^\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}$", "description": "AAAA-MM-DD HH:MM, horário de Brasília." }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "origem": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "De onde veio a decisão, para comparar modelos e versões das regras.",
+      "properties": {
+        "modelo": { "type": "string" },
+        "data": { "type": "string" },
+        "regras": { "type": "string", "description": "Saída de `esteira status --regras`." },
+        "skill": { "type": "string" },
+        "observacao": { "type": "string" }
+      }
+    }
+  }
+}

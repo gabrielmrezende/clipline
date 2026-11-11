@@ -1,7 +1,8 @@
 import json
 
 from esteira import cortar
-from esteira.cortar import ler_aprovados, pasta_de_trabalho
+from esteira.cortar import ler_aprovados, pasta_de_trabalho, preparar_episodio
+from esteira.midia import ErroMidia
 from esteira.modelos import Corte
 from esteira.musica import Faixa, atualizar_musica, credito, gravar_catalogo, ler_uso
 from esteira.planos import Plano, gravar_planos
@@ -207,7 +208,8 @@ def test_preparar_poe_alertas_de_planos_no_tempo_do_corte(tmp_path):
     gravar_planos(trabalho, [Plano(1.0, 62.9)])
     alertas = ["00:02 voz V3 sem pessoa", "00:20 sem rosto", "00:08 fala sobreposta", "sem tempo"]
     (trabalho / "alertas-planos.json").write_text(json.dumps(alertas), "utf-8")
-    preparar_teste(pasta)
+    # O vídeo de teste tem um tom contínuo: a pausa só sai se o áudio estiver em silêncio nela.
+    preparar_episodio(pasta, None, False, [], pasta.parent / "musicas", medir_silencio=lambda v, a, b: [(4.9, 15.0)])
     faixas = ler_receita(trabalho).faixas
     assert faixas[0][1] < 5 and faixas[1][0] > 14  # a pausa saiu
     registro = json.loads((trabalho / "registro.json").read_text("utf-8"))
@@ -216,3 +218,31 @@ def test_preparar_poe_alertas_de_planos_no_tempo_do_corte(tmp_path):
     assert registro["alertas_preparar"][:4] == [
         "00:02 voz V3 sem pessoa", "00:10 sem rosto", "00:03 fala sobreposta", "sem tempo",
     ]
+
+
+def test_pausa_com_som_no_audio_fica_no_corte(tmp_path):
+    """A transcrição perdeu uma fala (riso, "uhum"): o tom do vídeo de teste segue na pausa, então ela fica."""
+    corte = {**BOM, "inicio": 1.0, "fim": 62.9}
+    pasta, _ = preparar_episodio_teste(tmp_path, [corte])
+    palavras = json.loads((pasta / "transcricao" / "palavras.json").read_text("utf-8"))
+    palavras = [p for p in palavras if not 5 <= p["inicio"] < 15]
+    (pasta / "transcricao" / "palavras.json").write_text(json.dumps(palavras), "utf-8")
+    preparar_teste(pasta)  # medição real, com ffmpeg: o tom de 440 Hz não é silêncio
+    trabalho = pasta / "01-bom-corte" / "trabalho"
+    assert len(ler_receita(trabalho).faixas) == 1
+    assert "pausa com som mantida" in (trabalho / "edicoes.md").read_text("utf-8")
+
+
+def test_sem_medir_silencio_avisa_e_corta_pela_transcricao(tmp_path):
+    corte = {**BOM, "inicio": 1.0, "fim": 62.9}
+    pasta, _ = preparar_episodio_teste(tmp_path, [corte])
+    palavras = json.loads((pasta / "transcricao" / "palavras.json").read_text("utf-8"))
+    palavras = [p for p in palavras if not 5 <= p["inicio"] < 15]
+    (pasta / "transcricao" / "palavras.json").write_text(json.dumps(palavras), "utf-8")
+
+    def quebrado(*_):
+        raise ErroMidia("sem áudio")
+
+    r = preparar_episodio(pasta, None, False, [], pasta.parent / "musicas", medir_silencio=quebrado)
+    assert "não consegui medir o silêncio" in r[1]
+    assert len(ler_receita(pasta / "01-bom-corte" / "trabalho").faixas) == 2

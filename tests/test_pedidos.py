@@ -175,3 +175,25 @@ def test_no_video_vazio_por_padrao_e_ida_e_volta(tmp_path):
     dados["momentos"][0]["no_video"] = "0001-a-2.jpg"
     (tmp_path / "pedidos.json").write_text(json.dumps(dados), "utf-8")
     assert ler_pedidos(tmp_path)[0].no_video == "0001-a-2.jpg"
+
+
+@pytest.mark.parametrize("prompt", [
+    "o presidente discursando no palácio",
+    "vertical photo of the President waving",
+    "a senator at the podium",
+    "retrato da ministra da saúde",
+    "the prime minister shaking hands",
+])
+def test_prompt_com_cargo_publico_e_recusado(prompt):
+    assert _pessoa_citada(prompt, []).startswith("cargo público")
+
+
+@pytest.mark.parametrize("prompt", [
+    "vertical photo of a rainy street in Brasília",
+    "an empty parliament chamber",
+    "a crowd holding generic signs",
+    "kingdom of clouds at sunset",
+    "presidential palace at night",
+])
+def test_prompt_generico_passa(prompt):
+    assert _pessoa_citada(prompt, []) is None

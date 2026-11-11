@@ -2,6 +2,7 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
 
+from esteira import config
 from esteira.caminhos import FONTES, LOGO
 
 LARGURA = 1080
@@ -53,12 +54,13 @@ def gerar_sobreposicao(saida: Path) -> Path:
     desenho = ImageDraw.Draw(imagem)
     fonte = ImageFont.truetype(str(ARQUIVO_FONTE), 66)
     siga = "SIGA "
-    largura = fonte.getlength(siga + ARROBA)
+    arroba = config.atual().arroba or ARROBA
+    largura = fonte.getlength(siga + arroba)
     x = (LARGURA - largura) / 2
     y = 70 + logo.height + 30
     desenho.text((x, y), siga, font=fonte, fill=AZUL, stroke_width=3, stroke_fill="#000000")
     desenho.text(
-        (x + fonte.getlength(siga), y), ARROBA, font=fonte, fill="#FFFFFF",
+        (x + fonte.getlength(siga), y), arroba, font=fonte, fill="#FFFFFF",
         stroke_width=3, stroke_fill="#000000",
     )
     imagem.save(saida)

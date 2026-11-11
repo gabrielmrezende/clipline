@@ -17,6 +17,17 @@ SOBREPOSICAO = AUTOMACAO / "assets" / "encerramento.png"
 LOGO = IDENTIDADE / "Logos" / "Logo sem Fundo.png"
 
 
+def gravar_atomico(caminho: Path, texto: str, newline: str | None = None) -> None:
+    """Grava num .tmp ao lado e troca de uma vez: uma queda no meio nunca deixa o arquivo pela metade."""
+    caminho = Path(caminho)
+    temporario = caminho.with_name(caminho.name + ".tmp")
+    try:
+        temporario.write_text(texto, "utf-8", newline=newline)
+        temporario.replace(caminho)
+    finally:
+        temporario.unlink(missing_ok=True)
+
+
 class EscritaProibida(Exception):
     pass
 

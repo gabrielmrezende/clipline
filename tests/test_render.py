@@ -406,3 +406,28 @@ def test_imagem_nao_muda_as_cores_do_resto_do_corte(tmp_path):
         a = _quadro(sem, 0.4, pasta / "a.png").getpixel(ponto)
         b = _quadro(com, 0.4, pasta / "b.png").getpixel(ponto)
         assert all(abs(x - y) <= 4 for x, y in zip(a, b)), (ponto, a, b)
+
+
+def test_voz_normalizada_e_legenda_por_palavra_no_render_real(tmp_path, monkeypatch):
+    from esteira import config
+
+    monkeypatch.setattr(config, "atual", lambda: config.Config(normalizar_voz=True, legenda_estilo="palavra"))
+    pasta, origem, cartao = _cenario(tmp_path)
+    saida = pasta / "final.mp4"
+    cue = Cue(0.0, 1.0, ["olá Brasil"], palavras=[[0.0, 0.4], [0.5, 1.0]])
+    receita = Receita([(0.0, 1.0), (2.0, 3.0)], [], [cue], musica=Musica(str(_musica(tmp_path / "m.mp3", 5)), -24))
+    renderizar_final(receita, origem, cartao, pasta, saida)
+    m = sondar(saida)
+    assert (m.largura, m.altura) == (1080, 1920) and m.tem_audio
+    assert m.duracao == pytest.approx(3, abs=0.2)
+    medida = saida_ffmpeg(["-i", str(saida), "-t", "2", "-af", "ebur128", "-f", "null", "-"])
+    integrado = float(re.findall(r"I:\s+(-?[\d.]+) LUFS", medida)[-1])
+    assert -20 < integrado < -9  # perto do alvo de -14 LUFS (trecho curto, tolerância larga)
+
+
+def test_filtro_de_voz_normalizada():
+    from esteira.render import filtro_voz_normalizada
+
+    assert filtro_voz_normalizada("a", "b", -14) == (
+        "[a]loudnorm=I=-14:TP=-1.5:LRA=11,aresample=44100,aformat=sample_fmts=fltp:channel_layouts=stereo[b]"
+    )

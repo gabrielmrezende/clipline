@@ -1,0 +1,23 @@
+# Configuração do canal. Copie para clipline.toml (que fica fora do git) e ajuste.
+# Sem o arquivo, valem estes mesmos valores.
+
+[canal]
+nome = "Tudo é Política"          # vira "canal"
+arroba = "@tudoepoliticabr"        # aparece nos cartões de notícia
+perfil_tiktok = "https://www.tiktok.com/@tudoepoliticabr"
+
+[duracao]
+minima = 60                        # segundos; o validar recusa cortes fora da faixa
+maxima = 120
+
+[legenda]
+estilo = "fixa"                    # "fixa" ou "palavra" (a palavra falada acende, no estilo dos Shorts)
+cor_destaque = "&H0000E5FF"        # cor ASS (&HAABBGGRR); o padrão é amarelo
+
+[voz]
+normalizar = false                 # true: a voz de todos os cortes fica no mesmo volume percebido
+lufs = -14.0                       # alvo de volume integrado
+
+[youtube]
+categoria = "22"
+limite_shorts = 180

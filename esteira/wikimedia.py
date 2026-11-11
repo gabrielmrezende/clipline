@@ -61,8 +61,16 @@ def licenca_aceita(nome: str) -> bool:
     return texto.startswith(("cc0", "public domain", "pd")) or bool(re.match(r"cc by( sa)? \d", texto))
 
 
-def _texto(texto: str) -> str:
-    return " ".join(html.unescape(re.sub(r"<[^>]*>", "", texto)).split())
+LIMITE_AUTOR = 120
+
+
+def _texto(texto: str, limite: int | None = None) -> str:
+    """Texto de terceiros (qualquer um edita o Commons): sem HTML, numa linha só e com tamanho limitado.
+
+    Esses campos chegam ao agente e aos posts; uma linha curta reduz o espaço para instrução escondida."""
+    limpo = " ".join(html.unescape(re.sub(r"<[^>]*>", "", texto)).split())
+    limpo = "".join(c for c in limpo if c.isprintable())
+    return limpo if limite is None or len(limpo) <= limite else limpo[: limite - 1] + "…"
 
 
 def _candidata(pagina: dict) -> Candidata | None:
@@ -77,9 +85,9 @@ def _candidata(pagina: dict) -> Candidata | None:
     if not licenca_aceita(licenca):
         return None
     titulo = pagina["title"]
-    autor = _texto((meta.get("Artist") or {}).get("value", "")) or "desconhecido"
+    autor = _texto((meta.get("Artist") or {}).get("value", ""), LIMITE_AUTOR) or "desconhecido"
     link = "https://commons.wikimedia.org/wiki/" + titulo.replace(" ", "_")
-    return Candidata(titulo, link, info["thumburl"], largura, altura, autor, licenca)
+    return Candidata(titulo, link, info["thumburl"], largura, altura, autor, _texto(licenca, 60))
 
 
 def buscar_candidatas(busca: str, consultar: Consulta = consultar, limite: int = 6) -> list[Candidata]:

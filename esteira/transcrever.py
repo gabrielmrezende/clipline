@@ -1,4 +1,5 @@
 import gc
+import inspect
 import json
 import os
 import sys
@@ -13,6 +14,28 @@ MODOS = [
     ("medium", "cuda", "int8_float16"),
 ]
 FALTA_DE_MEMORIA = ("out of memory", "alloc_failed", "status_not_initialized")
+LIMITE_PROMPT = 200  # caracteres do initial_prompt (o Whisper usa só o fim de um prompt longo)
+
+
+def opcoes_de_nomes(transcribe, nomes: list[str]) -> dict:
+    """O glossário inteiro vai em `hotwords` (faster-whisper >= 1.0.2); o `initial_prompt` leva o que couber.
+
+    Antes, `", ".join(nomes)[:200]` cortava o glossário no meio de um nome e descartava o resto."""
+    opcoes: dict = {}
+    prompt, usados = "", 0
+    for nome in nomes:
+        candidato = f"{prompt}, {nome}" if prompt else nome
+        if len(candidato) > LIMITE_PROMPT:
+            break
+        prompt, usados = candidato, usados + 1
+    opcoes["initial_prompt"] = prompt or None
+    try:
+        aceita = "hotwords" in inspect.signature(transcribe).parameters
+    except (TypeError, ValueError):
+        aceita = False
+    if aceita and nomes:
+        opcoes["hotwords"] = ", ".join(nomes)
+    return opcoes
 
 
 def carregar_glossario(caminho: Path) -> list[str]:
@@ -28,6 +51,9 @@ def carregar_glossario(caminho: Path) -> list[str]:
 
 
 def _registrar_dlls_nvidia() -> None:
+    """Só no Windows: lá as DLLs do CUDA instaladas pelo pip não entram sozinhas no caminho de busca."""
+    if not hasattr(os, "add_dll_directory"):
+        return
     raiz = Path(sys.prefix) / "Lib" / "site-packages"
     for pasta in ("nvidia/cublas/lib", "nvidia/cudnn/lib", "nvidia/cudnn/bin", "nvidia/cublas/bin"):
         caminho = raiz / pasta
@@ -74,7 +100,7 @@ def transcrever(
                 language="pt",
                 word_timestamps=True,
                 vad_filter=True,
-                initial_prompt=", ".join(nomes)[:200] or None,
+                **opcoes_de_nomes(modelo.transcribe, nomes),
             )
             blocos = [
                 [Palavra(p.word.strip(), p.start, p.end) for p in s.words] for s in segmentos

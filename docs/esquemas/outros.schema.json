@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/gabrielmrezende/clipline/docs/esquemas/outros.schema.json",
+  "title": "musicas-do-episodio.json e nomes-suspeitos.json",
+  "$defs": {
+    "musicas_do_episodio": {
+      "type": "object",
+      "required": ["faixas"],
+      "properties": {
+        "faixas": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["arquivo"],
+            "properties": {
+              "arquivo": { "type": "string", "pattern": "^[^/]+/[^/]+\\.mp3$", "description": "Caminho do musicas/catalogo.json." },
+              "motivo": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "nomes_suspeitos": {
+      "type": "object",
+      "description": "Chave: número do corte. Valor: nomes que podem ter saído errados na legenda.",
+      "patternProperties": { "^[0-9]+$": { "type": "array", "items": { "type": "string" } } },
+      "additionalProperties": false
+    }
+  }
+}

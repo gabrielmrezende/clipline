@@ -104,3 +104,27 @@ def test_glossario_extrai_nomes(tmp_path):
         "utf-8",
     )
     assert carregar_glossario(g) == ["Pio Pacelli", "Juliano Viegas", "Gripen", "Embraer", "A-29"]
+
+
+def test_glossario_inteiro_vai_em_hotwords_e_prompt_nao_corta_nome():
+    from esteira.transcrever import LIMITE_PROMPT, opcoes_de_nomes
+
+    nomes = [f"Pessoa Número {i}" for i in range(40)]
+
+    def transcribe(audio, language=None, hotwords=None, initial_prompt=None, **_):
+        pass
+
+    opcoes = opcoes_de_nomes(transcribe, nomes)
+    assert opcoes["hotwords"] == ", ".join(nomes)
+    assert len(opcoes["initial_prompt"]) <= LIMITE_PROMPT
+    assert all(parte.strip() in nomes for parte in opcoes["initial_prompt"].split(","))
+
+
+def test_versao_antiga_sem_hotwords():
+    from esteira.transcrever import opcoes_de_nomes
+
+    def transcribe(audio, language=None, initial_prompt=None):
+        pass
+
+    assert "hotwords" not in opcoes_de_nomes(transcribe, ["Ana"])
+    assert opcoes_de_nomes(transcribe, [])["initial_prompt"] is None

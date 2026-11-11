@@ -2,6 +2,7 @@ import pytest
 
 from esteira.limpeza import planejar_limpeza, remapear
 from esteira.modelos import Palavra as P
+from esteira.modelos import Palavra
 
 
 def duracao(faixas):
@@ -58,3 +59,32 @@ def test_ignora_palavras_fora_do_trecho():
     p = [P("a", 0, 1), P("b", 5, 6), P("c", 6.1, 7), P("d", 20, 21)]
     faixas, _ = planejar_limpeza(p, 5, 7)
     assert faixas == [(5, 7)]
+
+
+def test_pausa_com_som_nao_e_cortada():
+    from esteira.limpeza import PAUSA_COM_SOM
+
+    palavras = [Palavra("um", 0.0, 0.4), Palavra("dois", 2.0, 2.4)]
+    faixas, edicoes = planejar_limpeza(palavras, 0.0, 2.4, tem_som=lambda de, ate: True)
+    assert faixas == [(0.0, 2.4)]
+    assert [e.motivo for e in edicoes] == [PAUSA_COM_SOM]
+
+
+def test_pausa_em_silencio_e_cortada():
+    palavras = [Palavra("um", 0.0, 0.4), Palavra("dois", 2.0, 2.4)]
+    faixas, _ = planejar_limpeza(palavras, 0.0, 2.4, tem_som=lambda de, ate: False)
+    assert len(faixas) == 2
+
+
+def test_tem_som_pelos_silencios_e_pelas_vozes():
+    from esteira.limpeza import tem_som_pelos_silencios
+
+    assert not tem_som_pelos_silencios([(1.0, 3.0)])(1.2, 2.8)
+    assert tem_som_pelos_silencios([(1.0, 1.5)])(1.2, 2.8)  # só um pedaço em silêncio
+    assert tem_som_pelos_silencios([(1.0, 3.0)], [(1.5, 2.2)])(1.2, 2.8)  # alguém fala na pausa
+
+
+def test_repeticao_com_virgula_e_enfase():
+    palavras = [Palavra("muito,", 0.0, 0.3), Palavra("muito", 0.35, 0.6), Palavra("grave", 0.65, 1.0)]
+    _, edicoes = planejar_limpeza(palavras, 0.0, 1.0)
+    assert not [e for e in edicoes if e.motivo == "repetição"]

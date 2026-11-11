@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 @dataclass
@@ -33,3 +33,6 @@ class Cue:
     fim: float
     linhas: list[str]
     destaque: str | None = None
+    # [início, fim] de cada palavra das linhas, na ordem; usado pela legenda "palavra". Fora da comparação:
+    # duas telas com o mesmo texto e tempo continuam iguais.
+    palavras: list[list[float]] | None = field(default=None, compare=False)

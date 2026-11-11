@@ -167,3 +167,40 @@ def test_ocultar_nao_deixa_pedaco_curto_piscando():
     assert ocultar_durante([Cue(1.9, 4.2, ["a"])], imagem) == []  # os dois lados curtos
     assert ocultar_durante([Cue(1.5, 4.1, ["a"])], imagem) == [Cue(1.5, 2.0, ["a"])]
     assert ocultar_durante([Cue(5.0, 5.2, ["b"])], imagem) == [Cue(5.0, 5.2, ["b"])]  # fora da imagem fica
+
+
+def test_cues_guardam_o_tempo_de_cada_palavra():
+    from esteira.legenda import montar_cues
+    from esteira.modelos import Palavra
+
+    palavras = [Palavra("Um", 0.0, 0.3), Palavra("dois", 0.4, 0.7), Palavra("três.", 0.8, 1.2)]
+    cues = montar_cues(palavras, [(0.0, 2.0)])
+    assert cues[0].palavras == [[0.0, 0.3], [0.4, 0.7], [0.8, 1.2]]
+
+
+def test_ass_por_palavra_acende_uma_palavra_por_evento(tmp_path):
+    from esteira.legenda import escrever_ass
+    from esteira.modelos import Cue
+
+    cue = Cue(0.0, 1.2, ["um dois", "três"], palavras=[[0.0, 0.3], [0.4, 0.7], [0.8, 1.2]])
+    escrever_ass([cue], tmp_path / "l.ass", estilo="palavra", cor_destaque="&H0000E5FF")
+    eventos = [l for l in (tmp_path / "l.ass").read_text("utf-8").splitlines() if l.startswith("Dialogue")]
+    assert len(eventos) == 3
+    assert r"{\c&H00E5FF&}um{\c&HFFFFFF&} dois" in eventos[0]
+    assert r"{\c&H00E5FF&}três" in eventos[2]
+    assert eventos[0].split(",")[1:3] == ["0:00:00.00", "0:00:00.40"]
+
+
+def test_ass_por_palavra_sem_tempos_cai_no_estilo_fixo(tmp_path):
+    from esteira.legenda import escrever_ass
+    from esteira.modelos import Cue
+
+    escrever_ass([Cue(0.0, 1.0, ["texto editado à mão"])], tmp_path / "l.ass", estilo="palavra")
+    eventos = [l for l in (tmp_path / "l.ass").read_text("utf-8").splitlines() if l.startswith("Dialogue")]
+    assert len(eventos) == 1 and r"\c&H" not in eventos[0]
+
+
+def test_cue_com_e_sem_tempos_continuam_iguais():
+    from esteira.modelos import Cue
+
+    assert Cue(0, 1, ["a"]) == Cue(0, 1, ["a"], palavras=[[0, 1]])

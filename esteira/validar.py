@@ -1,3 +1,4 @@
+from esteira import config
 from esteira.modelos import Corte, Palavra
 from esteira.musica import CLIMAS_VALIDOS
 
@@ -15,8 +16,9 @@ def validar_trecho(palavras: list[Palavra], corte: Corte, duracao_video: float) 
     problemas: list[str] = []
     if corte.inicio < 0 or corte.fim > duracao_video:
         problemas.append("tempos fora da duração do vídeo")
-    if not DURACAO_MIN <= corte.fim - corte.inicio <= DURACAO_MAX:
-        problemas.append(f"duração fora de {DURACAO_MIN} a {DURACAO_MAX} segundos")
+    minimo, maximo = config.atual().duracao_minima, config.atual().duracao_maxima  # padrão: 60 e 120 (clipline.toml)
+    if not minimo <= corte.fim - corte.inicio <= maximo:
+        problemas.append(f"duração fora de {minimo:g} a {maximo:g} segundos")
     if corte.clima not in CLIMAS_VALIDOS:
         problemas.append(f"clima fora de {', '.join(CLIMAS_VALIDOS)}")
 

@@ -5,6 +5,7 @@ from pathlib import Path
 from esteira.legenda import _chave
 from esteira.modelos import Cue
 from esteira.planos import Plano
+from esteira.caminhos import gravar_atomico
 
 NOME_ARQUIVO = "montagem.json"
 TOLERANCIA = 0.05
@@ -50,7 +51,7 @@ def duracao_principal(receita: Receita) -> float:
 
 def gravar_receita(pasta: Path, receita: Receita) -> None:
     texto = json.dumps(asdict(receita), ensure_ascii=False, indent=2)
-    (Path(pasta) / NOME_ARQUIVO).write_text(texto, "utf-8")
+    gravar_atomico(Path(pasta) / NOME_ARQUIVO, texto)
 
 
 def ler_receita(pasta: Path) -> Receita:
