@@ -3,7 +3,16 @@
 Roteiro para o Claude Code. Rodar comandos a partir de `Automacao/`, com
 `.venv\Scripts\python.exe -m esteira`.
 
-Antes de sugerir qualquer coisa, ler todos os arquivos de `Contexto/`.
+Antes de sugerir qualquer coisa, ler todos os arquivos de `Contexto/`. As regras invioláveis estão em `CLAUDE.md`;
+as travas de `.claude/hooks/travas.py` recusam o que só o dono pode fazer.
+
+Comandos que ajudam em qualquer etapa:
+
+- `esteira status "<pasta do episódio>"`: etapa de cada corte e o próximo comando.
+- `esteira trecho "<pasta do episódio>" --de S --ate S`: palavras, tempos e quem fala de um intervalo
+  (no lugar de abrir o `palavras.json` inteiro).
+- `esteira validar "<pasta do episódio>" --json`: confere todos os arquivos que você grava.
+- `esteira doctor`: confere o ambiente.
 Nunca alterar pastas de episódios (`1 - Programas/`). A saída vai para
 `2 - Cortes/<Quadro NN - Convidado>/`.
 
@@ -61,7 +70,8 @@ Rodar uma vez por episódio, depois de `transcrever`. Separa quem fala por voz
 .venv\Scripts\python.exe -m esteira vozes "<video>" "<pasta do episódio>" --pessoas 3
 ```
 
-Grava `transcricao/vozes.json`. Use `--forcar` para refazer.
+Grava `transcricao/vozes.json` e `transcricao/texto-falantes.md` (a transcrição com quem fala e as pausas
+longas). Use `--forcar` para refazer.
 
 O token do Hugging Face vem só da variável de ambiente `HF_TOKEN`. Nunca
 gravar o token em arquivo, log ou mensagem. A conta e o aceite dos termos do
@@ -70,7 +80,7 @@ para com mensagem clara. Nesse caso, avisar o dono do canal e esperar.
 
 ## 3. Escolher os cortes
 
-Ler `transcricao/texto.md` e escolher até 8 a 10 cortes, conforme o episódio
+Seguir a skill `escolher-cortes`. Ler `transcricao/texto-falantes.md` (ou `texto.md`, se o `vozes` não rodou) e escolher até 8 a 10 cortes, conforme o episódio
 permitir. Conferir em `transcricao/palavras.json` os tempos exatos. Ler o que
 vem antes e depois de cada trecho para não mudar o sentido da fala.
 
@@ -152,7 +162,9 @@ corte só.
 .venv\Scripts\python.exe -m esteira preparar "<pasta do episódio>"
 ```
 
-Cria `montagem.json`, `legenda.srt` e `registro.json` em `trabalho/`. A
+Cria `montagem.json`, `legenda.srt` e `registro.json` em `trabalho/`. Antes de cortar uma pausa, a esteira mede o
+áudio: se houver som (riso, "uhum", fala que a transcrição perdeu) ou alguém falando nela segundo o `vozes.json`, a
+pausa fica, e o `edicoes.md` registra "pausa com som mantida". A
 música sai do clima do corte. Use `--numero N` para um corte só e `--forcar`
 para refazer.
 
@@ -330,6 +342,9 @@ Só quando o dono do canal pedir, por exemplo "agende o corte 1 para domingo
 
 ### Fluxo
 
+O caminho recomendado é o bloco **Publicar** do painel: o dono escolhe a data e as redes, vê o mesmo resumo e
+confirma ali. Pelo terminal:
+
 1. Rodar sem `--confirmar`. O comando confere tudo e mostra o resumo, sem
    enviar nada:
 
@@ -359,6 +374,10 @@ O `agendar` recusa, e diz o motivo, quando:
 - o corte já está agendado naquela rede.
 - o vídeo em `video-final/` é mais antigo que o `corte.mp4` (o corte foi montado de novo, por exemplo ao trocar a música ou as imagens no painel): aprovar de novo no painel, ou refazer no CapCut e salvar o vídeo novo em `video-final/`.
 - o vídeo foi aprovado pelo painel, tem imagem de IA e falta o aviso de IA em algum texto das redes pedidas.
+- o vídeo foi aprovado pelo painel, tem foto livre e falta o crédito dela (o autor ou o link) em algum texto.
+
+Vídeo com imagem de IA vai com o rótulo nativo de conteúdo sintético no YouTube e no TikTok direto. No Instagram e
+no TikTok em rascunho, o resumo lembra de ligar o rótulo no app.
 
 Com o vídeo aprovado pelo painel, o resumo diz quantas imagens de IA estão no vídeo
 e lista os créditos das fotos que estão nele (autor, licença e link). Com o vídeo

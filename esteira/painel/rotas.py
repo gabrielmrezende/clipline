@@ -280,7 +280,7 @@ def entrar(corpo: Entrar, requisicao: Request) -> Response:
     if porteiro is None:
         return Response(status_code=204)
     try:
-        valor = porteiro.entrar(corpo.codigo)
+        valor = porteiro.entrar(corpo.codigo, requisicao.client.host if requisicao.client else "")
     except Travado as erro:
         return JSONResponse({"detail": str(erro)}, status_code=429)
     except CodigoErrado:
@@ -289,4 +289,12 @@ def entrar(corpo: Entrar, requisicao: Request) -> Response:
     resposta.set_cookie(
         COOKIE, valor, httponly=True, samesite="strict", max_age=DURACAO_SESSAO, path="/"
     )
+    return resposta
+
+
+@roteador.post("/sair")
+def sair() -> Response:
+    """Apaga o cookie deste aparelho. Para derrubar todos, gere um código novo (painel codigo)."""
+    resposta = Response(status_code=204)
+    resposta.delete_cookie(COOKIE, path="/", httponly=True, samesite="strict")
     return resposta

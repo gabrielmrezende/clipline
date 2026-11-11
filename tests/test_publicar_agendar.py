@@ -340,12 +340,21 @@ def test_sem_ia_no_video_aprovado_nao_mostra_linha_de_ia(episodio, tmp_path):
     assert "de IA" not in texto
 
 
+def _com_credito_das_fotos(corte, credito):
+    """Põe o crédito no fim de cada texto das redes (antes da seção seguinte)."""
+    texto = (corte / "post.md").read_text("utf-8")
+    for secao in ("## Instagram", "## TikTok", "## Música"):
+        texto = texto.replace(f"\n{secao}", f"\nFoto: {credito}\n\n{secao}", 1)
+    (corte / "post.md").write_text(texto, "utf-8")
+
+
 def test_resumo_lista_creditos_das_fotos(episodio, tmp_path):
     pasta, corte, _ = episodio
     sem_credito = {**FOTO_NO_VIDEO, "inicio": 9.0, "fim": 11.0, "arquivo": "imagens-sugeridas/0009-x-1.jpg", "momento": "0009-x"}
     credito = {"autor": "Fulano", "licenca": "CC BY-SA 4.0", "pagina": "https://c/A1", "titulo": "File:A1.jpg"}
     (corte / "trabalho" / "creditos.json").write_text(json.dumps({"0005-placa-1.jpg": credito}), "utf-8")
     _aprovado_pelo_painel(corte, [FOTO_NO_VIDEO, sem_credito], tmp_path)
+    _com_credito_das_fotos(corte, "Fulano, CC BY-SA 4.0, Wikimedia Commons")
     linhas = resumo(preparar_pedido(pasta, 1, "2026-11-08 18:00", TODAS, AGORA), MODOS).splitlines()
     i = linhas.index("Créditos das fotos no vídeo:")
     assert linhas[i + 1:i + 3] == [
@@ -369,8 +378,40 @@ def test_credito_vem_do_video_aprovado_mesmo_se_a_foto_mudou_depois(episodio, tm
     pasta, corte, _ = episodio
     no_video = {**FOTO_NO_VIDEO, "credito": {"autor": "Fulano", "licenca": "CC BY-SA 4.0", "pagina": "https://c/A1"}}
     _aprovado_pelo_painel(corte, [no_video], tmp_path)
+    _com_credito_das_fotos(corte, "Fulano (https://c/A1)")
     # depois de aprovar, o dono trocou a foto da posição 1 e baixou de novo, sem remontar
     outra = {"autor": "Beltrana", "licenca": "CC BY 4.0", "pagina": "https://c/A9", "titulo": "File:A9.jpg"}
     (corte / "trabalho" / "creditos.json").write_text(json.dumps({"0005-placa-1.jpg": outra}), "utf-8")
     linhas = resumo(preparar_pedido(pasta, 1, "2026-11-08 18:00", TODAS, AGORA), MODOS).splitlines()
     assert "- Fulano, CC BY-SA 4.0, https://c/A1" in linhas and not any("Beltrana" in l for l in linhas)
+
+
+def test_foto_no_video_sem_credito_nos_textos_nao_agenda(episodio, tmp_path):
+    pasta, corte, _ = episodio
+    no_video = {**FOTO_NO_VIDEO, "credito": {"autor": "Fulano", "licenca": "CC BY-SA 4.0", "pagina": "https://c/A1"}}
+    _aprovado_pelo_painel(corte, [no_video], tmp_path)
+    with pytest.raises(ErroAgendar) as erro:
+        preparar_pedido(pasta, 1, "2026-11-08 18:00", TODAS, AGORA)
+    assert "youtube: falta o crédito da foto 0005-placa-1.jpg (Fulano)" in str(erro.value)
+
+
+def test_link_da_pagina_tambem_vale_como_credito(episodio, tmp_path):
+    pasta, corte, _ = episodio
+    no_video = {**FOTO_NO_VIDEO, "credito": {"autor": "desconhecido", "licenca": "CC0", "pagina": "https://c/A1"}}
+    _aprovado_pelo_painel(corte, [no_video], tmp_path)
+    _com_credito_das_fotos(corte, "https://c/A1")
+    assert preparar_pedido(pasta, 1, "2026-11-08 18:00", TODAS, AGORA).creditos
+
+
+def test_video_com_ia_vai_com_rotulo_nativo(episodio, tmp_path):
+    pasta, corte, _ = episodio
+    ia = {**FOTO_NO_VIDEO, "tipo": "ia", "credito": None}
+    _aprovado_pelo_painel(corte, [ia], tmp_path)
+    texto = (corte / "post.md").read_text("utf-8")
+    from esteira.publicar.post import AVISO_IA
+    for secao in ("## Instagram", "## TikTok", "## Música"):
+        texto = texto.replace(f"\n{secao}", f"\n{AVISO_IA}\n\n{secao}", 1)
+    (corte / "post.md").write_text(texto, "utf-8")
+    pedido = preparar_pedido(pasta, 1, "2026-11-08 18:00", TODAS, AGORA)
+    assert pedido.ia
+    assert "Rótulo de conteúdo de IA: enviado ao YouTube; ligue no app: Instagram, TikTok." in resumo(pedido, MODOS)

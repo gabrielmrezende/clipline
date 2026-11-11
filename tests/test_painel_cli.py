@@ -192,7 +192,6 @@ def test_painel_montagem_falsa_por_ambiente(estatico, tmp_path, monkeypatch):
     from tests.auxiliares_painel import criar_episodio
 
     monkeypatch.setenv("ESTEIRA_PAINEL_MONTAGEM_FALSA", "1")
-    musicas = tmp_path / "musicas-reais-nao"
     corte = Corte(1, "Um", 10, 20, "tenso")
     pasta = criar_episodio(tmp_path, "ep", [corte], {1})
     mp4 = pasta_do_corte(pasta, corte) / "corte.mp4"

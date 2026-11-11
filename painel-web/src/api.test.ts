@@ -18,4 +18,13 @@ describe("api", () => {
     expect(assign).toHaveBeenCalledWith("/entrar");
     vi.unstubAllGlobals();
   });
+
+  it("no 401 lembra a página para voltar depois de entrar", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("{}", { status: 401 })));
+    const assign = vi.fn();
+    vi.stubGlobal("location", { pathname: "/episodios/Ep 1/cortes/2", assign });
+    await expect(pedir("/api/episodios")).rejects.toMatchObject({ status: 401 });
+    expect(assign).toHaveBeenCalledWith("/entrar?volta=%2Fepisodios%2FEp%201%2Fcortes%2F2");
+    vi.unstubAllGlobals();
+  });
 });

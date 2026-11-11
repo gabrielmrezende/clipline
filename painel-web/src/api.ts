@@ -85,11 +85,14 @@ export interface Post {
 export class ErroApi extends Error {
   status: number;
   detail: string;
-  constructor(status: number, detail: string) {
+  /** O corpo JSON da resposta de erro, quando há (por exemplo, a lista de problemas do agendar). */
+  corpo: Record<string, unknown> | null;
+  constructor(status: number, detail: string, corpo: Record<string, unknown> | null = null) {
     super(detail);
     this.name = "ErroApi";
     this.status = status;
     this.detail = detail;
+    this.corpo = corpo;
   }
 }
 
@@ -110,16 +113,19 @@ async function buscar(caminho: string, init?: RequestInit): Promise<Response> {
   }
   if (!resposta.ok) {
     let detail = `Erro ${resposta.status}.`;
+    let corpoDoErro: Record<string, unknown> | null = null;
     try {
       const corpo = await resposta.json();
+      if (corpo && typeof corpo === "object") corpoDoErro = corpo as Record<string, unknown>;
       if (corpo && typeof corpo.detail === "string") detail = corpo.detail;
     } catch {
       /* corpo sem JSON */
     }
     if (resposta.status === 401 && caminho !== "/api/entrar" && location.pathname !== "/entrar") {
-      location.assign("/entrar");
+      const volta = location.pathname === "/" ? "" : `?volta=${encodeURIComponent(location.pathname)}`;
+      location.assign(`/entrar${volta}`);
     }
-    throw new ErroApi(resposta.status, detail);
+    throw new ErroApi(resposta.status, detail, corpoDoErro);
   }
   return resposta;
 }
@@ -377,3 +383,66 @@ export function tempoTexto(segundos: number): string {
   const total = Math.max(0, Math.floor(segundos));
   return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`;
 }
+
+// --- publicação pelo painel ---------------------------------------------------------------------
+
+export interface ItemPublicacao {
+  rede: string;
+  data: string;
+  estado: string;
+  link: string;
+  erro: string;
+  tentativas: number;
+}
+
+export interface Publicacao {
+  itens: ItemPublicacao[];
+  redes: string[];
+  data: string;
+  modos: Record<string, string>;
+}
+
+export interface ResumoPublicacao {
+  resumo: string;
+  /** Marca do texto exato do resumo: a confirmação só vale para ele. */
+  marca: string;
+  ia: boolean;
+}
+
+export const lerPublicacao = (ep: string, n: number | string) => pedir<Publicacao>(`${caminhoCorte(ep, n)}/publicacao`);
+
+export const resumoDaPublicacao = (ep: string, n: number | string, data: string, redes: string[]) =>
+  enviarJson<ResumoPublicacao>(`${caminhoCorte(ep, n)}/publicacao/resumo`, "POST", { data, redes });
+
+export const confirmarPublicacao = (ep: string, n: number | string, data: string, redes: string[], marca: string) =>
+  enviarJson<Pedido>(`${caminhoCorte(ep, n)}/publicacao`, "POST", { data, redes, marca, confirmado: true });
+
+export const cancelarPublicacao = (ep: string, n: number | string, redes: string[]) =>
+  enviarJson<{ mensagens: string[]; itens: ItemPublicacao[] }>(`${caminhoCorte(ep, n)}/publicacao/cancelar`, "POST", {
+    redes,
+    confirmado: true,
+  });
+
+// --- legenda ------------------------------------------------------------------------------------
+
+export interface TelaLegenda {
+  indice: number;
+  inicio: number;
+  fim: number;
+  linhas: string[];
+}
+
+export interface Legenda {
+  versao: string;
+  telas: TelaLegenda[];
+  max_caracteres: number;
+}
+
+export const lerLegenda = (ep: string, n: number | string) => pedir<Legenda>(`${caminhoCorte(ep, n)}/legenda`);
+
+export const gravarLegenda = (
+  ep: string,
+  n: number | string,
+  versao: string,
+  telas: { indice: number; linhas: string[] }[],
+) => enviarJson<{ versao: string; remontar: boolean }>(`${caminhoCorte(ep, n)}/legenda`, "PUT", { versao, telas });

@@ -6,7 +6,7 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
 
-from esteira.caminhos import FONTES
+from esteira.caminhos import FONTES, gravar_atomico
 from esteira.midia import executar_ffmpeg, saida_ffmpeg
 
 PROPORCAO_FAIXA = 1080 / 1036
@@ -84,7 +84,7 @@ def planos_iniciais(video: Path, inicio: float, fim: float) -> list[Plano]:
 
 def gravar_planos(pasta: Path, planos: list[Plano]) -> None:
     conteudo = {"planos": [asdict(p) for p in planos]}
-    (Path(pasta) / "enquadramento.json").write_text(json.dumps(conteudo, indent=2), "utf-8")
+    gravar_atomico(Path(pasta) / "enquadramento.json", json.dumps(conteudo, indent=2))
 
 
 def ler_planos(pasta: Path) -> list[Plano]:

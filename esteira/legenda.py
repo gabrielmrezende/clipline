@@ -115,7 +115,8 @@ def montar_cues(
         bloco = textos[i : i + n]
         bloco[-1] = bloco[-1].rstrip(PONTUACAO_FINAL)
         linhas = _disposicao(bloco) or [" ".join(bloco)]
-        cues.append(Cue(visiveis[i][1], visiveis[i + n - 1][2], linhas))
+        tempos = [[round(v[1], 3), round(v[2], 3)] for v in visiveis[i : i + n]]
+        cues.append(Cue(visiveis[i][1], visiveis[i + n - 1][2], linhas, palavras=tempos))
         i += n
     return cues
 
@@ -159,13 +160,56 @@ def _pintar_destaque(linhas: list[str], destaque: str | None) -> list[str]:
     return resultado
 
 
-def escrever_ass(cues: list[Cue], caminho: Path) -> None:
-    eventos = [
-        f"Dialogue: 0,{_tempo_ass(c.inicio)},{_tempo_ass(c.fim)},Default,,0,0,0,,"
-        + r"{\an8\pos(540,1530)}"
-        + r"\N".join(_pintar_destaque(c.linhas, c.destaque))
-        for c in cues
-    ]
+POSICAO = r"{\an8\pos(540,1530)}"
+DURACAO_MINIMA_EVENTO = 0.02
+
+
+def _cor_ass(cor: str) -> str:
+    """"&H0000E5FF" (AABBGGRR, do estilo) -> "&H00E5FF&" (BBGGRR, da tag \\c)."""
+    digitos = cor.upper().removeprefix("&H").rstrip("&")
+    return f"&H{digitos[-6:].rjust(6, '0')}&"
+
+
+def _acender(linhas: list[str], indice: int, cor: str) -> list[str]:
+    """As linhas com a palavra de posição `indice` (contando todas as linhas) na cor de destaque."""
+    resultado, k = [], 0
+    for linha in linhas:
+        partes = []
+        for palavra in linha.split(" "):
+            texto = _escapar_ass(palavra)
+            partes.append(r"{\c" + cor + "}" + texto + r"{\c&HFFFFFF&}" if k == indice else texto)
+            k += 1
+        resultado.append(" ".join(partes))
+    return resultado
+
+
+def _eventos_por_palavra(c: Cue, cor: str) -> list[str] | None:
+    total = sum(len(linha.split(" ")) for linha in c.linhas)
+    if not c.palavras or len(c.palavras) != total:
+        return None  # tela antiga (sem tempos) ou texto editado à mão: cai no estilo fixo
+    eventos = []
+    for k, (inicio, _) in enumerate(c.palavras):
+        de = c.inicio if k == 0 else min(max(c.inicio, inicio), c.fim)
+        ate = c.fim if k + 1 == total else min(max(c.inicio, c.palavras[k + 1][0]), c.fim)
+        if ate - de < DURACAO_MINIMA_EVENTO:
+            continue
+        eventos.append(
+            f"Dialogue: 0,{_tempo_ass(de)},{_tempo_ass(ate)},Default,,0,0,0,," + POSICAO + r"\N".join(_acender(c.linhas, k, cor))
+        )
+    return eventos or None
+
+
+def escrever_ass(cues: list[Cue], caminho: Path, estilo: str = "fixa", cor_destaque: str = "&H0000E5FF") -> None:
+    """`estilo`: "fixa" (a tela inteira branca) ou "palavra" (a palavra falada acende em `cor_destaque`)."""
+    cor = _cor_ass(cor_destaque)
+    eventos: list[str] = []
+    for c in cues:
+        por_palavra = _eventos_por_palavra(c, cor) if estilo == "palavra" else None
+        eventos += por_palavra or [
+            f"Dialogue: 0,{_tempo_ass(c.inicio)},{_tempo_ass(c.fim)},Default,,0,0,0,,"
+            + POSICAO
+            + r"\N".join(_pintar_destaque(c.linhas, c.destaque))
+        ]
     Path(caminho).write_text(CABECALHO_ASS + "\n".join(eventos) + "\n", "utf-8", newline="\n")
 
 

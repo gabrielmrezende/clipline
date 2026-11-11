@@ -509,3 +509,21 @@ def test_guia_explica_que_a_esteira_ja_poe_as_imagens(tmp_path):
     escrever_guia(corte, ler_pedidos(corte / "trabalho"))
     guia = (corte / "imagens-sugeridas" / "guia.md").read_text("utf-8")
     assert "A esteira já põe no corte.mp4 a imagem marcada de cada momento." in guia
+
+
+def test_sugerir_sem_rede_mantem_a_foto_anterior(tmp_path):
+    ep, corte = _sugeridos(tmp_path)
+    resumir_episodio(ep, None, falso, lambda u: 1)
+    assert sugerir_episodio(ep, None, [], falso, baixar_cor) == {1: "ok"}
+    pasta = corte / "imagens-sugeridas"
+    antes = (pasta / "0012-yas-marina-1.jpg").read_bytes()
+
+    def sem_rede(url, destino):
+        raise OSError("sem rede")
+
+    resultado = sugerir_episodio(ep, None, [], falso, sem_rede)[1]
+    assert "a foto anterior foi mantida" in resultado
+    assert (pasta / "0012-yas-marina-1.jpg").read_bytes() == antes
+    assert "0012-yas-marina-1.jpg" in json.loads((corte / "trabalho" / "sugeridas.json").read_text("utf-8"))
+    assert "0012-yas-marina-1.jpg" in json.loads((corte / "trabalho" / "creditos.json").read_text("utf-8"))
+    assert not (corte / "trabalho" / ".sugeridas-anteriores").exists()

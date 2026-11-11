@@ -4,8 +4,9 @@ import urllib.parse
 from datetime import datetime, timezone
 from pathlib import Path
 
+from esteira import config
 from esteira.publicar import credenciais
-from esteira.publicar.credenciais import PORTA, REDIRECIONAMENTO, ErroConexao, esperar_codigo, pedir_segredo
+from esteira.publicar.credenciais import PORTA, REDIRECIONAMENTO, ErroConexao, esperar_codigo, pedir_segredo, pkce
 from esteira.publicar.http import ErroRede, Resultado, json_de, pedir
 from esteira.publicar.post import Textos
 
@@ -38,15 +39,17 @@ def _acesso() -> str:
 
 
 class YouTube:
-    def publicar(self, video: Path, textos: Textos, data: datetime, modo: str) -> Resultado:
+    def publicar(self, video: Path, textos: Textos, data: datetime, modo: str, ia: bool = False) -> Resultado:
         acesso = _acesso()
         status = {"privacyStatus": "private", "selfDeclaredMadeForKids": False}
+        if ia:  # rótulo de conteúdo alterado ou sintético (status.containsSyntheticMedia, desde 30/10/2024)
+            status["containsSyntheticMedia"] = True
         if modo == "agendado" and data <= datetime.now(timezone.utc):
             status["privacyStatus"] = "public"  # passou da hora: publica já
         elif modo == "agendado":
             status["publishAt"] = data.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         meta = {
-            "snippet": {"title": textos.youtube_titulo, "description": textos.youtube_descricao, "categoryId": "22"},
+            "snippet": {"title": textos.youtube_titulo, "description": textos.youtube_descricao, "categoryId": config.atual().youtube_categoria},
             "status": status,
         }
         conteudo = Path(video).read_bytes()
@@ -78,14 +81,16 @@ def conectar() -> None:
     credenciais.gravar(REDE, "client_id", cliente)
     credenciais.gravar(REDE, "client_secret", segredo)
     estado = secrets.token_urlsafe(16)
+    verificador, desafio = pkce()
     url = AUTORIZAR + "?" + urllib.parse.urlencode({
         "client_id": cliente, "redirect_uri": REDIRECIONAMENTO, "response_type": "code", "scope": ESCOPO,
         "access_type": "offline", "prompt": "consent", "state": estado,
+        "code_challenge": desafio, "code_challenge_method": "S256",
     })
     codigo = esperar_codigo(PORTA, estado, url)
     dados = _token({
         "code": codigo, "client_id": cliente, "client_secret": segredo,
-        "redirect_uri": REDIRECIONAMENTO, "grant_type": "authorization_code",
+        "redirect_uri": REDIRECIONAMENTO, "grant_type": "authorization_code", "code_verifier": verificador,
     })
     if not dados.get("refresh_token"):
         raise ErroConexao("o Google não devolveu refresh token; tente de novo", REDE)

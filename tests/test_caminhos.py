@@ -26,6 +26,7 @@ def test_bloqueia_caminho_com_ponto_ponto():
         garantir_escrita(CORTES / ".." / "3 - Identidade" / "Logos" / "a.png")
 
 
+@pytest.mark.skipif(not LOGO.is_file(), reason="só na máquina do canal: precisa das pastas e da identidade reais")
 def test_arquivos_do_canal_existem():
     assert RAIZ.joinpath("Contexto").is_dir()
     assert PROGRAMAS.is_dir() and IDENTIDADE.is_dir()

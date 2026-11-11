@@ -141,7 +141,7 @@ export function Episodio() {
             role="tab"
             id={`aba-${a.id}`}
             aria-selected={aba === a.id}
-            aria-controls={`painel-${aba}`}
+            aria-controls={aba === a.id ? `painel-${a.id}` : undefined}
             tabIndex={aba === a.id ? 0 : -1}
             onClick={() => escolher(a.id)}
             onKeyDown={(e) => teclas(e, i)}

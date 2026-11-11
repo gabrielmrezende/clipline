@@ -5,10 +5,22 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 from esteira.receita import TOLERANCIA
+from esteira.caminhos import gravar_atomico
 
 TIPOS = ("foto", "noticia", "ia")
 ARQUIVO = "pedidos.json"
-SECOES_DE_PESSOAS = ("Apresentadores", "Convidados", "Pessoas")
+SECOES_DE_PESSOAS = ("Apresentadores", "Convidados", "Pessoas", "Apelidos", "Cargos")
+# Cargos que, num canal de política, apontam para uma pessoa real ("o presidente" é o presidente de agora).
+# Em português e em inglês (os prompts costumam ir em inglês). Sem acento: a comparação normaliza.
+CARGOS = (
+    "presidente", "presidenta", "vice-presidente", "ex-presidente", "primeiro-ministro", "primeira-ministra",
+    "ministro", "ministra", "senador", "senadora", "deputado", "deputada", "governador", "governadora",
+    "prefeito", "prefeita", "vereador", "vereadora", "chanceler", "papa", "rei", "rainha", "principe", "princesa",
+    "candidato", "candidata", "ditador", "ditadora", "stf",
+    "president", "vice president", "prime minister", "minister", "senator", "congressman", "congresswoman",
+    "member of congress", "governor", "mayor", "chancellor", "pope", "king", "queen", "prince", "princess",
+    "dictator", "candidate", "head of state", "supreme court justice",
+)
 IMAGEM_MINIMA = 2.0
 IMAGEM_MAXIMA = 5.0
 MAXIMO_ESCOLHAS = 3
@@ -63,7 +75,7 @@ def texto_dos_pedidos(momentos: list[Momento]) -> str:
 
 
 def gravar_pedidos(pasta: Path, momentos: list[Momento]) -> None:
-    (Path(pasta) / ARQUIVO).write_text(texto_dos_pedidos(momentos), "utf-8")
+    gravar_atomico(Path(pasta) / ARQUIVO, texto_dos_pedidos(momentos))
 
 
 def pessoas_do_glossario(caminho: Path) -> list[str]:
@@ -89,12 +101,19 @@ def _normalizar(texto: str) -> str:
     return re.sub(r"\s+", " ", sem_acento).strip().lower()
 
 
-def _pessoa_citada(prompt: str, pessoas: list[str]) -> str | None:
+def _pessoa_citada(prompt: str, pessoas: list[str], cargos: tuple[str, ...] = CARGOS) -> str | None:
+    """O nome (do glossário) ou o cargo público que o prompt cita; None se nenhum.
+
+    É uma lista, não um classificador: pega o óbvio. Descrição que identifica alguém sem nome nem cargo passa,
+    e por isso o dono aprova cada prompt no painel antes de gerar."""
     texto = _normalizar(prompt)
     for pessoa in pessoas:
         nome = _normalizar(pessoa)
         if nome and re.search(rf"\b{re.escape(nome)}\b", texto):
             return pessoa
+    for cargo in cargos:
+        if re.search(rf"(?<![\w-]){re.escape(cargo)}s?(?![\w-])", texto):
+            return f"cargo público: {cargo}"
     return None
 
 

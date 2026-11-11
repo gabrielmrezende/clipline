@@ -4,6 +4,8 @@ import { CorteDetalhe, ErroApi, Momento, caminhoCorte, pedir } from "../api";
 import { BlocoImagens } from "../componentes/BlocoImagens";
 import { Aprovacao } from "../componentes/Aprovacao";
 import { BlocoMusica } from "../componentes/BlocoMusica";
+import { BlocoPublicacao } from "../componentes/BlocoPublicacao";
+import { EditorLegenda } from "../componentes/EditorLegenda";
 import { EditorPost } from "../componentes/EditorPost";
 import { LinhaDoCorte } from "../componentes/LinhaDoCorte";
 import { Markdown } from "../componentes/Markdown";
@@ -16,7 +18,9 @@ const SECOES = [
   { id: "titulo-info", rotulo: "Informações" },
   { id: "titulo-musica", rotulo: "Música" },
   { id: "titulo-imagens", rotulo: "Imagens" },
+  { id: "titulo-legenda", rotulo: "Legenda" },
   { id: "titulo-post", rotulo: "Post" },
+  { id: "titulo-publicar", rotulo: "Publicar" },
 ];
 
 /** A seção cujo título já passou do topo da tela (para marcar o atalho dela). */
@@ -85,9 +89,13 @@ export function Corte() {
     setMontando(false);
     setComMomentos(false);
     setMomentos([]);
+    let vivo = true; // trocar de corte rápido: a resposta do corte anterior não pode cobrir a deste
     pedir<CorteDetalhe>(caminhoCorte(ep, n))
-      .then(setDados)
-      .catch((x) => setErro(x instanceof ErroApi ? x.detail : "Erro inesperado."));
+      .then((d) => vivo && setDados(d))
+      .catch((x) => vivo && setErro(x instanceof ErroApi ? x.detail : "Erro inesperado."));
+    return () => {
+      vivo = false;
+    };
   }, [ep, n]);
 
   const voltar = (
@@ -256,7 +264,18 @@ export function Corte() {
             </ul>
           </section>
         ) : null}
+        <EditorLegenda
+          key={`legenda-${ep}/${n}/${versaoVideo ?? ""}`}
+          ep={ep}
+          n={n}
+          irPara={irPara}
+          soltarVideo={soltarVideo}
+          aoMudarAndamento={setMontando}
+          aoTerminarMontagem={aoTerminarTroca}
+          montandoNaTela={montando}
+        />
         <EditorPost ep={ep} n={n} recarregarSinal={sinalPost} />
+        <BlocoPublicacao key={`publicar-${ep}/${n}`} ep={ep} n={n} />
       </div>
     </main>
   );

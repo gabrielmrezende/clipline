@@ -25,6 +25,7 @@ from esteira.painel.fila import Fila
 from esteira.painel.rotas import _TRAVA_GRAVACAO, roteador
 from esteira.painel.rotas_imagens import roteador as roteador_imagens
 from esteira.painel.rotas_musica import roteador as roteador_musica
+from esteira.painel.rotas_publicar import roteador as roteador_publicar
 from esteira.painel.troca_musica import recuperar_trocas_interrompidas, trocar_musica
 
 ESPERA_AO_DESLIGAR = 120  # segundos esperando a montagem atual quando o painel fecha
@@ -103,7 +104,7 @@ def criar_app(
         @app.middleware("http")
         async def _exigir_sessao(requisicao: Request, seguir):
             caminho = requisicao.scope["path"]  # o mesmo caminho que o roteador usa
-            if caminho.startswith("/api/") and caminho != "/api/entrar":
+            if caminho.startswith("/api/") and caminho not in ("/api/entrar", "/api/sair"):
                 if not app.state.porteiro.sessao_valida(requisicao.cookies.get(COOKIE)):
                     return JSONResponse({"detail": "Entre com o código de acesso."}, status_code=401)
             return await seguir(requisicao)
@@ -123,13 +124,67 @@ def criar_app(
     app.include_router(roteador)
     app.include_router(roteador_musica)
     app.include_router(roteador_imagens)
+    app.include_router(roteador_publicar)
 
     if estatico is not None and (Path(estatico) / "index.html").is_file():
         _servir_estatico(app, Path(estatico).resolve())
 
+    @app.middleware("http")
+    async def _mesma_origem(requisicao: Request, seguir):
+        motivo = recusa_de_origem(requisicao.scope["path"], requisicao.method, requisicao.headers)
+        if motivo:
+            return JSONResponse({"detail": motivo}, status_code=403)
+        resposta = await seguir(requisicao)
+        for nome, valor in CABECALHOS_DE_SEGURANCA.items():
+            resposta.headers.setdefault(nome, valor)
+        return resposta
+
     if hosts:
         app.add_middleware(TrustedHostMiddleware, allowed_hosts=hosts)  # contra DNS rebinding
     return app
+
+
+CSP = "; ".join([
+    "default-src 'self'",
+    "script-src 'self'",
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: blob: https://upload.wikimedia.org",
+    "media-src 'self' blob:",
+    "font-src 'self' data:",
+    "connect-src 'self'",
+    "object-src 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "frame-ancestors 'none'",
+])
+CABECALHOS_DE_SEGURANCA = {
+    "Content-Security-Policy": CSP,
+    "X-Content-Type-Options": "nosniff",
+    "Referrer-Policy": "no-referrer",
+    "X-Frame-Options": "DENY",
+    "Cross-Origin-Opener-Policy": "same-origin",
+    "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+}
+OUTRA_ORIGEM = "Pedido vindo de outra página recusado. Abra o painel pelo endereço dele."
+
+
+def recusa_de_origem(caminho: str, metodo: str, cabecalhos) -> str | None:
+    """Defesa explícita contra CSRF e contra GETs com efeito disparados por outra página (um <img>, por exemplo).
+
+    Antes, a proteção dependia de o FastAPI só aceitar JSON com Content-Type: application/json, o que obriga o
+    navegador a um preflight. Isso continua valendo; isto acrescenta uma regra que não depende do framework.
+    Pedidos sem esses cabeçalhos (curl, testes, scripts locais) passam: não vêm de um navegador enganado."""
+    if not caminho.startswith("/api/"):
+        return None
+    sitio = cabecalhos.get("sec-fetch-site")
+    if sitio is not None and sitio not in ("same-origin", "none"):
+        return OUTRA_ORIGEM
+    origem = cabecalhos.get("origin")
+    if origem is not None and metodo not in ("GET", "HEAD", "OPTIONS"):
+        host = cabecalhos.get("host", "")
+        if origem not in (f"http://{host}", f"https://{host}"):
+            return OUTRA_ORIGEM
+    return None
 
 
 def _servir_estatico(app: FastAPI, estatico: Path) -> None:

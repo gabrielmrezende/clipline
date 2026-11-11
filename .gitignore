@@ -18,3 +18,9 @@ painel-web/playwright-report/
 painel-web/tsconfig.tsbuildinfo
 painel-web/e2e/.cortes/
 painel-web/e2e/.musicas/
+clipline.toml
+logs/
+publicar.trava
+*.tmp
+trabalho/.sugeridas-anteriores/
+clipline.egg-info/

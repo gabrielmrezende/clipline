@@ -5,6 +5,8 @@ import os
 import sys
 from pathlib import Path
 
+from esteira import agente, contrato, diagnostico, falantes
+
 from esteira.caminhos import CONTEXTO, CORTES, MUSICAS, EscritaProibida, garantir_escrita
 from esteira.cartao import gerar_cartao
 from esteira.cortar import CORTE_MP4, TRABALHO, ler_aprovados, pasta_de_trabalho, pasta_do_corte, preparar_episodio
@@ -52,7 +54,33 @@ def _vozes(args) -> int:
         print(f"Erro: {erro}", file=sys.stderr)
         return 1
     print(f"{len({t.voz for t in trechos})} vozes, {len(trechos)} trechos")
+    arquivo = _gravar_texto_com_falantes(pasta)
+    if arquivo:
+        print(f"Transcrição com falantes em {arquivo}")
     return 0
+
+
+def _ligacao_e_nomes(pasta: Path) -> tuple[dict, dict]:
+    try:
+        dados = json.loads((pasta / "transcricao" / "pessoas.json").read_text("utf-8"))
+        return dict(dados.get("ligacao") or {}), dict(dados.get("nomes") or {})
+    except (OSError, ValueError, AttributeError, TypeError):
+        return {}, {}
+
+
+def _gravar_texto_com_falantes(pasta: Path) -> Path | None:
+    """transcricao/texto-falantes.md: a transcrição com quem fala e as pausas longas (para o agente)."""
+    try:
+        palavras = ler_palavras(pasta)
+        trechos = modulo_vozes.ler_vozes(pasta)
+    except (OSError, ValueError, KeyError, TypeError, modulo_vozes.ErroVozes):
+        return None
+    ligacao, nomes = _ligacao_e_nomes(pasta)
+    destino = garantir_escrita(pasta / "transcricao" / "texto-falantes.md")
+    temporario = destino.with_name(destino.name + ".tmp")
+    temporario.write_text(falantes.texto_com_falantes(palavras, trechos, ligacao, nomes), "utf-8")
+    temporario.replace(destino)
+    return destino
 
 
 def _positivo(texto: str) -> int:
@@ -64,14 +92,89 @@ def _positivo(texto: str) -> int:
 
 def _validar(args) -> int:
     pasta = Path(args.pasta)
-    duracao = json.loads((pasta / "episodio.json").read_text("utf-8"))["duracao"]
+    catalogo = {f.arquivo for f in ler_catalogo(MUSICAS)} if (MUSICAS / "catalogo.json").exists() else None
+    problemas = [p.como_dict() for p in contrato.conferir_episodio(pasta, None, catalogo)]
+    trechos: list[dict] = []
+    if not any(p["arquivo"] == contrato.APROVADOS for p in problemas):
+        try:
+            duracao = json.loads((pasta / "episodio.json").read_text("utf-8"))["duracao"]
+            palavras = ler_palavras(pasta)
+        except (OSError, ValueError, KeyError) as erro:
+            problemas.append({"arquivo": "episodio.json ou transcricao/palavras.json", "campo": "", "mensagem": f"ilegível: {erro}"})
+        else:
+            for corte in ler_aprovados(pasta):
+                achados = validar_trecho(palavras, corte, duracao)
+                trechos.append({"numero": corte.numero, "titulo": corte.titulo, "problemas": achados})
+    if args.json:
+        print(json.dumps({"ok": not problemas and not any(t["problemas"] for t in trechos),
+                          "arquivos": problemas, "cortes": trechos}, ensure_ascii=False, indent=2))
+    else:
+        for p in problemas:
+            print(f"{p['arquivo']}: {p['campo'] + ': ' if p['campo'] else ''}{p['mensagem']}")
+        for t in trechos:
+            print(f"{t['numero']:02d} {t['titulo']}: {'; '.join(t['problemas']) or 'ok'}")
+    return 1 if problemas or any(t["problemas"] for t in trechos) else 0
+
+
+def _trecho(args) -> int:
+    pasta = Path(args.pasta)
     palavras = ler_palavras(pasta)
-    erros = 0
-    for corte in ler_aprovados(pasta):
-        problemas = validar_trecho(palavras, corte, duracao)
-        erros += len(problemas)
-        print(f"{corte.numero:02d} {corte.titulo}: {'; '.join(problemas) or 'ok'}")
-    return 1 if erros else 0
+    try:
+        trechos = modulo_vozes.ler_vozes(pasta)
+    except modulo_vozes.ErroVozes:
+        trechos = []
+    ligacao, nomes = _ligacao_e_nomes(pasta)
+    intervalo = falantes.palavras_do_intervalo(palavras, args.de - args.margem, args.ate + args.margem)
+    rotulos = falantes.rotular([p for _, p in intervalo], trechos) if trechos else [None] * len(intervalo)
+    linhas = [
+        {"indice": i, "texto": p.texto, "inicio": round(p.inicio, 3), "fim": round(p.fim, 3),
+         "falante": falantes.nome_da_voz(v, ligacao, nomes) if trechos else None,
+         "dentro": args.de <= p.inicio and p.fim <= args.ate}
+        for (i, p), v in zip(intervalo, rotulos)
+    ]
+    if args.json:
+        print(json.dumps(linhas, ensure_ascii=False))
+        return 0
+    for linha in linhas:
+        marca = " " if linha["dentro"] else "~"
+        quem = f" {linha['falante']}" if linha["falante"] else ""
+        print(f"{marca}{linha['inicio']:9.3f} {linha['fim']:9.3f}{quem}  {linha['texto']}")
+    return 0
+
+
+def _status(args) -> int:
+    if args.regras:
+        print(diagnostico.hash_das_regras())
+        return 0
+    pastas = [Path(args.pasta)] if args.pasta else sorted(p for p in CORTES.iterdir() if p.is_dir()) if CORTES.is_dir() else []
+    todos = [diagnostico.status_episodio(p) for p in pastas]
+    if args.json:
+        print(json.dumps(todos if not args.pasta else todos[0], ensure_ascii=False, indent=2))
+    else:
+        print("\n\n".join(diagnostico.texto_do_status(s) for s in todos) or "Nenhum episódio em 2 - Cortes.")
+    return 0
+
+
+def _sugerir_cortes(args) -> int:
+    arquivo = agente.sugerir_cortes(Path(args.pasta), modelo=args.modelo)
+    print(f"Proposta em {arquivo}. Revise e copie para aprovados.json; depois rode validar.")
+    return 0
+
+
+def _aprendizado(args) -> int:
+    print(f"Comparação em {agente.aprendizado(Path(args.pasta))}")
+    return 0
+
+
+def _doctor(args) -> int:
+    itens = diagnostico.doctor()
+    if args.json:
+        print(json.dumps([i.como_dict() for i in itens], ensure_ascii=False, indent=2))
+    else:
+        simbolo = {"ok": "ok   ", "aviso": "aviso", "falta": "FALTA"}
+        for i in itens:
+            print(f"{simbolo[i.estado]}  {i.nome}: {i.detalhe}")
+    return 1 if any(i.estado == "falta" for i in itens) else 0
 
 
 def _imprimir(resultados: dict[int, str]) -> int:
@@ -302,9 +405,37 @@ def principal(argv: list[str] | None = None) -> int:
     c.add_argument("--forcar", action="store_true")
     c.set_defaults(funcao=_vozes)
 
-    c = comandos.add_parser("validar")
+    c = comandos.add_parser("validar", help="confere os arquivos do agente e os tempos dos cortes")
     c.add_argument("pasta")
+    c.add_argument("--json", action="store_true", help="resposta em JSON")
     c.set_defaults(funcao=_validar)
+
+    c = comandos.add_parser("trecho", help="palavras, tempos e quem fala de um intervalo do episódio")
+    c.add_argument("pasta")
+    c.add_argument("--de", type=float, required=True, help="segundos do episódio")
+    c.add_argument("--ate", type=float, required=True)
+    c.add_argument("--margem", type=float, default=5.0, help="segundos antes e depois (marcados com ~)")
+    c.add_argument("--json", action="store_true")
+    c.set_defaults(funcao=_trecho)
+
+    c = comandos.add_parser("status", help="em que etapa está cada corte e qual o próximo passo")
+    c.add_argument("pasta", nargs="?")
+    c.add_argument("--json", action="store_true")
+    c.add_argument("--regras", action="store_true", help="só a marca das regras de Contexto/ (vai na origem)")
+    c.set_defaults(funcao=_status)
+
+    c = comandos.add_parser("sugerir-cortes", help="o Claude propõe os cortes sem sessão interativa (aprovados.proposta.json)")
+    c.add_argument("pasta")
+    c.add_argument("--modelo", help="modelo do Claude Code (padrão: o configurado nele)")
+    c.set_defaults(funcao=_sugerir_cortes)
+
+    c = comandos.add_parser("aprendizado", help="compara a proposta do Claude com o aprovados.json final")
+    c.add_argument("pasta")
+    c.set_defaults(funcao=_aprendizado)
+
+    c = comandos.add_parser("doctor", help="confere ffmpeg, GPU, modelos, chaves, pastas e build do painel")
+    c.add_argument("--json", action="store_true")
+    c.set_defaults(funcao=_doctor)
 
     c = comandos.add_parser("preparar")
     c.add_argument("pasta")
@@ -366,6 +497,19 @@ def principal(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         return args.funcao(args)
-    except (ErroMidia, ErroBusca, FileExistsError, EscritaProibida, ErroAgendar, ErroPost, ErroConexao, ErroRede, ErroImagem) as erro:
+    except (ErroMidia, ErroBusca, FileExistsError, EscritaProibida, ErroAgendar, ErroPost, ErroConexao, ErroRede, ErroImagem,
+            contrato.ErroContrato, agente.ErroAgente) as erro:
         print(f"Erro: {erro}", file=sys.stderr)
+        return 1
+    except FileNotFoundError as erro:
+        print(f"Erro: arquivo não encontrado: {erro.filename or erro}. Rode esteira status para ver a etapa que falta.",
+              file=sys.stderr)
+        return 1
+    except json.JSONDecodeError as erro:
+        print(f"Erro: JSON inválido (linha {erro.lineno}, coluna {erro.colno}): {erro.msg}. Rode esteira validar.",
+              file=sys.stderr)
+        return 1
+    except (KeyError, TypeError) as erro:
+        print(f"Erro: arquivo fora do formato ({type(erro).__name__}: {erro}). Rode esteira validar para ver o campo.",
+              file=sys.stderr)
         return 1

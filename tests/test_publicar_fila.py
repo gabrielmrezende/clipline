@@ -60,3 +60,30 @@ def test_trava_solta_mesmo_com_erro(tmp_path):
         with trava(tmp_path / "t.trava"):
             raise RuntimeError("x")
     assert not (tmp_path / "t.trava").exists()
+
+
+def test_item_antigo_sem_campo_ia_continua_legivel(tmp_path):
+    from esteira.publicar.fila import ARQUIVO, ler_fila
+
+    (tmp_path / ARQUIVO).write_text('{"itens": [{"numero": 1, "rede": "youtube", "data": "2026-11-08T18:00:00-03:00"}]}', "utf-8")
+    assert ler_fila(tmp_path)[0].ia is False
+
+
+def test_enviar_passa_ia_so_quando_marcado(tmp_path, monkeypatch):
+    from esteira.publicar import envio, fila
+    from esteira.publicar.fila import Item
+    from esteira.publicar.http import Resultado
+    from tests.auxiliares_publicar import TEXTOS
+
+    monkeypatch.setattr(envio, "gravar_fila", lambda pasta, itens, base=None: None)
+    recebidos = []
+
+    class Api:
+        def publicar(self, video, textos, data, modo, **extras):
+            recebidos.append(extras)
+            return Resultado("publicado")
+
+    for ia in (False, True):
+        item = Item(1, "youtube", "2026-11-08T18:00:00-03:00", ia=ia)
+        envio.enviar(tmp_path, [item], item, tmp_path / "v.mp4", TEXTOS, "privado", Api())
+    assert recebidos == [{}, {"ia": True}]

@@ -5,7 +5,7 @@ from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
 
-from esteira.caminhos import MUSICAS
+from esteira.caminhos import MUSICAS, gravar_atomico
 from esteira.midia import duracao_audio, executar_ffmpeg
 from esteira.modelos import Corte
 from esteira.rede import abrir, baixar_url
@@ -121,7 +121,7 @@ def ler_catalogo(pasta: Path) -> list[Faixa]:
 def gravar_catalogo(pasta: Path, faixas: list[Faixa]) -> None:
     pasta.mkdir(parents=True, exist_ok=True)
     texto = json.dumps([asdict(f) for f in faixas], ensure_ascii=False, indent=2) + "\n"
-    (pasta / "catalogo.json").write_text(texto, "utf-8", newline="\n")
+    gravar_atomico(pasta / "catalogo.json", texto, newline="\n")
 
 
 def _processar(pasta: Path, clima: str, peca: dict, baixar: Callable[[str, Path], None]) -> Faixa:
@@ -178,7 +178,7 @@ def ler_uso(pasta: Path) -> dict[str, dict]:
 def gravar_uso(pasta: Path, uso: dict[str, dict]) -> None:
     pasta.mkdir(parents=True, exist_ok=True)
     texto = json.dumps(uso, ensure_ascii=False, indent=2) + "\n"
-    (pasta / "uso.json").write_text(texto, "utf-8", newline="\n")
+    gravar_atomico(pasta / "uso.json", texto, newline="\n")
 
 
 def registrar_uso(

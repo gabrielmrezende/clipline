@@ -1,6 +1,7 @@
 import copy
 import json
 import os
+import shutil
 import tempfile
 from collections.abc import Callable
 from dataclasses import asdict
@@ -346,6 +347,9 @@ def _produzir(caminho: Path, produzir: Callable[[Path], object], falha: str) -> 
         return falha
 
 
+RESERVA = ".sugeridas-anteriores"
+
+
 def _sugerir_um(
     destino: Path,
     originais: list[Momento],
@@ -359,8 +363,15 @@ def _sugerir_um(
     trabalho = pasta_de_trabalho(destino)
     pasta = destino / IMAGENS_SUGERIDAS
     pasta.mkdir(exist_ok=True)
-    for nome in _ler_sugeridas(trabalho):  # só o que a própria esteira gerou
-        (pasta / nome).unlink(missing_ok=True)
+    # Só o que a própria esteira gerou sai da frente, e vai para uma reserva (não para o lixo): se o download de
+    # uma foto falhar (sem rede, por exemplo), a versão anterior com o mesmo nome volta, com o crédito dela.
+    reserva = trabalho / RESERVA
+    shutil.rmtree(reserva, ignore_errors=True)
+    reserva.mkdir()
+    creditos_anteriores = ler_creditos(trabalho)
+    for nome in _ler_sugeridas(trabalho):
+        if (pasta / nome).is_file():
+            os.replace(pasta / nome, reserva / nome)
     geradas: list[str] = []
     creditos: dict[str, dict] = {}
     _gravar_sugeridas(trabalho, geradas)
@@ -386,6 +397,14 @@ def _sugerir_um(
                         baixar(url, baixada)
                         preparar_foto(baixada, c)
                     motivo = _produzir(pasta / nome, produzir, "download falhou")
+                if motivo and (reserva / nome).is_file() and not (pasta / nome).exists():
+                    os.replace(reserva / nome, pasta / nome)
+                    if nome in creditos_anteriores:
+                        creditos[nome] = creditos_anteriores[nome]
+                        _gravar_creditos(trabalho, creditos)
+                    geradas.append(nome)
+                    _gravar_sugeridas(trabalho, geradas)
+                    motivo = f"{motivo}; a foto anterior foi mantida"
                 if motivo:
                     falhas.append((k, motivo))
                 else:
@@ -401,6 +420,7 @@ def _sugerir_um(
             else:
                 m.motivo = "; ".join(f"opção {k}: {motivo}" for k, motivo in falhas)
             alertas.append(f"{rotulos[posicao - 1]}: {m.motivo}")
+    shutil.rmtree(reserva, ignore_errors=True)
     escrever_guia(destino, originais, momentos)
     return _resultado(alertas)
 

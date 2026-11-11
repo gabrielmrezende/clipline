@@ -1,4 +1,7 @@
+import base64
 import getpass
+import hashlib
+import secrets
 import threading
 import urllib.parse
 import webbrowser
@@ -39,6 +42,24 @@ def pedir_segredo(rotulo: str) -> str:
     return valor
 
 
+def pkce() -> tuple[str, str]:
+    """(code_verifier, code_challenge S256) do RFC 7636: o código de autorização sozinho não vale nada."""
+    verificador = secrets.token_urlsafe(64)
+    desafio = base64.urlsafe_b64encode(hashlib.sha256(verificador.encode("ascii")).digest()).rstrip(b"=").decode("ascii")
+    return verificador, desafio
+
+
+class _Servidor(HTTPServer):
+    # Sem SO_REUSEADDR: no Windows ele deixaria dois programas ouvindo a mesma porta (o painel e este retorno),
+    # e o código de autorização poderia ir parar no painel.
+    allow_reuse_address = False
+
+
+PORTA_OCUPADA = (
+    "a porta {porta} está em uso (o painel está aberto?). Feche o painel e rode o conectar de novo: "
+    "o endereço de retorno registrado nas redes usa essa porta"
+)
+
 PAGINA = "<html><body><p>Pode fechar esta aba e voltar ao terminal.</p></body></html>".encode("utf-8")
 
 
@@ -64,7 +85,10 @@ def esperar_codigo(porta: int, estado: str, abrir_url: str, abrir=webbrowser.ope
             pass
 
     pronto = threading.Event()
-    servidor = HTTPServer(("127.0.0.1", porta), Retorno)
+    try:
+        servidor = _Servidor(("127.0.0.1", porta), Retorno)
+    except OSError:
+        raise ErroConexao(PORTA_OCUPADA.format(porta=porta)) from None
     servidor.timeout = 0.2
     try:
         abrir(abrir_url)

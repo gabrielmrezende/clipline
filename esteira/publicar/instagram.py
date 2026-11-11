@@ -51,7 +51,9 @@ class Instagram:
     def __init__(self, esperar=time.sleep):
         self.esperar = esperar
 
-    def publicar(self, video: Path, textos: Textos, data: datetime, modo: str) -> Resultado:
+    def publicar(self, video: Path, textos: Textos, data: datetime, modo: str, ia: bool = False) -> Resultado:
+        # `ia` sem efeito aqui: o aviso vai no texto (o painel e o agendar exigem). Não confirmei um campo
+        # equivalente na API de conteúdo do Instagram; ver docs/auditoria.
         token, usuario = _token()
         base = f"{BASE}/{VERSAO_GRAPH}"
         conteiner = _chamar("POST", f"{base}/{usuario}/media", {

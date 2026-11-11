@@ -69,7 +69,8 @@ beforeEach(() => {
   musicaDoCorte = { atual: null, anterior: null, pedido: null };
   tarefas = [];
   respostaPost = () => resposta(pedido(), 202);
-  respostaPrevia = () => Promise.resolve(new Response(new Blob(["x"]), { status: 200 }));
+  // Texto, não Blob: o Response do Node não aceita o Blob do jsdom (o teste quebrava no Node 22).
+  respostaPrevia = () => Promise.resolve(new Response("x", { status: 200 }));
   play = vi.fn(() => Promise.resolve());
   pause = vi.fn();
   HTMLMediaElement.prototype.play = play as any;

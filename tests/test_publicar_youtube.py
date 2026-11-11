@@ -95,3 +95,9 @@ def test_agendado_com_data_passada_publica_ja(monkeypatch, video):
     status = json.loads(servidor.pedidos[1].data)["status"]
     assert status == {"privacyStatus": "public", "selfDeclaredMadeForKids": False}
     assert r.estado == "publicado"
+
+
+def test_video_com_ia_leva_o_rotulo_de_conteudo_sintetico(monkeypatch, video):
+    servidor = _preparar(monkeypatch, _envio_ok())
+    YouTube().publicar(video, TEXTOS, DATA, "privado", ia=True)
+    assert json.loads(servidor.pedidos[1].data)["status"]["containsSyntheticMedia"] is True
