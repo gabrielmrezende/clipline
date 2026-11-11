@@ -1,0 +1,25 @@
+name: Problema
+description: Algo não funciona como o README ou a documentação dizem.
+labels: [problema]
+body:
+  - type: textarea
+    id: oque
+    attributes:
+      label: O que aconteceu
+      description: O comando, a tela do painel e a mensagem exata. Não cole chaves, tokens nem dados do canal.
+    validations:
+      required: true
+  - type: textarea
+    id: esperado
+    attributes:
+      label: O que você esperava
+  - type: textarea
+    id: doctor
+    attributes:
+      label: Saída de `clipline doctor`
+      render: text
+  - type: input
+    id: sistema
+    attributes:
+      label: Sistema, Python e GPU
+      placeholder: "Windows 11, Python 3.12, RTX 4060"

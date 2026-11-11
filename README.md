@@ -17,6 +17,7 @@
   <img alt="ffmpeg" src="https://img.shields.io/badge/ffmpeg-NVENC-007808?logo=ffmpeg&logoColor=white">
   <img alt="Windows" src="https://img.shields.io/badge/plataforma-Windows-0078D4?logo=windows&logoColor=white">
   <img alt="Em uso" src="https://img.shields.io/badge/status-em_uso_no_canal-0750D8">
+  <a href="https://github.com/gabrielmrezende/clipline/actions/workflows/testes.yml"><img alt="Testes" src="https://github.com/gabrielmrezende/clipline/actions/workflows/testes.yml/badge.svg"></a>
   <a href="LICENSE"><img alt="Licença MIT" src="https://img.shields.io/badge/licen%C3%A7a-MIT-green"></a>
 </p>
 
@@ -49,6 +50,7 @@ O trabalho é dividido em três partes:
 - [Requisitos](#requisitos)
 - [Instalação](#instalação)
 - [Uso](#uso)
+- [Claude Code](#claude-code)
 - [Painel de revisão](#painel-de-revisão)
 - [Testes](#testes)
 - [Estrutura do repositório](#estrutura-do-repositório)
@@ -67,8 +69,10 @@ O trabalho é dividido em três partes:
 - **Zoom em quem fala.** A diarização (pyannote) diz quem fala e quando; os rostos (YuNet e SFace)
   dizem onde a pessoa está. A esteira calcula o enquadramento vertical de cada trecho e gera folhas
   de contato para conferir.
-- **Corte limpo.** Remove pausas, hesitações e repetições e lista cada remoção em `edicoes.md`.
-- **Legenda queimada no vídeo**, com uma cópia `.srt` editável.
+- **Corte limpo.** Remove pausas, hesitações e repetições e lista cada remoção em `edicoes.md`. Uma pausa só sai se
+  o áudio confirmar o silêncio: riso, "uhum" ou fala que a transcrição perdeu ficam no corte.
+- **Legenda queimada no vídeo**, com uma cópia `.srt` editável e correção do texto pelo painel. Opcional: a palavra
+  falada acende, no estilo dos Shorts.
 - **Música por clima.** Uma biblioteca de faixas livres (Kevin MacLeod, CC BY 4.0), volume ajustável
   e crédito escrito automaticamente nos textos dos posts.
 - **Imagens ilustrativas no vídeo:**
@@ -80,8 +84,11 @@ O trabalho é dividido em três partes:
   "linha do corte", troca de música com prévia, escolha das imagens, edição dos posts com limite de
   caracteres, calendário e botão de aprovar.
 - **Publicação com trava.** YouTube, Instagram e TikTok, sempre a partir de um resumo que o dono
-  confirma. O YouTube recebe o vídeo na hora; Instagram e TikTok entram numa fila que o Agendador
-  de Tarefas do Windows publica no horário.
+  confirma, pelo painel ou pelo terminal. O YouTube recebe o vídeo na hora; Instagram e TikTok entram numa fila que o
+  Agendador de Tarefas do Windows publica no horário. Vídeo com imagem de IA vai com o rótulo nativo de conteúdo
+  sintético (YouTube e TikTok direto), e foto livre no vídeo exige o crédito nos textos.
+- **Agente com travas de verdade.** O Claude Code segue `CLAUDE.md` e skills versionadas, e um hook impede que ele
+  publique, gaste, sobrescreva ou toque em credenciais, mesmo se for induzido a isso por um texto que leu.
 - **Cuidado com os arquivos.** A gravação é confinada a duas pastas, nada é sobrescrito sem
   `--forcar` e um corte com erro não derruba os outros.
 
@@ -130,9 +137,9 @@ sozinha, e o estado nunca fica só em memória.
 
 ## Requisitos
 
-- **Windows 10 ou 11.** O Agendador de Tarefas e o Gerenciador de Credenciais são usados na
-  publicação.
-- **Python 3.12** (o projeto pede `>=3.12,<3.13`).
+- **Windows 10 ou 11** para o uso completo. O Agendador de Tarefas e o Gerenciador de Credenciais são usados na
+  publicação. A esteira, o painel e os testes também rodam em Linux (é o que a CI usa).
+- **Python 3.12** (testado também no 3.13).
 - **GPU NVIDIA com CUDA 12** para a transcrição e as vozes. A esteira roda em uso real numa RTX 4060
   de 8 GB.
 - **ffmpeg e ffprobe** para Windows, de preferência com NVENC.
@@ -162,16 +169,18 @@ Meu Canal/
 └── Automacao/        este repositório
 ```
 
-**2. Crie o ambiente Python e instale as dependências.** O `pip install -e .` não funciona neste
-repositório; instale os pacotes direto:
+**2. Crie o ambiente Python e instale o pacote:**
 
 ```powershell
 cd Automacao
 py -3.12 -m venv .venv
-.venv\Scripts\python.exe -m pip install faster-whisper "av<18" pillow opencv-python nvidia-cublas-cu12 nvidia-cudnn-cu12 keyring
-.venv\Scripts\python.exe -m pip install "fastapi>=0.162" "uvicorn>=0.54"   # painel
-.venv\Scripts\python.exe -m pip install pytest httpx                       # testes
+.venv\Scripts\python.exe -m pip install -e ".[painel,dev]"
+Copy-Item -Recurse Contexto.exemplo ..\Contexto      # modelos das regras do canal; reescreva com as suas
+.venv\Scripts\clipline.exe doctor                    # confere ffmpeg, GPU, modelos, chaves e pastas
 ```
+
+Opcional: copie `clipline.exemplo.toml` para `clipline.toml` para mudar a duração dos cortes, a identidade do canal,
+o estilo da legenda e a normalização da voz.
 
 Para o comando `vozes`, instale também o `torch` 2.5.1 com CUDA (veja o comando certo em
 [pytorch.org](https://pytorch.org/get-started/previous-versions/)), o `torchaudio` 2.5.1,
@@ -221,6 +230,10 @@ O resultado sai por corte: `ok`, `ok com alertas: ...` ou `erro: ...`.
 
 Comandos de apoio:
 
+- `status [<pasta>]`: em que etapa está cada corte e qual o próximo comando (`--json` para o painel e o agente).
+- `trecho <pasta> --de S --ate S`: palavras, tempos e quem fala de um intervalo do episódio.
+- `doctor`: confere o ambiente.
+- `validar <pasta> --json`: confere todos os arquivos que o agente escreve e diz arquivo, campo e correção.
 - `musica <pasta>`: troca a música de um corte já montado.
 - `musicas propor|baixar`: monta a biblioteca de música.
 - `cartao`: gera um cartão de notícia avulso.
@@ -237,6 +250,22 @@ Exemplo do começo de um episódio:
 O passo a passo completo, com as pausas para confirmação, está em
 [`docs/operacao.md`](docs/operacao.md).
 
+## Claude Code
+
+A integração com o agente está no repositório:
+
+| Arquivo | Para quê |
+|---|---|
+| [`CLAUDE.md`](CLAUDE.md) | Regras invioláveis e como economizar contexto |
+| [`.claude/hooks/travas.py`](.claude/hooks/travas.py) | Hook `PreToolUse`: nega confirmar, sobrescrever, credenciais e pastas protegidas |
+| [`.claude/skills/`](.claude/skills) | `escolher-cortes`, `momentos-de-imagem`, `textos-e-calendario` |
+| [`.claude/commands/`](.claude/commands) | `/episodio`, `/corrigir-corte`, `/agendar` |
+| [`docs/esquemas/`](docs/esquemas) | Formato dos arquivos que o agente grava |
+| [`Contexto.exemplo/`](Contexto.exemplo) | Modelos das regras editoriais do canal |
+
+Abra o Claude Code dentro de `Automacao/`. As pastas irmãs entram pelo `.claude/settings.json`. Detalhes e limites em
+[`docs/seguranca-do-agente.md`](docs/seguranca-do-agente.md).
+
 ## Painel de revisão
 
 ```powershell
@@ -252,8 +281,10 @@ O passo a passo completo, com as pausas para confirmação, está em
 - **Imagens:** cada momento aparece como uma linha de roteiro. Dá para escolher fotos, buscar
   outras, aprovar prompts de IA (com o custo antes), escolher a versão que vai para o vídeo e
   montar de novo.
+- **Legenda:** o texto de cada tela, com um clique para ir ao tempo dela e o botão de montar de novo.
 - **Post:** títulos, descrições e legendas com contador de limite por rede, avisos e proteção
   contra edição simultânea.
+- **Publicar:** data, redes, o mesmo resumo do `publicar agendar` e a confirmação; a fila do corte com cancelar.
 - **Aprovar:** copia o corte para `video-final/corte-aprovado.mp4`, que é o vídeo que a publicação
   usa.
 - Tema claro e escuro, uso pelo teclado e movimento reduzido quando o sistema pede.
@@ -263,7 +294,7 @@ Detalhes em [`docs/painel.md`](docs/painel.md).
 ## Testes
 
 ```powershell
-.venv\Scripts\python.exe -m pytest   # esteira e API do painel (mais de 950 testes)
+.venv\Scripts\python.exe -m pytest -n auto   # esteira e API do painel (mais de 1.000 testes; Windows, Linux e CI)
 
 cd painel-web
 npm test                             # componentes do painel (Vitest)
@@ -281,11 +312,16 @@ teste das imagens falha se a página tentar acessar a internet.
 
 ```text
 Automacao/
+├── CLAUDE.md             regras do agente
+├── .claude/              hook das travas, skills e comandos do Claude Code
+├── Contexto.exemplo/     modelos das regras editoriais do canal
+├── clipline.exemplo.toml configuração do canal (opcional)
 ├── esteira/              pacote Python
 │   ├── cli.py            ponto de entrada, um subcomando por etapa
 │   ├── transcrever.py, vozes.py, rostos.py, pessoas.py, enquadrar.py, planos.py
 │   ├── limpeza.py, legenda.py, receita.py, musica.py, montar.py, render.py
 │   ├── pedidos.py, wikimedia.py, imagens.py, imagens_no_video.py, cartao.py
+│   ├── contrato.py, falantes.py, diagnostico.py, config.py
 │   ├── imagens_ia/       provedores de imagem de IA
 │   ├── painel/           API FastAPI do painel e fila de tarefas
 │   └── publicar/         YouTube, Instagram, TikTok, fila e Agendador
@@ -321,6 +357,10 @@ Automacao/
 | [`docs/superpowers/specs/`](docs/superpowers/specs) | Especificação de cada funcionalidade |
 | [`docs/superpowers/plans/`](docs/superpowers/plans) | Planos de implementação |
 | [`docs/resultados/`](docs/resultados) | Medições e testes com episódios reais |
+| [`docs/seguranca-do-agente.md`](docs/seguranca-do-agente.md) | Travas do agente, defesa do painel e limites |
+| [`docs/esquemas/`](docs/esquemas) | JSON Schema dos arquivos que o agente grava |
+| [`docs/auditoria/`](docs/auditoria) | Auditorias do projeto e o que falta fazer |
+| [`CHANGELOG.md`](CHANGELOG.md) | O que mudou em cada versão |
 
 ## Roadmap
 
@@ -329,15 +369,22 @@ Automacao/
 - [x] Painel de revisão: vídeos, posts, calendário, música, imagens e aprovação
 - [x] Publicação no YouTube, Instagram e TikTok com resumo e confirmação
 - [x] Licença MIT
-- [ ] Painel, fase 2: agendar pela tela e acompanhar a fila
+- [x] Painel, fase 2: agendar pela tela e acompanhar a fila do corte
+- [x] Integração com o Claude Code versionada, com travas por hook
+- [x] Integração contínua com os testes
+- [x] `clipline.toml` para duração, identidade, legenda e voz
 - [ ] Painel, fase 3: editor de cortes com a transcrição clicável
-- [ ] Configuração por canal (pastas, regras, encerramento) no lugar dos valores fixos
-- [ ] Instalação com um comando e suporte a Linux e macOS
-- [ ] Integração contínua com os testes
+- [ ] Configuração completa por canal (pastas e encerramentos)
+- [ ] Instalação com um comando e publicação agendada fora do Windows
+- [ ] Acompanhamento suave do rosto e tela dividida
+
+O que falta, com prioridade e motivo, está em [`docs/auditoria/`](docs/auditoria).
 
 ## Contribuindo
 
 Sugestões e correções são bem-vindas.
+
+Veja [`CONTRIBUTING.md`](CONTRIBUTING.md). Em resumo:
 
 1. Abra uma issue descrevendo o problema ou a ideia antes de um pull request grande.
 2. Crie um branch a partir do `master`.
@@ -353,7 +400,10 @@ O código, os comentários e a interface são em português.
 - Nenhuma chave fica em arquivo. As chaves das APIs de imagem e das redes sociais ficam no
   Gerenciador de Credenciais do Windows (via `keyring`); o token do Hugging Face vem da variável
   `HF_TOKEN` e aparece mascarado nas mensagens de erro.
-- O painel abre só em `127.0.0.1`. Na rede local (`--rede`), ele exige o código de acesso.
+- O painel abre só em `127.0.0.1`. Na rede local (`--rede`), ele exige o código de acesso, com trava por aparelho, e
+  a sessão dura 7 dias. Pedidos vindos de outra página são recusados e as respostas levam CSP.
+- O agente não confirma nada: ver [`docs/seguranca-do-agente.md`](docs/seguranca-do-agente.md) e
+  [`SECURITY.md`](SECURITY.md).
 - Gerar imagem de IA e publicar sempre mostram um resumo com o custo ou o destino antes de agir.
 
 ## Créditos de terceiros

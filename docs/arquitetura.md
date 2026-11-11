@@ -1,3 +1,6 @@
+> **Documento histórico.** Descreve a esteira de 05/11/2026, antes do painel, das imagens no vídeo e da publicação.
+> O estado atual está no [README](../README.md), em [`operacao.md`](operacao.md) e no [CHANGELOG](../CHANGELOG.md).
+
 # Esteira de cortes do Tudo é Política: como funciona
 
 Relatório de arquitetura. Data: 2026-11-05. Base: código em `Automacao/esteira/`

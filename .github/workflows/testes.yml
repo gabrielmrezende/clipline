@@ -1,0 +1,71 @@
+name: testes
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  python:
+    name: esteira e API do painel (pytest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+      - name: dependências (sem GPU: os testes usam falsos para Whisper, pyannote e APIs)
+        run: |
+          python -m pip install --upgrade pip
+          pip install pillow opencv-python-headless keyring numpy "fastapi>=0.162" "uvicorn>=0.54" pytest pytest-xdist httpx ruff
+      - name: regras do canal de exemplo (a esteira lê ../Contexto)
+        run: cp -r Contexto.exemplo ../Contexto
+      - name: ruff
+        run: ruff check esteira tests .claude/hooks
+      - name: pytest
+        run: python -m pytest -q -n auto
+
+  painel:
+    name: painel (tsc, Vitest, build, Playwright)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: painel-web/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: dependências
+        working-directory: painel-web
+        run: npm ci
+      - name: tipos
+        working-directory: painel-web
+        run: npx tsc -b
+      - name: Vitest
+        working-directory: painel-web
+        run: npm test
+      - name: build
+        working-directory: painel-web
+        run: npm run build
+      - name: Python do painel para o e2e
+        run: |
+          sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+          python -m venv .venv
+          .venv/bin/pip install pillow opencv-python-headless keyring numpy "fastapi>=0.162" "uvicorn>=0.54"
+          cp -r Contexto.exemplo ../Contexto
+      - name: Playwright
+        working-directory: painel-web
+        run: |
+          npx playwright install --with-deps chromium
+          npm run e2e
+      - name: npm audit (só produção; avisa sem quebrar)
+        working-directory: painel-web
+        run: npm audit --omit=dev || true

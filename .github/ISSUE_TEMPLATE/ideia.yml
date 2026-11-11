@@ -1,0 +1,21 @@
+name: Ideia
+description: Uma funcionalidade nova ou uma mudança de comportamento.
+labels: [ideia]
+body:
+  - type: textarea
+    id: problema
+    attributes:
+      label: Que problema isto resolve
+    validations:
+      required: true
+  - type: textarea
+    id: proposta
+    attributes:
+      label: Como você imagina
+  - type: checkboxes
+    id: principios
+    attributes:
+      label: Princípios do projeto
+      options:
+        - label: Mantém a aprovação humana antes de publicar ou gastar.
+        - label: Não põe regra editorial do canal dentro do código.

@@ -10,7 +10,7 @@ publicado.
 ## Instalar o FastAPI e o uvicorn
 
 Uma vez só, rode `.venv\Scripts\python.exe -m pip install fastapi uvicorn`
-(o `pip install -e .` não funciona neste repositório). Sem eles, o comando
+(ou `pip install -e ".[painel]"`). Sem eles, o comando
 `painel` avisa e não abre.
 
 ## Gerar o build
@@ -176,3 +176,27 @@ npm run e2e     # fumaça no navegador, com um episódio falso (precisa do build
 ```
 
 A primeira vez do `e2e` exige `npx playwright install chromium` (cerca de 150 MB).
+
+## Legenda
+
+Na tela do corte, o bloco **Legenda** mostra o texto de cada tela. Clique no tempo para levar o player até ela,
+corrija o texto (até 2 linhas de 40 caracteres) e clique em `Salvar`. Depois, `Montar com a legenda nova` monta o
+`corte.mp4` de novo. Se o `montagem.json` mudou por fora enquanto a tela estava aberta, o painel recusa e pede para
+recarregar.
+
+## Publicar
+
+O bloco **Publicar** faz o mesmo que `publicar agendar`, sem terminal:
+
+1. Escolha a data (horário de Brasília) e as redes.
+2. Clique em `Ver o resumo`. Se faltar algo (vídeo final, crédito, aviso de IA), o painel lista o que corrigir.
+3. Confira o resumo e clique em `Confirmar o agendamento`. O painel só aceita o resumo exato que você viu: se o vídeo,
+   o texto ou a data mudaram, ele pede para ver de novo.
+
+A lista no topo do bloco mostra o estado de cada rede e deixa cancelar o que ainda está agendado.
+
+## Sair
+
+`POST /api/sair` apaga o cookie do aparelho. Para derrubar todos os aparelhos, gere um código novo com
+`painel codigo`. Na rede, a sessão dura 7 dias e cada aparelho que erra o código 5 vezes fica travado por 1 minuto
+(o tempo dobra a cada nova trava, até 15 minutos), sem bloquear os outros.
