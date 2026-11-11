@@ -27,9 +27,10 @@ não estava disponível. Antes de usar num episódio, rode o roteiro da seção 
 | `npm run build` | ok | Node 22 |
 | Playwright (6 testes, incluindo os 3 novos) | todos passando | Chromium 1243 do ambiente, painel real servido pelo uvicorn |
 | `pip install -e .` e o comando `clipline doctor` | ok | venv limpo, Linux |
+| CI do GitHub Actions (pytest + ruff; tsc, Vitest, build e Playwright) | os dois jobs passaram | `ubuntu-latest`, Python 3.12, commit `bbf2984` |
 
 Não foi verificado: o hook dentro de uma sessão real do Claude Code (só a lógica e o formato de saída, por teste),
-o workflow do GitHub Actions rodando no GitHub, chamadas reais às APIs do YouTube, TikTok, Instagram, OpenAI e Google,
+chamadas reais às APIs do YouTube, TikTok, Instagram, OpenAI e Google,
 e o comportamento no Windows.
 
 Antes das mudanças, 59 testes falhavam fora do Windows (caminho fixo `bin/ffmpeg.exe`), 6 dependiam do `Contexto/`
@@ -152,6 +153,7 @@ estrutural é o MCP (tirar o shell) ou a confirmação só pelo painel, que já 
 | Lockfile do Python | Resolver as dependências com CUDA no Windows pede o ambiente do canal | `uv pip compile pyproject.toml -o requirements.lock` no Windows |
 | Publicação agendada fora do Windows | `schtasks` e Gerenciador de Credenciais | cron/systemd/launchd e o backend padrão do `keyring` |
 | CI no Windows | Custo e tempo de CI maiores | Um job `windows-latest` só com `pytest` |
+| ffmpeg da CI por action de terceiro | O `apt` dos runners travou por mais de 10 min | Fixar a action por SHA (`AnimMouse/setup-ffmpeg@<sha>`) para não depender de uma tag móvel |
 | Linter de estilo completo | Reescreveria o projeto inteiro de uma vez | Acrescentar regras do `ruff` aos poucos |
 
 ## 5. Antes de usar num episódio real
