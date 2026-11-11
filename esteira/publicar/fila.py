@@ -21,6 +21,7 @@ class Item:
     id_rede: str = ""
     erro: str = ""
     assinatura: str = ""
+    ia: bool = False  # o vídeo tem imagem de IA: vai com o rótulo de conteúdo sintético das redes que têm um
 
 
 class Ocupado(Exception):
@@ -35,8 +36,9 @@ def ler_fila(pasta_episodio: Path) -> list[Item]:
     return [Item(**item) for item in dados["itens"]]
 
 
-def gravar_fila(pasta_episodio: Path, itens: list[Item]) -> None:
-    caminho = garantir_escrita(Path(pasta_episodio) / ARQUIVO)
+def gravar_fila(pasta_episodio: Path, itens: list[Item], base: Path | None = None) -> None:
+    destino = Path(pasta_episodio) / ARQUIVO
+    caminho = garantir_escrita(destino, base_extra=base) if base is not None else garantir_escrita(destino)
     temporario = caminho.with_name(caminho.name + ".tmp")
     texto = json.dumps({"itens": [asdict(i) for i in itens]}, ensure_ascii=False, indent=2)
     temporario.write_text(texto, "utf-8")

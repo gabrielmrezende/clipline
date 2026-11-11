@@ -5,6 +5,7 @@ import urllib.parse
 from datetime import datetime
 from pathlib import Path
 
+from esteira import config
 from esteira.publicar import credenciais
 from esteira.publicar.credenciais import PORTA, REDIRECIONAMENTO, ErroConexao, esperar_codigo, pedir_segredo
 from esteira.publicar.http import ErroIncerto, ErroRede, Resultado, json_de, pedir
@@ -86,7 +87,9 @@ class TikTok:
     def __init__(self, esperar=time.sleep):
         self.esperar = esperar
 
-    def publicar(self, video: Path, textos: Textos, data: datetime, modo: str) -> Resultado:
+    def publicar(self, video: Path, textos: Textos, data: datetime, modo: str, ia: bool = False) -> Resultado:
+        """`ia`: marca o post como gerado por IA (post_info.is_aigc). O rascunho (inbox) não tem esse campo:
+        lá o dono liga o rótulo no app."""
         acesso = _acesso()
         conteudo = Path(video).read_bytes()
         lista = partes(len(conteudo))
@@ -107,6 +110,7 @@ class TikTok:
             "post_info": {
                 "title": textos.tiktok, "privacy_level": "PUBLIC_TO_EVERYONE",
                 "disable_comment": False, "disable_duet": False, "disable_stitch": False,
+                **({"is_aigc": True} if ia else {}),
             },
             "source_info": origem,
         })
@@ -117,7 +121,7 @@ class TikTok:
             except ErroRede as erro:
                 raise ErroIncerto(f"tiktok: vídeo enviado, status desconhecido ({erro})") from None
             if situacao.get("status") == "PUBLISH_COMPLETE":
-                return Resultado("publicado", PERFIL, inicio["publish_id"])
+                return Resultado("publicado", config.atual().perfil_tiktok or PERFIL, inicio["publish_id"])
             if situacao.get("status") == "FAILED":
                 raise ErroRede(f"tiktok: publicação recusada ({situacao.get('fail_reason', '?')})", False)
             self.esperar(ESPERA)

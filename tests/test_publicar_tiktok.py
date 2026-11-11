@@ -114,3 +114,15 @@ def test_status_falha_depois_do_envio_e_incerto(monkeypatch, video):
     ])
     with pytest.raises(ErroIncerto):
         TikTok(esperar=lambda s: None).publicar(video, TEXTOS, DATA, "direto")
+
+
+def test_direto_com_ia_marca_is_aigc(monkeypatch, video):
+    servidor, _ = _preparar(monkeypatch, [
+        _token(),
+        Resposta(200, {"data": {"privacy_level_options": ["PUBLIC_TO_EVERYONE"]}, "error": OK}),
+        Resposta(200, {"data": {"publish_id": "P2", "upload_url": "https://up/2"}, "error": OK}),
+        Resposta(201, b""),
+        Resposta(200, {"data": {"status": "PUBLISH_COMPLETE"}, "error": OK}),
+    ])
+    TikTok(esperar=lambda s: None).publicar(video, TEXTOS, DATA, "direto", ia=True)
+    assert json.loads(servidor.pedidos[2].data)["post_info"]["is_aigc"] is True

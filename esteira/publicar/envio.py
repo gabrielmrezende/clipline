@@ -27,12 +27,13 @@ def assinatura(video: Path, textos: Textos, rede: str) -> str:
     return marca.hexdigest()
 
 
-def enviar(pasta: Path, itens: list[Item], item: Item, video: Path, textos: Textos, modo: str, api) -> None:
+def enviar(pasta: Path, itens: list[Item], item: Item, video: Path, textos: Textos, modo: str, api, base: Path | None = None) -> None:
     """Envia um item. Grava 'enviando' antes de chamar a rede e o resultado depois."""
     item.estado = "enviando"
-    gravar_fila(pasta, itens)
+    gravar_fila(pasta, itens, base)
     try:
-        resultado = api.publicar(video, textos, datetime.fromisoformat(item.data), modo)
+        extras = {"ia": True} if item.ia else {}  # só quem tem rótulo nativo recebe (YouTube e TikTok direto)
+        resultado = api.publicar(video, textos, datetime.fromisoformat(item.data), modo, **extras)
     except ErroRede as erro:
         item.tentativas += 1
         item.erro = str(erro)
@@ -48,4 +49,4 @@ def enviar(pasta: Path, itens: list[Item], item: Item, video: Path, textos: Text
     else:
         item.estado, item.link, item.id_rede = resultado.estado, resultado.link, resultado.id_rede
         item.erro = AVISO_RASCUNHO if resultado.estado == "rascunho" else ""
-    gravar_fila(pasta, itens)
+    gravar_fila(pasta, itens, base)
