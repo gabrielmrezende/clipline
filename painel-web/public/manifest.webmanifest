@@ -3,7 +3,20 @@
   "short_name": "clipline",
   "start_url": "/",
   "icons": [
-    { "src": "/clipline-icone-192.png", "sizes": "192x192", "type": "image/png" },
-    { "src": "/clipline-icone-512.png", "sizes": "512x512", "type": "image/png" }
-  ]
+    {
+      "src": "/clipline-icone-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/clipline-icone-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ],
+  "description": "Painel de revisão dos cortes",
+  "lang": "pt-BR",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#0750d8"
 }

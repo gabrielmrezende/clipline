@@ -9,9 +9,10 @@ SERVICO = "tudo-e-politica-painel"
 ALFABETO = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"  # sem I, L, O, 0 e 1, que se confundem
 TAMANHO_CODIGO = 8
 ITERACOES = 200_000
-DURACAO_SESSAO = 30 * 86400
+DURACAO_SESSAO = 7 * 86400  # HTTP sem TLS na Wi-Fi: um cookie copiado vale no máximo uma semana
 MAX_ERROS = 5
 TRAVA_SEGUNDOS = 60
+TRAVA_MAXIMA = 15 * 60  # a cada nova trava do mesmo aparelho o tempo dobra, até 15 min
 COOKIE = "painel_sessao"
 
 
@@ -61,8 +62,9 @@ class Porteiro:
     def __init__(self, cofre: Cofre, relogio: Callable[[], float]):
         self._cofre = cofre
         self._relogio = relogio
-        self._erros = 0
-        self._travado_ate = 0.0
+        self._erros: dict[str, int] = {}
+        self._travado_ate: dict[str, float] = {}
+        self._travas: dict[str, int] = {}  # quantas vezes cada aparelho já foi travado
         self._trava = threading.Lock()
 
     def _assinar(self, chave: str, expira: str) -> str:
@@ -79,22 +81,27 @@ class Porteiro:
             return False
         return hmac.compare_digest(_hash(codigo.strip().upper(), sal), esperado)
 
-    def entrar(self, codigo: str) -> str:
+    def entrar(self, codigo: str, origem: str = "") -> str:
+        """`origem`: o IP de quem tenta. A trava é por aparelho: um celular errando não bloqueia o dono."""
         with self._trava:  # serializa: o PBKDF2 solta o GIL e burlaria a contagem
-            return self._entrar(codigo)
+            return self._entrar(codigo, origem)
 
-    def _entrar(self, codigo: str) -> str:
+    def _entrar(self, codigo: str, origem: str) -> str:
         agora = self._relogio()
-        if agora < self._travado_ate:
-            raise Travado(int(self._travado_ate - agora) + 1)
+        travado_ate = self._travado_ate.get(origem, 0.0)
+        if agora < travado_ate:
+            raise Travado(int(travado_ate - agora) + 1)
         chave = self._cofre.ler("chave_sessao")
         if not chave or not self._confere(codigo):
-            self._erros += 1
-            if self._erros >= MAX_ERROS:
-                self._erros = 0
-                self._travado_ate = agora + TRAVA_SEGUNDOS
+            self._erros[origem] = self._erros.get(origem, 0) + 1
+            if self._erros[origem] >= MAX_ERROS:
+                self._erros[origem] = 0
+                self._travas[origem] = self._travas.get(origem, 0) + 1
+                duracao = min(TRAVA_SEGUNDOS * 2 ** (self._travas[origem] - 1), TRAVA_MAXIMA)
+                self._travado_ate[origem] = agora + duracao
             raise CodigoErrado()
-        self._erros = 0
+        self._erros.pop(origem, None)
+        self._travas.pop(origem, None)
         expira = str(int(agora) + DURACAO_SESSAO)
         return f"{expira}.{self._assinar(chave, expira)}"
 

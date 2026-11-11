@@ -84,7 +84,7 @@ def test_entrar_e_usar_cookie(tmp_path):
     assert "painel_sessao=" in cabecalho
     assert "HttpOnly" in cabecalho
     assert "samesite=strict" in cabecalho.lower()
-    assert "Max-Age=2592000" in cabecalho
+    assert "Max-Age=604800" in cabecalho
     assert "Path=/" in cabecalho
     assert cliente.get("/api/episodios").status_code == 200
 
@@ -127,13 +127,13 @@ def test_acerto_zera_contador_de_erros(tmp_path):
     assert _entrar(cliente, codigo).status_code == 204
 
 
-def test_sessao_expira_em_30_dias(tmp_path):
+def test_sessao_expira_em_7_dias(tmp_path):
     cofre = CofreFalso()
     codigo = gerar_codigo(cofre)
     relogio = Relogio()
     cliente = _app(tmp_path, cofre, relogio)
     _entrar(cliente, codigo)
-    relogio.t += 30 * DIA - 1
+    relogio.t += 7 * DIA - 1
     assert cliente.get("/api/episodios").status_code == 200
     relogio.t += 2
     assert cliente.get("/api/episodios").status_code == 401
@@ -211,3 +211,35 @@ def test_trava_resiste_a_tentativas_simultaneas():
         fio.join()
     assert resultados.count(CodigoErrado) == 5
     assert resultados.count(Travado) == total - 5
+
+
+def test_trava_e_por_aparelho_e_dobra():
+    from esteira.painel.acesso import CodigoErrado, Porteiro, Travado
+
+    cofre = CofreFalso()
+    codigo = gerar_codigo(cofre)
+    relogio = Relogio()
+    porteiro = Porteiro(cofre, relogio)
+    for _ in range(5):
+        with pytest.raises(CodigoErrado):
+            porteiro.entrar("ZZZZZZZZ", "10.0.0.9")
+    with pytest.raises(Travado):
+        porteiro.entrar(codigo, "10.0.0.9")
+    assert porteiro.entrar(codigo, "10.0.0.2")  # o dono, em outro aparelho, entra
+    relogio.t += 61
+    for _ in range(5):
+        with pytest.raises(CodigoErrado):
+            porteiro.entrar("ZZZZZZZZ", "10.0.0.9")
+    relogio.t += 61
+    with pytest.raises(Travado):  # a segunda trava dura 120 s
+        porteiro.entrar(codigo, "10.0.0.9")
+
+
+def test_sair_apaga_o_cookie(tmp_path):
+    cofre = CofreFalso()
+    codigo = gerar_codigo(cofre)
+    cliente = _app(tmp_path, cofre, Relogio())
+    _entrar(cliente, codigo)
+    resposta = cliente.post("/api/sair")
+    assert resposta.status_code == 204
+    assert 'painel_sessao=""' in resposta.headers["set-cookie"] or "Max-Age=0" in resposta.headers["set-cookie"]

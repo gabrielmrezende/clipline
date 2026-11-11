@@ -76,7 +76,10 @@ for (const corte of cortes) {
   gravar(join(pasta, "trabalho", "montagem.json"), {
     faixas: [[corte.inicio, corte.fim]],
     planos: [],
-    legenda: [],
+    legenda: [
+      { inicio: 0, fim: 1.5, linhas: ["olá Brazil"], destaque: null, palavras: [[0, 0.6], [0.7, 1.5]] },
+      { inicio: 1.5, fim: 3, linhas: ["tudo bem"], destaque: null, palavras: null },
+    ],
     musica: { arquivo: join(musicas, ICE_FLOW), volume_db: -26.0, titulo: "Ice Flow", credito },
     encerramento: true,
     versao: 1,

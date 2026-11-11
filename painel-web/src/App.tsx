@@ -1,4 +1,5 @@
 import { Link, NavLink, Route, Routes, useLocation } from "react-router-dom";
+import { ErroDaTela } from "./componentes/ErroDaTela";
 import { MarcaClipline } from "./componentes/MarcaClipline";
 import { Configuracoes } from "./telas/Configuracoes";
 import { Corte } from "./telas/Corte";
@@ -25,7 +26,9 @@ export function App() {
           )}
         </div>
       </header>
-      <Rotas />
+      <ErroDaTela key={pathname}>
+        <Rotas />
+      </ErroDaTela>
     </>
   );
 }

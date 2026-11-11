@@ -1,4 +1,4 @@
-import { CSSProperties, MouseEvent, useEffect, useRef, useState } from "react";
+import { CSSProperties, KeyboardEvent, MouseEvent, useEffect, useId, useRef, useState } from "react";
 import { Momento, tempoTexto } from "../api";
 
 interface Props {
@@ -43,6 +43,7 @@ export function LinhaDoCorte({ video, momentos, irPara }: Props) {
   const listaRef = useRef(lista);
   listaRef.current = lista;
   const duracaoRef = useRef(0);
+  const prefixo = useId();
 
   useEffect(() => {
     if (!video) return;
@@ -116,9 +117,32 @@ export function LinhaDoCorte({ video, momentos, irPara }: Props) {
 
   const passo = `${Math.max(1, (10 / duracao) * 100)}%`;
 
+  /** Pelo teclado: setas voltam e avançam 5 s; Home e End vão ao começo e ao fim. */
+  function teclas(e: KeyboardEvent<HTMLDivElement>) {
+    if (!video || e.target !== e.currentTarget) return;
+    const destinos: Record<string, number> = {
+      ArrowLeft: video.currentTime - 5,
+      ArrowRight: video.currentTime + 5,
+      Home: 0,
+      End: duracao,
+    };
+    if (!(e.key in destinos)) return;
+    e.preventDefault();
+    video.currentTime = Math.min(duracao, Math.max(0, destinos[e.key]));
+  }
+
   return (
     <div className="linha-do-corte">
-      <div className="linha-trilho" style={{ "--passo": passo } as CSSProperties} onClick={clicarNaRegua}>
+      <div
+        className="linha-trilho"
+        style={{ "--passo": passo } as CSSProperties}
+        onClick={clicarNaRegua}
+        onKeyDown={teclas}
+        tabIndex={0}
+        role="group"
+        aria-label="Linha do corte. Setas: voltar ou avançar 5 segundos; Home e End: começo e fim."
+        aria-keyshortcuts="ArrowLeft ArrowRight Home End"
+      >
         {lista.map((x, i) => (
           <button
             key={x.chave}
@@ -134,6 +158,7 @@ export function LinhaDoCorte({ video, momentos, irPara }: Props) {
               } as CSSProperties
             }
             aria-label={`Imagem em ${tempoTexto(x.inicio)}: ${TIPO[x.tipo] ?? x.tipo}${x.noVideo ? "" : ", fora do vídeo"}`}
+            aria-describedby={x.fala ? `${prefixo}-fala-${i}` : undefined}
             title={x.fala}
             onClick={(e) => {
               e.stopPropagation();
@@ -142,6 +167,15 @@ export function LinhaDoCorte({ video, momentos, irPara }: Props) {
           />
         ))}
         <div className="linha-cabeca" ref={cabeca} aria-hidden="true" />
+      </div>
+      <div className="so-leitor">
+        {lista.map((x, i) =>
+          x.fala ? (
+            <span key={x.chave} id={`${prefixo}-fala-${i}`}>
+              {x.fala}
+            </span>
+          ) : null,
+        )}
       </div>
       <div className="linha-tempos" aria-hidden="true">
         <span>0:00</span>

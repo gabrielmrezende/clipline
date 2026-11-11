@@ -1,5 +1,5 @@
 import { FormEvent, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { ErroApi, enviarJson } from "../api";
 
 export function Entrada() {
@@ -7,6 +7,10 @@ export function Entrada() {
   const [erro, setErro] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
   const navegar = useNavigate();
+  const [busca] = useSearchParams();
+  const pedida = busca.get("volta") ?? "";
+  // Só caminhos do próprio painel: "/x" sim; "//outro.site" e "/\\outro" não (redirecionamento aberto).
+  const volta = /^\/(?![\/\\])/.test(pedida) ? pedida : "/";
 
   async function entrar(e: FormEvent) {
     e.preventDefault();
@@ -14,7 +18,7 @@ export function Entrada() {
     setErro(null);
     try {
       await enviarJson("/api/entrar", "POST", { codigo });
-      navegar("/");
+      navegar(volta);
     } catch (x) {
       setErro(x instanceof ErroApi ? x.detail : "Não foi possível entrar.");
     } finally {

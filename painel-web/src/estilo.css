@@ -12,6 +12,7 @@
   --nevoa: #eef2f8;
   --linha: #dde3ee;
   --linha-forte: #c5cedd;
+  --borda-campo: #848fa5; /* 3,2:1 sobre o papel: o contorno do campo é a única pista de onde clicar */
   --tinta: #0f1a2e;
   --grafite: #556079;
   --azul: #0750d8;
@@ -46,6 +47,7 @@
     --nevoa: #152038;
     --linha: #223050;
     --linha-forte: #34446a;
+    --borda-campo: #5f719a;
     --tinta: #e7ecf6;
     --grafite: #9aa6c0;
     --azul: #5b95ff;
@@ -277,7 +279,7 @@ textarea {
   min-height: 44px;
   margin-top: 0.35rem;
   padding: 0.55rem 0.75rem;
-  border: 1px solid var(--linha-forte);
+  border: 1px solid var(--borda-campo);
   border-radius: var(--raio);
   background: var(--papel);
   color: var(--tinta);
@@ -1467,4 +1469,86 @@ details[open]::details-content {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+/* ---------- Só para leitor de tela ---------- */
+.so-leitor {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* ---------- Legenda ---------- */
+.telas-legenda {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+.telas-legenda li {
+  display: grid;
+  grid-template-columns: 4rem 1fr;
+  gap: 0.5rem;
+  align-items: start;
+}
+.telas-legenda li .aviso {
+  grid-column: 2;
+}
+.telas-legenda textarea {
+  margin-top: 0;
+  min-height: 3.2rem;
+}
+.acoes-legenda {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+/* ---------- Publicar ---------- */
+.campos-publicar {
+  display: grid;
+  gap: 0.75rem;
+  max-width: 28rem;
+}
+.campos-publicar fieldset {
+  border: 1px solid var(--linha);
+  border-radius: var(--raio);
+  padding: 0.5rem 0.75rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+.opcao-rede {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 44px;
+}
+.fila-publicacao {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 1rem;
+  display: grid;
+  gap: 0.35rem;
+}
+.fila-publicacao li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+.resumo-publicacao pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  background: var(--nevoa);
+  border: 1px solid var(--linha);
+  border-radius: var(--raio);
+  padding: 0.75rem 1rem;
+  max-height: 28rem;
+  overflow: auto;
 }
