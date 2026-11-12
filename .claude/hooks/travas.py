@@ -72,13 +72,15 @@ def decidir(chamada: dict) -> str | None:
 
 
 def _negar(motivo: str) -> None:
-    print(json.dumps({
+    # Bytes UTF-8 direto no stdout: no Windows o print usaria cp1252 e quebraria os acentos.
+    sys.stdout.buffer.write(json.dumps({
         "hookSpecificOutput": {
             "hookEventName": "PreToolUse",
             "permissionDecision": "deny",
             "permissionDecisionReason": f"clipline: {motivo}",
         }
-    }, ensure_ascii=False))
+    }, ensure_ascii=False).encode("utf-8") + b"\n")
+    sys.stdout.buffer.flush()
 
 
 def principal() -> int:
