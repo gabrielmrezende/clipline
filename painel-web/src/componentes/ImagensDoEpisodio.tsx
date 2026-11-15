@@ -14,18 +14,19 @@ import {
   plural,
   resumoDeFotosDoEpisodio,
 } from "../api";
+import { useConfirmar } from "./Confirmacao";
 import {
   Alerta,
   AndamentoPedido,
   AvisosDoResumo,
   PEDIDO_PERDIDO,
   ativo,
+  confirmacaoDeFotos,
+  confirmacaoDeIa,
   ehDeImagens,
   mensagem,
   rotuloDeFotos,
   rotuloDeIa,
-  textoDeFotos,
-  textoDeIa,
   useAcompanhamento,
   useUmaPorVez,
 } from "./imagensComum";
@@ -68,6 +69,7 @@ export function ImagensDoEpisodio({ ep, cortes }: Props) {
   const [erroOrcamento, setErroOrcamento] = useState<string | null>(null);
   const [avisoGlossario, setAvisoGlossario] = useState<string | null>(null);
   const [preparando, umaPorVez] = useUmaPorVez();
+  const confirmar = useConfirmar();
   const vivo = useRef(true);
   const numeros = cortes.map((c) => c.numero).join(",");
 
@@ -170,7 +172,7 @@ export function ImagensDoEpisodio({ ep, cortes }: Props) {
       setErroPedido(null);
       const r = await lerResumo();
       if (!r) return;
-      if (window.confirm(textoDeFotos(r, SUBSTITUIDAS))) await enviarPedido(() => baixarFotosDoEpisodio(ep));
+      if (await confirmar(confirmacaoDeFotos(r, SUBSTITUIDAS))) await enviarPedido(() => baixarFotosDoEpisodio(ep));
     });
   }
 
@@ -180,7 +182,7 @@ export function ImagensDoEpisodio({ ep, cortes }: Props) {
       const o = await lerOrcamento();
       if (!o || o.imagens === 0) return;
       // Só o que estava no orçamento confirmado: o que for aprovado depois fica para o próximo clique.
-      if (window.confirm(textoDeIa(o))) await enviarPedido(() => gerarImagensIaDoEpisodio(ep, o.itens));
+      if (await confirmar(confirmacaoDeIa(o))) await enviarPedido(() => gerarImagensIaDoEpisodio(ep, o.itens));
     });
   }
 

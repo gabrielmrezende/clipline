@@ -22,18 +22,19 @@ import {
   resumoDeFotos,
 } from "../api";
 import { CartaoMomento } from "./CartaoMomento";
+import { OpcoesConfirmacao, useConfirmar } from "./Confirmacao";
 import {
   Alerta,
   AndamentoPedido,
   AvisosDoResumo,
   PEDIDO_PERDIDO,
   ativo,
+  confirmacaoDeFotos,
+  confirmacaoDeIa,
   ehDeImagens,
   mensagem,
   rotuloDeFotos,
   rotuloDeIa,
-  textoDeFotos,
-  textoDeIa,
   useAcompanhamento,
   useUmaPorVez,
 } from "./imagensComum";
@@ -61,8 +62,12 @@ const ESPERA_RESUMOS_MS = 500;
 const SUBSTITUIDAS = "As fotos baixadas antes neste corte serão substituídas.";
 const DESATUALIZADA = "As imagens mudaram desde a última montagem.";
 
-export function textoDeMontar(imagens: number): string {
-  return `Montar o corte de novo com ${plural(imagens, "imagem", "imagens")}? O corte.mp4 atual será substituído (leva cerca de 1 minuto).`;
+export function confirmacaoDeMontar(imagens: number): OpcoesConfirmacao {
+  return {
+    titulo: `Montar o corte de novo com ${plural(imagens, "imagem", "imagens")}?`,
+    resumo: "O corte.mp4 atual será substituído (leva cerca de 1 minuto).",
+    confirmar: "Montar",
+  };
 }
 
 const emOrdem = (lista: Momento[]) => [...lista].sort((a, b) => a.inicio - b.inicio);
@@ -88,6 +93,7 @@ export function BlocoImagens({
   const [erroOrcamento, setErroOrcamento] = useState<string | null>(null);
   const [avisoGlossario, setAvisoGlossario] = useState<string | null>(null);
   const [preparando, umaPorVez] = useUmaPorVez();
+  const confirmar = useConfirmar();
   const [config, setConfig] = useState<ConfigImagens | null>(null);
   const [pedido, setPedido] = useState<Pedido | null>(null);
   const [erroPedido, setErroPedido] = useState<string | null>(null);
@@ -282,7 +288,7 @@ export function BlocoImagens({
       await cadeia.current;
       const r = await lerResumo();
       if (!r) return;
-      if (window.confirm(textoDeFotos(r, SUBSTITUIDAS))) await enviarPedido(() => baixarFotos(ep, n));
+      if (await confirmar(confirmacaoDeFotos(r, SUBSTITUIDAS))) await enviarPedido(() => baixarFotos(ep, n));
     });
   }
 
@@ -292,7 +298,7 @@ export function BlocoImagens({
       await cadeia.current;
       const o = await lerOrcamento();
       if (!o || o.imagens === 0) return;
-      if (window.confirm(textoDeIa(o))) await enviarPedido(() => gerarImagensIa(ep, n, o.itens));
+      if (await confirmar(confirmacaoDeIa(o))) await enviarPedido(() => gerarImagensIa(ep, n, o.itens));
     });
   }
 
@@ -302,7 +308,7 @@ export function BlocoImagens({
       setErroPedido(null);
       await cadeia.current;
       const imagens = (momentos ?? []).filter((m) => !m.descartar && m.no_video).length;
-      if (!window.confirm(textoDeMontar(imagens))) return;
+      if (!(await confirmar(confirmacaoDeMontar(imagens)))) return;
       soltarVideo?.();
       montandoAgora.current = true;
       aoMudarAndamento?.(true);

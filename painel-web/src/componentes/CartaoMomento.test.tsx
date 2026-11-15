@@ -1,7 +1,9 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { vi } from "vitest";
 import type { Momento } from "../api";
+import { botaoConfirmarDoDialogo, responderDialogo, tituloDoDialogo } from "../testes/dialogo";
 import { CartaoMomento } from "./CartaoMomento";
+import { ProvedorConfirmacao } from "./Confirmacao";
 
 function momento(extra: Partial<Momento> = {}): Momento {
   return {
@@ -83,15 +85,30 @@ describe("CartaoMomento", () => {
       expect(botao().disabled).toBe(false);
     });
 
-    it("confirma com o preço e o rótulo do botão", () => {
-      const confirmar = vi.fn(() => true);
-      vi.stubGlobal("confirm", confirmar);
+    it("confirma com o preço e o rótulo do botão", async () => {
       const p = props(ia());
-      render(<CartaoMomento {...p} />);
+      render(<CartaoMomento {...p} />, { wrapper: ProvedorConfirmacao });
       fireEvent.click(botao());
-      expect(confirmar).toHaveBeenCalledWith("Gerar esta imagem: 1 imagem, ~US$ 0,05?");
+      expect(tituloDoDialogo()).toBe("Gerar esta imagem: 1 imagem, ~US$ 0,05?");
+      expect(botaoConfirmarDoDialogo().textContent).toBe("Gerar por ~US$ 0,05");
+      expect(p.gerarDeNovo).not.toHaveBeenCalled();
+      responderDialogo(true);
+      await act(async () => {
+        await Promise.resolve();
+      });
       expect(p.gerarDeNovo).toHaveBeenCalledTimes(1);
-      vi.unstubAllGlobals();
+    });
+
+    it("cancelar não gera", async () => {
+      const p = props(ia({ ia: [versao(1)] }));
+      render(<CartaoMomento {...p} />, { wrapper: ProvedorConfirmacao });
+      fireEvent.click(botao());
+      expect(tituloDoDialogo()).toBe("Gerar de novo esta imagem: 1 imagem, ~US$ 0,05?");
+      responderDialogo(false);
+      await act(async () => {
+        await Promise.resolve();
+      });
+      expect(p.gerarDeNovo).not.toHaveBeenCalled();
     });
 
     it.each([

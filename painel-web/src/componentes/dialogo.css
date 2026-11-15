@@ -1,0 +1,209 @@
+/* Diálogos (confirmação e ajuda dos atalhos): uma folha por cima da mesa, com o fundo escurecido. */
+.dialogo {
+  width: min(32rem, calc(100vw - 2rem));
+  max-height: calc(100dvh - 2rem);
+  padding: 0;
+  border: 1px solid var(--linha);
+  border-radius: var(--raio-g);
+  background: var(--papel);
+  color: var(--tinta);
+  box-shadow:
+    0 24px 64px -16px rgba(10, 18, 38, 0.4),
+    0 2px 6px rgba(10, 18, 38, 0.12);
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.dialogo[open] {
+  animation: dialogo-entrar 0.18s var(--curva) both;
+}
+.dialogo::backdrop {
+  background: rgba(6, 12, 28, 0.55);
+  animation: dialogo-fundo 0.18s ease-out both;
+}
+.dialogo-caixa {
+  display: grid;
+  gap: 1rem;
+  padding: 1.5rem;
+}
+.dialogo-cabeca {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.85rem;
+}
+.dialogo-titulo {
+  margin: 0;
+  font-size: 1.1875rem;
+  line-height: 1.35;
+  text-wrap: pretty;
+  overflow-wrap: anywhere;
+}
+.dialogo-icone {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  margin-top: -0.3rem;
+  border-radius: 50%;
+}
+.tom-custo .dialogo-icone {
+  background: var(--alerta-fundo);
+  color: var(--alerta);
+}
+.tom-irreversivel .dialogo-icone {
+  background: var(--erro-fundo);
+  color: var(--erro);
+}
+.dialogo-descricao {
+  display: grid;
+  gap: 0.6rem;
+}
+.dialogo-descricao p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.dialogo-aviso {
+  padding: 0.55rem 0.8rem;
+  border-radius: var(--raio);
+  background: var(--alerta-fundo);
+  color: var(--alerta);
+  font-weight: 560;
+}
+.dialogo-itens {
+  margin: 0;
+  padding: 0.7rem 1rem 0.7rem 2rem;
+  max-height: 12rem;
+  overflow: auto;
+  border-radius: var(--raio);
+  background: var(--nevoa);
+  font-size: 0.9375rem;
+  overflow-wrap: anywhere;
+}
+.dialogo-itens li + li {
+  margin-top: 0.3rem;
+}
+.dialogo-custo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.25rem 1rem;
+  margin: 0;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--alerta);
+  border-radius: var(--raio);
+  background: var(--alerta-fundo);
+  color: var(--alerta);
+  font-weight: 600;
+}
+.dialogo-custo strong {
+  color: var(--tinta);
+  font-size: 1.5rem;
+  font-weight: 760;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+.dialogo-acoes {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+}
+.dialogo-acoes button {
+  flex: 0 1 auto;
+}
+.dialogo-confirmar.tom-normal {
+  background: var(--azul);
+  border-color: var(--azul);
+  color: var(--sobre-azul);
+}
+.dialogo-confirmar.tom-normal:hover:not(:disabled) {
+  background: var(--azul-escuro);
+  border-color: var(--azul-escuro);
+  color: var(--sobre-azul);
+}
+/* Gasta dinheiro: âmbar, com o preço no rótulo. Não volta: vermelho. Os dois começam sem o foco. */
+.dialogo-confirmar.tom-custo {
+  background: var(--alerta);
+  border-color: var(--alerta);
+  color: var(--papel);
+  font-weight: 650;
+}
+.dialogo-confirmar.tom-irreversivel {
+  background: var(--erro);
+  border-color: var(--erro);
+  color: var(--papel);
+  font-weight: 650;
+}
+.dialogo-confirmar.tom-custo:hover:not(:disabled),
+.dialogo-confirmar.tom-irreversivel:hover:not(:disabled) {
+  border-color: var(--tinta);
+  color: var(--papel);
+  box-shadow: inset 0 0 0 1px var(--papel);
+}
+@media (max-width: 30rem) {
+  .dialogo-caixa {
+    padding: 1.25rem;
+  }
+  .dialogo-acoes button {
+    flex: 1 1 100%;
+  }
+}
+
+/* Ajuda dos atalhos do player. */
+.dialogo-ajuda {
+  width: min(30rem, calc(100vw - 2rem));
+}
+.dialogo-ajuda .dialogo-cabeca {
+  justify-content: space-between;
+  align-items: center;
+}
+.atalhos {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.55rem 1.25rem;
+  margin: 0;
+}
+.atalhos dt {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  align-items: center;
+}
+.atalhos dd {
+  margin: 0;
+  color: var(--grafite);
+}
+kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.75rem;
+  height: 1.75rem;
+  padding: 0 0.4rem;
+  border: 1px solid var(--linha-forte);
+  border-bottom-width: 2px;
+  border-radius: 6px;
+  background: var(--nevoa);
+  color: var(--tinta);
+  font: 600 0.8125rem/1 var(--fonte);
+}
+
+@keyframes dialogo-entrar {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+}
+@keyframes dialogo-fundo {
+  from {
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dialogo[open],
+  .dialogo::backdrop {
+    animation: none;
+  }
+}

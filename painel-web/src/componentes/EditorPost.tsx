@@ -1,5 +1,6 @@
 import { ChangeEvent, useCallback, useEffect, useRef, useState } from "react";
 import { CamposPost, ErroApi, Post, caminhoCorte, enviarJson, pedir } from "../api";
+import { useConfirmar } from "./Confirmacao";
 
 interface Props {
   ep: string;
@@ -37,6 +38,7 @@ export function EditorPost({ ep, n, recarregarSinal }: Props) {
   const [erroDisco, setErroDisco] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
   const [copia, setCopia] = useState<string | null>(null);
+  const confirmar = useConfirmar();
   const temporizador = useRef<ReturnType<typeof setTimeout> | null>(null);
   const sequencia = useRef(0);
   const camposRef = useRef<CamposPost>(VAZIO);
@@ -164,10 +166,16 @@ export function EditorPost({ ep, n, recarregarSinal }: Props) {
     }
   }
 
-  function usarArquivo() {
-    if (!disco?.campos) return;
-    if (!window.confirm("Descartar o que você escreveu e usar a versão do arquivo?")) return;
-    aplicar({ ...disco, campos: disco.campos });
+  async function usarArquivo() {
+    const doDisco = disco;
+    if (!doDisco?.campos) return;
+    const sim = await confirmar({
+      titulo: "Descartar o que você escreveu e usar a versão do arquivo?",
+      confirmar: "Descartar e usar o arquivo",
+      tom: "irreversivel",
+    });
+    if (!sim || !doDisco.campos) return;
+    aplicar({ ...doDisco, campos: doDisco.campos });
     setSalvo(false);
     setErroSalvar(null);
     limparConflito();
@@ -276,7 +284,7 @@ export function EditorPost({ ep, n, recarregarSinal }: Props) {
           {erroDisco ? <p>{erroDisco}</p> : null}
           {disco ? (
             <div className="acoes-conflito">
-              <button type="button" onClick={usarArquivo} disabled={salvando}>
+              <button type="button" onClick={() => void usarArquivo()} disabled={salvando}>
                 Usar a versão do arquivo
               </button>
               <button type="button" onClick={() => void salvar(disco.versao)} disabled={salvando}>

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ErroApi, OrcamentoIa, Pedido, ResumoFotos, consultarTarefa, formatarDolar, formatarMb, plural } from "../api";
+import type { OpcoesConfirmacao } from "./Confirmacao";
 
 const ESPERA_CONSULTA_MS = 2000;
 export const PEDIDO_PERDIDO = "O pedido se perdeu (o painel foi reiniciado?). Confira as imagens e peça de novo se precisar.";
@@ -13,17 +14,23 @@ export function mensagem(x: unknown): string {
   return x instanceof ErroApi ? x.detail : "Erro inesperado.";
 }
 
-/** Texto da confirmação de baixar fotos; `substituidas` diz o que acontece com as fotos de antes. */
-export function textoDeFotos(r: ResumoFotos, substituidas: string): string {
-  return [
-    `Baixar ${plural(r.fotos, "foto", "fotos")} (${formatarMb(r.megabytes)}) de ${r.origem}?`,
-    ...r.avisos,
-    substituidas,
-  ].join("\n");
+/** Confirmação de baixar fotos; `substituidas` diz o que acontece com as fotos de antes. */
+export function confirmacaoDeFotos(r: ResumoFotos, substituidas: string): OpcoesConfirmacao {
+  return {
+    titulo: `Baixar ${plural(r.fotos, "foto", "fotos")} (${formatarMb(r.megabytes)}) de ${r.origem}?`,
+    resumo: substituidas,
+    itens: r.avisos,
+    confirmar: "Baixar",
+  };
 }
 
-export function textoDeIa(o: OrcamentoIa): string {
-  return `Gerar ${plural(o.imagens, "imagem", "imagens")} com ${o.provedor} (${o.modelo}), ${formatarDolar(o.custo_usd)}?`;
+/** Confirmação de gerar imagens de IA: gasta dinheiro, então o custo vai em destaque. */
+export function confirmacaoDeIa(o: OrcamentoIa): OpcoesConfirmacao {
+  return {
+    titulo: `Gerar ${plural(o.imagens, "imagem", "imagens")} com ${o.provedor} (${o.modelo}), ${formatarDolar(o.custo_usd)}?`,
+    custo: formatarDolar(o.custo_usd),
+    confirmar: "Gerar",
+  };
 }
 
 export function rotuloDeFotos(r: ResumoFotos | null): string {

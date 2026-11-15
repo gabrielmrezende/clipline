@@ -27,9 +27,13 @@ test("aprova um momento de IA, gera a imagem e mostra a miniatura", async ({ pag
   await expect(gerar).toBeEnabled();
   await expect(gerar).toContainText("1 imagem");
 
-  page.once("dialog", (d) => d.accept());
   const pedido = page.waitForRequest((q) => q.method() === "POST" && q.url().endsWith("/cortes/3/ia"));
   await gerar.click();
+  // A confirmação é o diálogo do painel, com o custo no botão (não mais o window.confirm do navegador).
+  const confirmacao = page.getByRole("alertdialog");
+  await expect(confirmacao).toContainText("Custo estimado");
+  await confirmacao.getByRole("button", { name: /^Gerar por ~US\$/ }).click();
+  await expect(confirmacao).toBeHidden();
   expect((await pedido).postDataJSON()).toEqual({ itens: [{ corte: 3, chave: "0006-pais-parado" }] });
 
   await expect(page.getByRole("status").filter({ hasText: /^Pronto/ })).toBeVisible({ timeout: 20_000 });

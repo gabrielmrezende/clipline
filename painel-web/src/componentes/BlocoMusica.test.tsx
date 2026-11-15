@@ -1,7 +1,9 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, vi } from "vitest";
 import type { Pedido } from "../api";
+import { haDialogo, responderDialogo, textoDoDialogo, tituloDoDialogo } from "../testes/dialogo";
 import { BlocoMusica } from "./BlocoMusica";
+import { ProvedorConfirmacao } from "./Confirmacao";
 
 const LISTA = {
   do_episodio: [
@@ -128,6 +130,7 @@ async function montar(props: PropsTeste = {}) {
       aoMudarAndamento={props.aoMudarAndamento}
       montandoNaTela={props.montandoNaTela}
     />,
+    { wrapper: ProvedorConfirmacao },
   );
   await avancar(0);
   return { ...r, aoTerminar };
@@ -210,19 +213,34 @@ describe("BlocoMusica", () => {
   });
 
   it("com vídeo final pede confirmação com o texto da spec", async () => {
-    const texto =
-      "Este corte já tem vídeo final. O vídeo final não muda: depois, aprove de novo (ou refaça no CapCut). Montar mesmo assim?";
-    const confirmar = vi.fn(() => false);
-    vi.stubGlobal("confirm", confirmar);
     await montar({ videoFinal: ["a.mp4"] });
     escolher("Brisa");
     fireEvent.click(botaoMontar());
     await avancar(0);
-    expect(confirmar).toHaveBeenCalledWith(texto);
+    expect(tituloDoDialogo()).toBe("Montar mesmo assim?");
+    expect(textoDoDialogo()).toContain(
+      "Este corte já tem vídeo final. O vídeo final não muda: depois, aprove de novo (ou refaça no CapCut).",
+    );
+    responderDialogo(false);
+    await avancar(0);
+    expect(haDialogo()).toBe(false);
     expect(chamadas.filter((c) => c.metodo === "POST")).toHaveLength(0);
-    confirmar.mockReturnValue(true);
+    fireEvent.click(botaoMontar());
+    fireEvent.click(botaoMontar()); // clique duplo: uma confirmação só
+    await avancar(0);
+    expect(screen.getAllByRole("alertdialog")).toHaveLength(1);
+    responderDialogo(true);
+    await avancar(0);
+    expect(haDialogo()).toBe(false);
+    expect(chamadas.filter((c) => c.metodo === "POST")).toHaveLength(1);
+  });
+
+  it("sem vídeo final, monta sem confirmação", async () => {
+    await montar();
+    escolher("Brisa");
     fireEvent.click(botaoMontar());
     await avancar(0);
+    expect(haDialogo()).toBe(false);
     expect(chamadas.filter((c) => c.metodo === "POST")).toHaveLength(1);
   });
 
@@ -315,11 +333,13 @@ describe("BlocoMusica", () => {
   });
 
   it("cancelar a confirmação não solta o vídeo", async () => {
-    vi.stubGlobal("confirm", vi.fn(() => false));
     const soltarVideo = vi.fn();
     await montar({ videoFinal: ["a.mp4"], soltarVideo });
     escolher("Brisa");
     fireEvent.click(botaoMontar());
+    await avancar(0);
+    expect(soltarVideo).not.toHaveBeenCalled();
+    responderDialogo(false);
     await avancar(0);
     expect(soltarVideo).not.toHaveBeenCalled();
   });
