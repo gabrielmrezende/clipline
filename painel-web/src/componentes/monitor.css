@@ -1,0 +1,241 @@
+/* O monitor de revisão: controles do player, áreas das redes e as remoções da limpeza na linha do corte.
+ * O monitor é sempre escuro (nos dois temas), então as cores aqui são fixas. */
+
+/* Com a barra do player e a legenda da linha, o vídeo encolhe um pouco para o monitor caber na tela. */
+@media (min-width: 960px) {
+  .corte .monitor {
+    --tela: min(100%, calc((100vh - 21rem) * 9 / 16));
+    overflow-y: auto;
+    scrollbar-width: thin;
+  }
+}
+
+/* Velocidade, áreas e atalhos, logo abaixo do vídeo. */
+.barra-player {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) auto;
+  align-items: end;
+  gap: 0.5rem;
+}
+.controle-player {
+  display: grid;
+  gap: 0.2rem;
+  min-width: 0;
+  color: var(--monitor-suave);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+.controle-player select {
+  min-height: 36px;
+  margin: 0;
+  padding: 0.3rem 0.5rem;
+  border-color: var(--monitor-linha);
+  border-radius: 9px;
+  background: var(--monitor-2);
+  color: var(--monitor-texto);
+  font-size: 0.875rem;
+  font-weight: 560;
+  color-scheme: dark;
+}
+.controle-player select:focus {
+  border-color: var(--monitor-azul);
+  box-shadow: 0 0 0 3px rgba(79, 141, 255, 0.35);
+}
+.botao-atalhos {
+  width: 36px;
+  min-width: 36px;
+  min-height: 36px;
+  padding: 0;
+  border-color: var(--monitor-linha);
+  border-radius: 9px;
+  background: var(--monitor-2);
+  color: var(--monitor-texto);
+  font-weight: 700;
+}
+.botao-atalhos:hover:not(:disabled) {
+  border-color: var(--monitor-azul);
+  color: #ffffff;
+}
+.nota-areas {
+  margin: -0.35rem 0 0;
+  color: var(--monitor-suave);
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+
+/* O aviso rápido do atalho (+5 s, 1,5x...), no alto da tela. */
+.aviso-player {
+  position: absolute;
+  top: 0.75rem;
+  left: 50%;
+  margin: 0;
+  padding: 0.3rem 0.7rem;
+  border-radius: 999px;
+  background: rgba(6, 12, 28, 0.82);
+  color: #ffffff;
+  font-size: 0.875rem;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transform: translate(-50%, -4px);
+  transition:
+    opacity 0.15s ease,
+    transform 0.15s ease;
+}
+.aviso-player.visivel {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+.aviso-player:empty {
+  padding: 0;
+}
+
+/* Áreas cobertas pela interface da rede (TikTok, Shorts, Reels). */
+.areas-rede {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.area-coberta {
+  position: absolute;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-start;
+  overflow: hidden;
+  background: repeating-linear-gradient(
+    -45deg,
+    rgba(255, 92, 92, 0.42) 0 6px,
+    rgba(255, 92, 92, 0.2) 6px 12px
+  );
+  box-shadow: inset 0 0 0 1px rgba(255, 140, 140, 0.9);
+}
+.area-rotulo {
+  margin: 0.25rem;
+  padding: 0.05rem 0.35rem;
+  border-radius: 4px;
+  background: rgba(6, 12, 28, 0.85);
+  color: #ffffff;
+  font-size: 0.6875rem;
+  font-weight: 650;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+.area-livre {
+  position: absolute;
+  border: 1.5px dashed rgba(255, 255, 255, 0.85);
+  border-radius: 4px;
+}
+
+/* Remoções da limpeza (pausas, hesitações, repetições) na linha do corte: marcas finas em âmbar. */
+.linha-remocao {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  width: 2px;
+  margin-left: -1px;
+  border-radius: 1px;
+  background: #ffb547;
+  pointer-events: none;
+}
+.linha-remocao.pausa {
+  background: #8f9bb7;
+}
+.legenda-linha {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.9rem;
+  margin: 0.35rem 0 0;
+  padding: 0;
+  list-style: none;
+  color: var(--monitor-suave);
+  font-size: 0.75rem;
+}
+.legenda-linha li {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.legenda-linha li::before {
+  content: "";
+  width: 0.75rem;
+  height: 0.5rem;
+  border-radius: 2px;
+  background: var(--cor, var(--monitor-azul));
+}
+.legenda-linha .chave-imagem {
+  --cor: var(--monitor-azul);
+}
+.legenda-linha .chave-corte {
+  --cor: #ffb547;
+}
+.legenda-linha .chave-pausa {
+  --cor: #8f9bb7;
+}
+.remocoes {
+  margin-top: 0.5rem;
+  color: var(--monitor-texto);
+  font-size: 0.875rem;
+}
+.remocoes summary {
+  display: flex;
+  align-items: center;
+  min-height: 36px;
+  cursor: pointer;
+  color: var(--monitor-suave);
+  font-weight: 600;
+}
+.remocoes summary:hover {
+  color: var(--monitor-texto);
+}
+.remocoes ul {
+  max-height: 14rem;
+  margin: 0.25rem 0 0;
+  padding: 0;
+  overflow: auto;
+  list-style: none;
+  border-top: 1px solid var(--monitor-linha);
+}
+.remocoes li {
+  border-bottom: 1px solid var(--monitor-linha);
+}
+.remocoes button {
+  display: grid;
+  grid-template-columns: 2.75rem minmax(0, 1fr) auto;
+  gap: 0.5rem;
+  align-items: baseline;
+  justify-content: stretch;
+  width: 100%;
+  min-height: 36px;
+  padding: 0.3rem 0.25rem;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--monitor-texto);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  text-align: left;
+}
+.remocoes button:hover:not(:disabled) {
+  background: var(--monitor-2);
+  color: #ffffff;
+}
+.remocao-tempo,
+.remocao-duracao {
+  color: var(--monitor-suave);
+  font-variant-numeric: tabular-nums;
+}
+.remocao-texto {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .aviso-player {
+    transition: none;
+    transform: translate(-50%, 0);
+  }
+}
