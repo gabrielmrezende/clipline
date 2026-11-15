@@ -12,3 +12,7 @@ pytest==9.2.0
 pytest-xdist==3.8.0
 ruff==0.17.5
 uvicorn==0.54.0
+# Extras opcionais (entrada, mcp e ia): sem eles, os testes que os usam são pulados.
+anthropic==2.8.0
+mcp==2.3.0
+yt-dlp==2026.10.26
