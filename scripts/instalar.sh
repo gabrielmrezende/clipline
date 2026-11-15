@@ -33,7 +33,8 @@ done
 # Tudo roda de dentro do repositório: "python -m esteira" pega primeiro a pasta esteira/ do diretório atual.
 cd "$REPO"
 
-versao_aceita() { "$@" -c 'import sys; sys.exit(0 if sys.version_info[:2] in ((3, 12), (3, 13)) else 1)' >/dev/null 2>&1; }
+VERSAO_ACEITA='import sys; sys.exit(0 if sys.version_info[:2] in ((3, 12), (3, 13)) else 1)'
+versao_aceita() { "$@" -c "$VERSAO_ACEITA" >/dev/null 2>&1; }
 
 achar_python() {
   if [ -n "${CLIPLINE_PYTHON:-}" ]; then
@@ -62,8 +63,10 @@ achar_python() {
 conferir_node() {
   command -v node >/dev/null 2>&1 && command -v npm >/dev/null 2>&1 ||
     erro "Node.js não encontrado. Instale o Node 22.12 ou mais novo (nodejs.org) ou rode com --sem-painel."
-  node -e 'const [a, b] = process.versions.node.split(".").map(Number); process.exit(a > 22 || (a === 22 && b >= 12) ? 0 : 1)' ||
-    erro "Node $(node --version) é antigo para o build do painel. Instale o 22.12 ou mais novo, ou rode com --sem-painel."
+  local recente='const [a, b] = process.versions.node.split(".").map(Number);
+process.exit(a > 22 || (a === 22 && b >= 12) ? 0 : 1);'
+  node -e "$recente" ||
+    erro "Node $(node --version) é antigo para o build do painel. Instale o 22.12+ ou rode com --sem-painel."
 }
 
 python_do_venv() {
@@ -116,7 +119,8 @@ if [ -z "$VENV_PY" ]; then
   echo "criado em $REPO/.venv"
 else
   versao_aceita "$VENV_PY" ||
-    erro "o .venv existente usa $("$VENV_PY" --version 2>&1), e o projeto pede 3.12 ou 3.13. Apague $REPO/.venv e rode de novo."
+    erro "o .venv existente usa $("$VENV_PY" --version 2>&1), e o projeto pede 3.12 ou 3.13." \
+      "Apague $REPO/.venv e rode de novo."
   echo "já existe ($("$VENV_PY" --version)); só atualizo os pacotes"
 fi
 

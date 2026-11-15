@@ -22,7 +22,9 @@ def _carregar(nome: str):
 def test_requisitos_cpu_tira_cuda_e_troca_o_opencv():
     requisitos = _carregar("requisitos_cpu")
     projeto = {
-        "dependencies": ["faster-whisper", "opencv-python>=4", "nvidia-cublas-cu12; platform_system != 'Darwin'", "keyring"],
+        "dependencies": [
+            "faster-whisper", "opencv-python>=4", "nvidia-cublas-cu12; platform_system != 'Darwin'", "keyring",
+        ],
         "optional-dependencies": {"painel": ["fastapi>=0.162"], "dev": ["pytest"]},
     }
     assert requisitos.requisitos_cpu(projeto, ["painel"]) == [

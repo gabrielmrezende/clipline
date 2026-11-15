@@ -88,11 +88,14 @@ function Achar-Python {
         if (Aceita 'py' @("-$versao")) { return , @('py', "-$versao") }
     }
     if (Aceita 'python') { return , @('python') }
-    Falhar 'Python 3.12 ou 3.13 não encontrado. Instale pelo python.org (marque "Add python.exe to PATH") e rode de novo.'
+    Falhar ('Python 3.12 ou 3.13 não encontrado. Instale pelo python.org (marque "Add python.exe to PATH") ' +
+        'e rode de novo.')
 }
 
 function Conferir-Node {
-    if (-not (Get-Command node -ErrorAction SilentlyContinue) -or -not (Get-Command npm -ErrorAction SilentlyContinue)) {
+    $temNode = Get-Command node -ErrorAction SilentlyContinue
+    $temNpm = Get-Command npm -ErrorAction SilentlyContinue
+    if (-not $temNode -or -not $temNpm) {
         Falhar 'Node.js não encontrado. Instale o Node 22.12 ou mais novo (nodejs.org) ou rode com -SemPainel.'
     }
     $versao = (& node --version).TrimStart('v')
@@ -146,7 +149,8 @@ $Venv = Join-Path $Repo '.venv'
 $VenvPy = Join-Path $Venv 'Scripts\python.exe'
 if (Test-Path -LiteralPath $VenvPy) {
     if (-not (Aceita $VenvPy)) {
-        Falhar "o .venv existente usa $(& $VenvPy --version), e o projeto pede 3.12 ou 3.13. Apague $Venv e rode de novo."
+        Falhar ("o .venv existente usa $(& $VenvPy --version), e o projeto pede 3.12 ou 3.13. " +
+            "Apague $Venv e rode de novo.")
     }
     Write-Host "já existe ($(& $VenvPy --version)); só atualizo os pacotes"
 } else {
@@ -207,7 +211,8 @@ Write-Host ''
 if ($codigoDoctor -eq 0) {
     Write-Host 'Tudo pronto.' -ForegroundColor Green
 } else {
-    Write-Host 'Instalação feita. O doctor apontou o que ainda falta (linhas FALTA acima): modelos de rosto em modelos\' -ForegroundColor Yellow
-    Write-Host '(veja modelos\LEIA.md), ffmpeg em bin\ ou no PATH, ou encerramentos em 3 - Identidade\.' -ForegroundColor Yellow
+    $aviso = 'Instalação feita. O doctor apontou o que ainda falta (linhas FALTA acima): modelos de rosto em ' +
+        'modelos\ (veja modelos\LEIA.md), ffmpeg em bin\ ou no PATH, ou encerramentos em 3 - Identidade\.'
+    Write-Host $aviso -ForegroundColor Yellow
 }
 Write-Host "Para abrir o painel: $VenvPy -m esteira painel"

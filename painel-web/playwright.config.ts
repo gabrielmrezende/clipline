@@ -24,7 +24,8 @@ export default defineConfig({
   webServer: {
     cwd: "..",
     command:
-      `node painel-web/e2e/preparar.mjs && "${python}" -m esteira painel --cortes painel-web/e2e/.cortes --porta ${porta}`,
+      `node painel-web/e2e/preparar.mjs && ` +
+      `"${python}" -m esteira painel --cortes painel-web/e2e/.cortes --porta ${porta}`,
     url: endereco,
     env: {
       ESTEIRA_PAINEL_MONTAGEM_FALSA: "1",
