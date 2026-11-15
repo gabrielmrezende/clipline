@@ -1,3 +1,4 @@
+import hashlib
 import json
 import secrets
 import time
@@ -31,6 +32,14 @@ def partes(tamanho: int) -> list[tuple[int, int]]:
     lista = [(i * PARTE, (i + 1) * PARTE - 1) for i in range(total)]
     lista[-1] = (lista[-1][0], tamanho - 1)
     return lista
+
+
+def pkce_hex() -> tuple[str, str]:
+    """(code_verifier, code_challenge) no formato do Login Kit para desktop do TikTok: o desafio é o SHA-256 do
+    verificador em hexadecimal (não em base64url, como no RFC 7636 e no Google). O verificador tem de 43 a 128
+    caracteres não reservados; token_urlsafe(64) dá 86, só letras, dígitos, - e _."""
+    verificador = secrets.token_urlsafe(64)
+    return verificador, hashlib.sha256(verificador.encode("ascii")).hexdigest()
 
 
 def _token(campos: dict) -> dict:
@@ -134,14 +143,16 @@ def conectar() -> None:
     credenciais.gravar(REDE, "client_key", chave)
     credenciais.gravar(REDE, "client_secret", segredo)
     estado = secrets.token_urlsafe(16)
+    verificador, desafio = pkce_hex()
     url = AUTORIZAR + "?" + urllib.parse.urlencode({
         "client_key": chave, "scope": ESCOPO, "response_type": "code",
         "redirect_uri": REDIRECIONAMENTO, "state": estado,
+        "code_challenge": desafio, "code_challenge_method": "S256",
     })
     codigo = esperar_codigo(PORTA, estado, url)
     dados = _token({
         "client_key": chave, "client_secret": segredo, "code": codigo,
-        "grant_type": "authorization_code", "redirect_uri": REDIRECIONAMENTO,
+        "grant_type": "authorization_code", "redirect_uri": REDIRECIONAMENTO, "code_verifier": verificador,
     })
     credenciais.gravar(REDE, "refresh_token", dados["refresh_token"])
     credenciais.gravar(REDE, "open_id", dados.get("open_id", ""))
