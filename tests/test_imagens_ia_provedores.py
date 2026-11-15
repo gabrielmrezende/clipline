@@ -73,7 +73,7 @@ def test_openai_sucesso_pedido_conforme_documentacao():
     (p,) = pedir.pedidos
     assert p["metodo"] == "POST"
     assert p["url"] == "https://api.openai.com/v1/images/generations"
-    assert p["corpo"] == {"model": "gpt-image-2", "prompt": "um gato", "size": "1024x1536", "quality": "medium", "n": 1}
+    assert p["corpo"] == {"model": "gpt-image-2", "prompt": "um gato", "size": "864x1536", "quality": "medium", "n": 1}
     assert p["cabecalhos"]["Authorization"] == f"Bearer {CHAVE}"
     assert CHAVE not in p["url"] and CHAVE not in json.dumps(p["corpo"])
 
@@ -250,3 +250,22 @@ def test_provedor_atual_sem_fabricas_devolve_os_adaptadores():
     atual = config.provedor_atual(cfg)
     assert isinstance(atual, Google)
     assert atual.nome == "google"
+
+
+@pytest.mark.parametrize("modelo,esperado", [
+    ("gpt-image-2", "864x1536"), ("gpt-image-2-2026-04-21", "864x1536"), ("gpt-image-2.5-flare", "864x1536"),
+    ("gpt-image-1.5", "1024x1536"), ("gpt-image-1-mini", "1024x1536"), ("chatgpt-image-latest", "1024x1536"),
+])
+def test_openai_pede_o_vertical_mais_proximo_de_9_16(modelo, esperado):
+    pedir = PedirFalso(OK_OPENAI)
+    OpenAI({**CFG_OPENAI, "modelo": modelo}, pedir, ler(CHAVE)).gerar("um gato")
+    assert pedir.pedidos[0]["corpo"]["size"] == esperado
+
+
+def test_tamanho_9_16_respeita_as_regras_da_documentacao():
+    from esteira.imagens_ia.openai import TAMANHO_9_16
+
+    largura, altura = map(int, TAMANHO_9_16.split("x"))
+    assert largura % 16 == 0 and altura % 16 == 0 and max(largura, altura) <= 3840
+    assert 655_360 <= largura * altura <= 8_294_400 and largura * altura < 1024 * 1536
+    assert largura * 16 == altura * 9
