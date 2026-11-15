@@ -14,6 +14,7 @@ class Resultado:
     estado: str
     link: str = ""
     id_rede: str = ""
+    aviso: str = ""  # o envio saiu, mas um extra falhou (playlist, miniatura): vai para o erro do item
 
 
 class ErroRede(Exception):
@@ -46,12 +47,22 @@ def _motivo(dados: dict) -> str:
     return str(texto)[:200] or "sem detalhe"
 
 
-def pedir(metodo: str, url: str, corpo: bytes | None = None, cabecalhos: dict | None = None) -> tuple[int, dict, bytes]:
+def cabecalho(cabecalhos: dict, nome: str) -> str:
+    """Um cabeçalho da resposta, sem diferenciar maiúsculas."""
+    nome = nome.lower()
+    return next((str(valor) for chave, valor in cabecalhos.items() if chave.lower() == nome), "")
+
+
+def pedir(metodo: str, url: str, corpo: bytes | None = None, cabecalhos: dict | None = None,
+          aceitar: tuple[int, ...] = ()) -> tuple[int, dict, bytes]:
+    """`aceitar`: códigos de erro que voltam como resposta (o 308 do envio retomável do YouTube)."""
     pedido = urllib.request.Request(url, data=corpo, method=metodo, headers={"User-Agent": USER_AGENT, **(cabecalhos or {})})
     try:
         with _urlopen(pedido, timeout=TEMPO) as resposta:
             return resposta.status, dict(resposta.headers), resposta.read()
     except urllib.error.HTTPError as erro:
+        if erro.code in aceitar:
+            return erro.code, dict(erro.headers.items()) if erro.headers else {}, erro.read() or b""
         dados = json_de(erro.read() or b"")
         temporario = erro.code == 429 or erro.code >= 500
         raise ErroRede(f"HTTP {erro.code}: {_motivo(dados)}", temporario, erro.code, dados) from None

@@ -235,6 +235,15 @@ def test_desinstalar_tarefa_que_nao_existe_so_avisa(monkeypatch, capsys):
     assert "Tarefa removida no Agendador do Windows." in saida
 
 
+def test_conectar_youtube_com_playlist(monkeypatch):
+    from esteira.publicar import youtube
+    vistos = []
+    monkeypatch.setattr(youtube, "conectar", lambda playlist=False: vistos.append(playlist))
+    assert cli.principal(["publicar", "conectar", "youtube", "--playlist"]) == 0
+    assert cli.principal(["publicar", "conectar", "youtube"]) == 0
+    assert vistos == [True, False]
+
+
 def test_cancelar_com_rodar_em_andamento_recusa(tmp_path, capsys):
     gravar_fila(tmp_path, [Item(1, "instagram", DATA)])
     with fila.trava(comandos.TRAVA):

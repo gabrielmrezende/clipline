@@ -2,6 +2,7 @@ import contextlib
 import hashlib
 import os
 import re
+import urllib.parse
 from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
@@ -64,6 +65,81 @@ def ler_post(caminho: Path) -> Textos:
     if not caminho.exists():
         raise ErroPost(f"post.md não encontrado: {caminho}")
     return interpretar_post(caminho.read_text("utf-8"))
+
+
+# --- campos opcionais do YouTube: tags, playlist e miniatura ------------------------------------------------
+# Ficam na seção ## YouTube, antes de 'Descrição:' (o que vem depois dela é a descrição). Sem eles, o post.md
+# continua valendo como sempre; o painel não os edita e o gravar_textos não mexe nessas linhas.
+
+LIMITE_TAGS = 500  # caracteres, contando vírgulas e as aspas que o YouTube põe em tag com espaço
+TIPOS_MINIATURA = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png"}
+LIMITE_MINIATURA = 50 * 1024 * 1024  # o máximo do thumbnails.set
+
+
+@dataclass(frozen=True)
+class ExtrasYouTube:
+    tags: tuple[str, ...] = ()
+    playlist: str = ""
+    miniatura: Path | None = None  # caminho resolvido a partir da pasta do post.md
+
+    def __bool__(self) -> bool:
+        return bool(self.tags or self.playlist or self.miniatura)
+
+
+def _campo_antes_da_descricao(corpo: str, nome: str) -> str:
+    descricao = re.search(r"^Descrição:\s*$", corpo, re.M)
+    cabecalho = corpo[:descricao.start()] if descricao else corpo
+    achado = re.search(rf"^{nome}:(.*)$", cabecalho, re.M)
+    return achado.group(1).strip() if achado else ""
+
+
+def _id_da_playlist(valor: str) -> str:
+    """Aceita o ID (PL...) ou o link da playlist (...?list=PL...)."""
+    if "list=" in valor:
+        return urllib.parse.parse_qs(urllib.parse.urlsplit(valor).query).get("list", [""])[0].strip()
+    return valor
+
+
+def interpretar_extras_youtube(texto: str) -> tuple[tuple[str, ...], str, str]:
+    """(tags, playlist, miniatura como escrita) da seção ## YouTube; vazios quando não há."""
+    corpo = _secoes(texto).get("YouTube", "")
+    tags = tuple(dict.fromkeys(t.strip() for t in _campo_antes_da_descricao(corpo, "Tags").split(",") if t.strip()))
+    playlist = _id_da_playlist(_campo_antes_da_descricao(corpo, "Playlist"))
+    return tags, playlist, _campo_antes_da_descricao(corpo, "Miniatura")
+
+
+def ler_extras_youtube(caminho: Path) -> ExtrasYouTube:
+    caminho = Path(caminho)
+    if not caminho.exists():
+        raise ErroPost(f"post.md não encontrado: {caminho}")
+    tags, playlist, miniatura = interpretar_extras_youtube(caminho.read_text("utf-8"))
+    return ExtrasYouTube(tags, playlist, (caminho.parent / miniatura).resolve() if miniatura else None)
+
+
+def tamanho_das_tags(tags: tuple[str, ...]) -> int:
+    """Como o YouTube conta: vírgulas entre as tags e aspas em volta das que têm espaço."""
+    return sum(len(t) + (2 if " " in t else 0) for t in tags) + max(len(tags) - 1, 0)
+
+
+def conferir_extras_youtube(extras: ExtrasYouTube, pasta_corte: Path) -> list[str]:
+    problemas = []
+    if tamanho_das_tags(extras.tags) > LIMITE_TAGS:
+        problemas.append(f"youtube: tags com mais de {LIMITE_TAGS} caracteres")
+    if any(re.search(r"[<>]", t) for t in extras.tags):
+        problemas.append("youtube: tag com < ou >")
+    if extras.playlist and not re.fullmatch(r"[A-Za-z0-9_-]+", extras.playlist):
+        problemas.append("youtube: playlist inválida; use o ID (PL...) ou o link da playlist")
+    miniatura = extras.miniatura
+    if miniatura is not None:
+        if not miniatura.is_relative_to(Path(pasta_corte).resolve()):
+            problemas.append("youtube: a miniatura precisa estar na pasta do corte")
+        elif miniatura.suffix.lower() not in TIPOS_MINIATURA:
+            problemas.append("youtube: a miniatura precisa ser .jpg ou .png")
+        elif not miniatura.is_file():
+            problemas.append(f"youtube: miniatura não encontrada: {miniatura.name}")
+        elif miniatura.stat().st_size > LIMITE_MINIATURA:
+            problemas.append("youtube: miniatura com mais de 50 MB")
+    return problemas
 
 
 def tem_quebra_de_linha(texto: str) -> bool:

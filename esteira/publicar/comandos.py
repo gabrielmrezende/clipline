@@ -50,7 +50,10 @@ def _redes(texto: str | None) -> list[str]:
 def conectar(args) -> int:
     from esteira.publicar import instagram, tiktok, youtube
 
-    {"youtube": youtube, "instagram": instagram, "tiktok": tiktok}[args.rede].conectar()
+    if args.rede == "youtube" and getattr(args, "playlist", False):
+        youtube.conectar(playlist=True)
+    else:
+        {"youtube": youtube, "instagram": instagram, "tiktok": tiktok}[args.rede].conectar()
     print(f"{args.rede}: conectado")
     return 0
 
@@ -189,6 +192,8 @@ def registrar(comandos_cli) -> None:
 
     c = acoes.add_parser("conectar")
     c.add_argument("rede", choices=REDES)
+    c.add_argument("--playlist", action="store_true",
+                   help="youtube: pede também a permissão de pôr o vídeo na playlist do post.md")
     c.set_defaults(funcao=_seguro(conectar))
 
     c = acoes.add_parser("agendar")
