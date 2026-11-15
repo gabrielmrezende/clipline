@@ -1,0 +1,171 @@
+/* Trecho do corte: a transcrição ao redor, onde se marca um início e um fim novos. */
+.editor-trecho {
+  --voz-0: var(--azul);
+  --voz-1: #a3367f;
+  --voz-2: #0d7350;
+  --voz-3: #875000;
+}
+@media (prefers-color-scheme: dark) {
+  .editor-trecho {
+    --voz-1: #f08bd0;
+    --voz-2: #63d4a4;
+    --voz-3: #f2c46e;
+  }
+}
+
+.modo-trecho {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 1rem;
+  margin: 0.5rem 0;
+  padding: 0;
+  border: 0;
+}
+.modo-trecho legend {
+  float: left;
+  padding: 0;
+  margin-right: 0.25rem;
+  color: var(--grafite);
+}
+.modo-trecho label {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  cursor: pointer;
+}
+
+.medidas-trecho {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1.25rem;
+  font-variant-numeric: tabular-nums;
+}
+.duracao-fora,
+.duracao-fora strong {
+  color: var(--erro);
+}
+
+.acoes-trecho {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.transcricao-trecho {
+  position: relative; /* o offsetTop das palavras conta a partir da caixa */
+  display: grid;
+  gap: 0.75rem;
+  max-height: 22rem;
+  overflow-y: auto;
+  margin: 0.75rem 0;
+  padding: 0.75rem;
+  border: 1px solid var(--linha-forte);
+  border-radius: var(--raio);
+  background: var(--papel);
+  line-height: 2;
+  overscroll-behavior: contain;
+}
+.transcricao-trecho[aria-disabled="true"] {
+  opacity: 0.6;
+}
+
+.fala-trecho {
+  padding-left: 0.7rem;
+  border-left: 3px solid var(--voz-0);
+}
+.fala-trecho.voz-1 {
+  border-left-color: var(--voz-1);
+}
+.fala-trecho.voz-2 {
+  border-left-color: var(--voz-2);
+}
+.fala-trecho.voz-3 {
+  border-left-color: var(--voz-3);
+}
+.falante-trecho {
+  display: block;
+  font-size: 0.8125rem;
+  font-weight: 650;
+  line-height: 1.5;
+  color: var(--voz-0);
+}
+.voz-1 .falante-trecho {
+  color: var(--voz-1);
+}
+.voz-2 .falante-trecho {
+  color: var(--voz-2);
+}
+.voz-3 .falante-trecho {
+  color: var(--voz-3);
+}
+
+.palavra {
+  padding: 0.15rem 0.1rem;
+  border-radius: 4px;
+  cursor: pointer;
+  user-select: none; /* Shift+clique marca o fim, não seleciona texto */
+  transition: background-color 0.12s ease;
+}
+.palavra:hover {
+  background: var(--nevoa);
+}
+.palavra.no-corte-atual {
+  text-decoration: underline;
+  text-decoration-color: var(--borda-campo);
+  text-underline-offset: 0.3em;
+}
+.palavra.de-outro-corte {
+  background: var(--cinza-fundo);
+  color: var(--grafite);
+}
+.palavra.dentro {
+  background: var(--azul-claro);
+  color: var(--azul-texto);
+}
+.palavra.dentro.de-outro-corte {
+  background: var(--alerta-fundo); /* o trecho novo sobrepõe outro corte */
+  color: var(--alerta);
+}
+.palavra.ponta-inicio {
+  box-shadow: inset 3px 0 0 var(--azul);
+}
+.palavra.ponta-fim {
+  box-shadow: inset -3px 0 0 var(--azul);
+}
+.palavra.ponta-inicio.ponta-fim {
+  box-shadow:
+    inset 3px 0 0 var(--azul),
+    inset -3px 0 0 var(--azul);
+}
+.palavra.em-foco {
+  outline: 1px dashed var(--borda-campo);
+  outline-offset: 1px;
+}
+.palavra:focus-visible {
+  outline: 2px solid var(--azul);
+  outline-offset: 2px;
+}
+
+.pausa-trecho {
+  margin: 0 0.35rem;
+  font-size: 0.75rem;
+  color: var(--grafite);
+  white-space: nowrap;
+}
+
+.conferencia-trecho h3 {
+  margin: 0.75rem 0 0.25rem;
+  font-size: 0.9375rem;
+}
+.resumo-trecho {
+  margin: 0.25rem 0;
+  padding-left: 1.25rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .palavra {
+    transition: none;
+  }
+}

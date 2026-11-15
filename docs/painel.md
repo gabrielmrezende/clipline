@@ -227,3 +227,32 @@ de cada vez, na ordem dos cliques. O bloco de cada um mostra `Na fila`, o andame
 Rotas: `GET /api/tarefas` (a lista), `GET /api/tarefas/{id}` (um pedido), `POST /api/tarefas/{id}/cancelar` (com o
 corpo `{"confirmado": true}`; 409 se já terminou ou se não para no meio) e `GET /api/tarefas/eventos` (evento
 `tarefas` com a lista inteira a cada mudança e um comentário de vida a cada 15 s).
+
+## Trecho
+
+O bloco **Trecho** da tela do corte troca o início e o fim do corte sem editar o `aprovados.json` à mão (é o que
+antes exigia mudar o JSON e rodar `preparar --numero N --forcar` e `montar --numero N`).
+
+- A transcrição mostra 30 s antes e depois do corte, com quem fala em cada trecho (cores e nomes do `vozes`), as
+  pausas longas e os outros cortes em cinza. O trecho de agora fica sublinhado; o novo, destacado.
+- Clique numa palavra para marcar o início; com Shift, marca o fim. A escolha `O clique marca` inverte isso (útil no
+  celular, sem Shift). No teclado: as setas andam pelas palavras, `Home`/`End` e `PageUp`/`PageDown` saltam, `Enter`
+  marca e `Shift+Enter` marca a outra ponta. `Mostrar mais 30 s antes/depois` amplia a janela (até 10 min).
+- A duração aparece com os limites do `clipline.toml` (60 a 120 s, sem ele). Cada seleção é conferida com as regras do
+  `validar` (dentro do episódio, duração, ponta numa palavra, sem cortar frase no meio); um problema impede a troca.
+  Sobrepor outro corte só gera um aviso, como no `validar`, que não tem essa regra.
+- Antes de confirmar, o painel diz o que muda e o que se perde. Confirmado, a troca entra na fila (uma de cada vez
+  por corte, como a música e a montagem):
+  1. Copia o `aprovados.json` para `aprovados-anteriores/aprovados-AAAAMMDD-HHMMSS.json` e grava o trecho novo
+     (só `inicio` e `fim` desse corte mudam; `origem` e o resto ficam como estavam).
+  2. Se o corte já foi preparado, prepara de novo (`edicoes.md` e a legenda são refeitos) e, se ele tinha vídeo,
+     monta de novo. Corte ainda não preparado: só o `aprovados.json` muda.
+  3. Preserva o que o `preparar --forcar` desfaria: a música e o volume escolhidos (o `uso.json` fica como estava),
+     as telas da legenda corrigidas no painel (quando o texto daquela tela continua igual no trecho novo) e os
+     momentos de imagem do `pedidos.json`, que passam para os tempos novos com as imagens prontas renomeadas. Os
+     momentos que ficam fora do trecho novo são descartados, com o motivo, e aparecem como aviso.
+- Se o preparar ou a montagem falham, tudo volta ao que era. Se o painel cai no meio, a troca é desfeita na próxima
+  vez que ele abrir (o marcador fica em `trabalho/trecho-em-andamento.json`).
+- `video-final/` nunca é tocado. Se o corte estava aprovado, a aprovação deixa de valer: confira o corte novo e
+  aprove de novo. O enquadramento (`planos`) não é refeito: a parte nova fica no centro, sem zoom, até rodar
+  `planos --numero N --forcar` no terminal.

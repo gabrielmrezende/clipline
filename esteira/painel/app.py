@@ -25,12 +25,14 @@ from esteira.painel.leitura import CaminhoProibido, NaoEncontrado
 from esteira.painel.fila import ARQUIVO as ARQUIVO_FILA
 from esteira.painel.fila import Fila
 from esteira.painel.rotas import _TRAVA_GRAVACAO, roteador
+from esteira.painel.rotas_editor import roteador as roteador_editor
 from esteira.painel.rotas_imagens import roteador as roteador_imagens
 from esteira.painel.rotas_musica import roteador as roteador_musica
 from esteira.painel.rotas_publicar import roteador as roteador_publicar
 from esteira.painel.rotas_tarefas import avisar_ao_fechar, fechar_eventos
 from esteira.painel.rotas_tarefas import roteador as roteador_tarefas
 from esteira.painel.troca_musica import recuperar_trocas_interrompidas, trocar_musica
+from esteira.painel.troca_trecho import recuperar_trechos_interrompidos
 
 ESPERA_AO_DESLIGAR = 120  # segundos esperando a montagem atual quando o painel fecha
 
@@ -66,6 +68,8 @@ def criar_app(
     tem_chave: Callable[[str], bool] = chaves.tem_chave,
     config_ia: Path = config_imagens.ARQUIVO,
 ) -> FastAPI:
+    for corte in recuperar_trechos_interrompidos(cortes):
+        print(f"Troca de trecho interrompida desfeita: {corte}")
     for corte in recuperar_trocas_interrompidas(cortes):
         print(f"Troca de música interrompida desfeita: {corte}")
 
@@ -134,6 +138,7 @@ def criar_app(
     app.include_router(roteador_imagens)
     app.include_router(roteador_publicar)
     app.include_router(roteador_tarefas)
+    app.include_router(roteador_editor)
 
     if estatico is not None and (Path(estatico) / "index.html").is_file():
         _servir_estatico(app, Path(estatico).resolve())
