@@ -63,6 +63,17 @@ const AJUDA: { teclas: string[]; texto: string }[] = [
   { teclas: ["?"], texto: "Abrir esta ajuda" },
 ];
 
+/** O nome falado das teclas de símbolo: com a pontuação no padrão, o leitor de tela pula "," e ".". */
+const NOME_DA_TECLA: Record<string, string> = {
+  "←": "seta para a esquerda",
+  "→": "seta para a direita",
+  ",": "vírgula",
+  ".": "ponto",
+  "<": "menor que",
+  ">": "maior que",
+  "?": "interrogação",
+};
+
 const INTERATIVOS = "button, a[href], summary, [role='button'], [role='tab'], [role='radio'], [role='checkbox']";
 const COM_SETAS = "[role='tab'], [role='radio'], [role='slider'], [role='listbox'], [role='menuitem'], [role='option']";
 
@@ -117,7 +128,12 @@ function SobreposicaoAreas({ rede }: { rede: Rede }) {
   return (
     <div className="areas-rede" aria-hidden="true" data-rede={rede}>
       {cobertas.map((c) => (
-        <span key={c.rotulo} className="area-coberta" style={pos(c)}>
+        // A coluna dos botões é estreita: o rótulo dela corre na vertical (a tela é 9:16).
+        <span
+          key={c.rotulo}
+          className={c.largura * 9 < c.altura * 16 ? "area-coberta em-pe" : "area-coberta"}
+          style={pos(c)}
+        >
           <span className="area-rotulo">{`${nome}: ${c.rotulo}`}</span>
         </span>
       ))}
@@ -349,7 +365,16 @@ export function Players({ ep, n, videoFinal, videoRef, versao, montando = false 
               <div key={a.texto} className="atalho">
                 <dt>
                   {a.teclas.map((t) => (
-                    <kbd key={t}>{t}</kbd>
+                    <kbd key={t}>
+                      {NOME_DA_TECLA[t] ? (
+                        <>
+                          <span aria-hidden="true">{t}</span>
+                          <span className="so-leitor">{NOME_DA_TECLA[t]}</span>
+                        </>
+                      ) : (
+                        t
+                      )}
+                    </kbd>
                   ))}
                 </dt>
                 <dd>{a.texto}</dd>

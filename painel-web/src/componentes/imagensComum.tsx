@@ -27,7 +27,9 @@ export function confirmacaoDeFotos(r: ResumoFotos, substituidas: string): Opcoes
 /** Confirmação de gerar imagens de IA: gasta dinheiro, então o custo vai em destaque. */
 export function confirmacaoDeIa(o: OrcamentoIa): OpcoesConfirmacao {
   return {
-    titulo: `Gerar ${plural(o.imagens, "imagem", "imagens")} com ${o.provedor} (${o.modelo}), ${formatarDolar(o.custo_usd)}?`,
+    titulo:
+      `Gerar ${plural(o.imagens, "imagem", "imagens")} com ${o.provedor} (${o.modelo}), ` +
+      `${formatarDolar(o.custo_usd)}?`,
     custo: formatarDolar(o.custo_usd),
     confirmar: "Gerar",
   };

@@ -27,7 +27,15 @@ function Carregando({ rotulo, className, children }: { rotulo: string; className
 }
 
 /** Algumas linhas de texto. */
-export function EsqueletoLinhas({ rotulo, linhas = 3, className }: { rotulo: string; linhas?: number; className?: string }) {
+export function EsqueletoLinhas({
+  rotulo,
+  linhas = 3,
+  className,
+}: {
+  rotulo: string;
+  linhas?: number;
+  className?: string;
+}) {
   return (
     <Carregando rotulo={rotulo} className={className}>
       {Array.from({ length: linhas }, (_, i) => (

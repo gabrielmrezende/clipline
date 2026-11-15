@@ -187,7 +187,9 @@ describe("Players", () => {
       tecla("?", botao);
       const ajuda = screen.getByRole("dialog", { name: "Atalhos do player" });
       expect(within(ajuda).getByText("Quadro anterior ou seguinte (pausa)")).toBeTruthy();
-      expect(within(ajuda).getAllByText(/./, { selector: "kbd" }).length).toBeGreaterThan(8);
+      expect(ajuda.querySelectorAll("kbd").length).toBeGreaterThan(8);
+      expect(within(ajuda).getByText("vírgula").className).toBe("so-leitor");
+      expect(within(ajuda).getByText("seta para a esquerda")).toBeTruthy();
       fireEvent.keyDown(document.activeElement!, { key: "Escape" });
       expect(screen.queryByRole("dialog")).toBeNull();
       expect(document.activeElement).toBe(botao);

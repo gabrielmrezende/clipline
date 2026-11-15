@@ -48,7 +48,8 @@ function useUltimoAlvo() {
   const alvo = useRef<Element | null>(null);
   useEffect(() => {
     function guardar(e: Event) {
-      const el = e.target instanceof Element ? e.target.closest("button, a, input, select, textarea, [tabindex]") : null;
+      const origem = e.target instanceof Element ? e.target : null;
+      const el = origem?.closest("button, a, input, select, textarea, [tabindex]") ?? null;
       if (el && !el.closest("dialog")) alvo.current = el;
     }
     document.addEventListener("pointerdown", guardar, true);
@@ -113,7 +114,13 @@ function IconeTom({ tom }: { tom: TomConfirmacao }) {
       {tom === "custo" ? (
         <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2">
           <circle cx="12" cy="12" r="9" />
-          <path d="M15 9.2c-.5-1-1.7-1.6-3-1.6-1.7 0-3 .9-3 2.2 0 3 6 1.6 6 4.5 0 1.3-1.3 2.2-3 2.2-1.4 0-2.6-.7-3.1-1.7M12 6v1.6M12 16.4V18" />
+          <path
+            d={
+              "M15 9.2c-.5-1-1.7-1.6-3-1.6-1.7 0-3 .9-3 2.2 0 3 6 1.6 6 4.5 " +
+              "0 1.3-1.3 2.2-3 2.2-1.4 0-2.6-.7-3.1-1.7"
+            }
+          />
+          <path d="M12 6v1.6M12 16.4V18" />
         </svg>
       ) : (
         <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2">

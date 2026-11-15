@@ -43,7 +43,7 @@ def test_ler_edicoes_texto_com_espacos_e_pontuacao():
     assert ler_edicoes("- 5.10s a 5.40s: repetição não,\n") == [Edicao(5.1, 5.4, "repetição", "não,")]
 
 
-# --- remoções no tempo do corte --------------------------------------------------------------------------------------
+# --- remoções no tempo do corte -------------------------------------------------------------------------------------
 
 
 def test_cada_corte_entre_faixas_vira_uma_remocao_no_tempo_do_corte():

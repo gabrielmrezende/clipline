@@ -72,7 +72,8 @@ describe("Confirmacao", () => {
     expect(d.tagName).toBe("DIALOG");
     expect(d.getAttribute("aria-modal")).toBe("true");
     expect(tituloDoDialogo()).toBe("Baixar 2 fotos (1,5 MB) de Wikimedia Commons?");
-    const descricao = d.getAttribute("aria-describedby")!.split(" ").map((id) => document.getElementById(id)!.textContent);
+    const ids = d.getAttribute("aria-describedby")!.split(" ");
+    const descricao = ids.map((id) => document.getElementById(id)!.textContent);
     expect(descricao.join(" ")).toContain("As fotos baixadas antes neste corte serão substituídas.");
     expect(descricao.join(" ")).toContain("As imagens mudaram desde a última montagem.");
     expect(within(d).getByRole("listitem").textContent).toBe("tamanho desconhecido: f1-2.jpg");

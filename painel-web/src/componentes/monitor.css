@@ -123,6 +123,14 @@
   line-height: 1.4;
   white-space: nowrap;
 }
+.area-coberta.em-pe {
+  justify-content: center;
+}
+.area-coberta.em-pe .area-rotulo {
+  margin: 0.25rem 0;
+  padding: 0.35rem 0.05rem;
+  writing-mode: vertical-rl;
+}
 .area-livre {
   position: absolute;
   border: 1.5px dashed rgba(255, 255, 255, 0.85);
