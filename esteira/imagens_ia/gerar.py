@@ -14,6 +14,7 @@ from esteira.receita import duracao_principal, ler_receita
 
 MAXIMO_VERSOES = 3
 JA_TEM_TODAS = f"Este momento já tem {MAXIMO_VERSOES} versões"
+Classificar = Callable[[str], str | None]  # o motivo para recusar o prompt (pessoa real), ou None
 
 
 class ErroPrompt(ErroImagem):
@@ -88,7 +89,7 @@ def _versao_livre(pasta_corte: Path, chave: str) -> int:
     raise ErroPrompt(JA_TEM_TODAS)
 
 
-def _conferir(m: Momento | None, pessoas: list[str]) -> Momento:
+def _conferir(m: Momento | None, pessoas: list[str], classificar: Classificar | None = None) -> Momento:
     if m is None:
         raise ErroPrompt("Momento não encontrado")
     if m.tipo != "ia":
@@ -102,6 +103,9 @@ def _conferir(m: Momento | None, pessoas: list[str]) -> Momento:
         raise ErroPrompt(f"Cita pessoa real ({pessoa}): não pode gerar")
     if not m.aprovado:
         raise ErroPrompt("Prompt não aprovado")
+    motivo = classificar(m.prompt) if classificar is not None else None  # por último: pode custar uma chamada
+    if motivo:
+        raise ErroPrompt(f"Pode retratar pessoa real ({motivo}): não pode gerar")
     return m
 
 
@@ -121,11 +125,17 @@ def gerar_momento(
     pessoas: list[str],
     base: Path | None = None,
     agora: Callable[[], datetime] = datetime.now,
+    classificar: Classificar | None = None,
 ) -> str:
+    """`classificar`: a segunda trava de pessoa real; sem ela, vale a do clipline.toml (desligada por padrão)."""
     pasta_corte = Path(pasta_corte)
     trabalho = pasta_corte / TRABALHO
     momentos = _momentos(pasta_corte)
-    m = _conferir(next((x for x in momentos if chave_momento(x) == chave), None), pessoas)
+    if classificar is None:
+        from esteira.classificador import do_config
+
+        classificar = do_config(trabalho, pessoas, base)
+    m = _conferir(next((x for x in momentos if chave_momento(x) == chave), None), pessoas, classificar)
     versao = _versao_livre(pasta_corte, chave)
     nome = arquivo_de_versao(chave, versao)
     saida = caminhos.garantir_escrita(pasta_corte / IMAGENS_SUGERIDAS / nome, base_extra=base)
@@ -171,6 +181,7 @@ def gerar_cortes(
     base: Path | None = None,
     progresso: Callable[[str], None] = lambda _: None,
     permitidos: set[tuple[Path, str]] | None = None,
+    classificar: Classificar | None = None,
 ) -> tuple[list[str], list[str]]:
     """Gera os pendentes; com `permitidos` (pasta do corte, chave), só os que o dono confirmou.
 
@@ -189,7 +200,7 @@ def gerar_cortes(
             progresso(f"Gerando {i} de {total}…")
             chave = chave_momento(m)
             try:
-                arquivos.append(gerar_momento(pasta, chave, provedor, config, pessoas, base))
+                arquivos.append(gerar_momento(pasta, chave, provedor, config, pessoas, base, classificar=classificar))
             except RegistroIncompleto as aviso:
                 arquivos.append(aviso.arquivo)
                 avisos.append(f"{pasta.name} {chave}: {aviso}")

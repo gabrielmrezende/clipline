@@ -200,7 +200,7 @@ def _montar(args) -> int:
 
 
 def _imagens_conectar(provedor: str) -> int:
-    if provedor not in PROVEDORES:
+    if provedor not in PROVEDORES and provedor != agente.PROVEDOR_ANTHROPIC:  # anthropic: revisão visual e classificador
         print(f"Provedor desconhecido: {provedor}. Use um destes: {', '.join(PROVEDORES)}.", file=sys.stderr)
         return 2
     chave = getpass.getpass(f"Chave da API ({provedor}): ").strip()
@@ -408,6 +408,8 @@ def _baixar(args) -> int:
     print(f"Origem: {entrada.arquivo_de_origem(video)}")
     print(f'Próximo passo: esteira transcrever "{video}" --quadro <quadro> --numero <n> --convidado <nome>')
     return 0
+
+
 def _erro_de_configuracao() -> str | None:
     """clipline.toml quebrado: melhor parar do que rodar com as pastas ou a identidade erradas."""
     if caminhos.ERRO_CONFIG:
@@ -417,6 +419,54 @@ def _erro_de_configuracao() -> str | None:
     except config.ErroConfig as erro:
         return str(erro)
     return None
+
+
+# --- agente: servidor MCP e revisão visual por IA ---------------------------------------------------------
+
+
+def _mcp(args) -> int:
+    try:
+        from esteira import mcp_servidor
+        import mcp  # noqa: F401
+    except ImportError:
+        print('O servidor MCP precisa do pacote mcp: rode ".venv\\Scripts\\python.exe -m pip install -e .[mcp]"',
+              file=sys.stderr)
+        return 1
+    sys.stderr.reconfigure(encoding="utf-8")  # o log do servidor (stderr) vai para o cliente MCP, que lê UTF-8
+    mcp_servidor.rodar(Path(args.cortes).resolve() if args.cortes else CORTES)
+    return 0
+
+
+def _revisao_visual(args) -> int:
+    from esteira import config, revisao_visual
+
+    pasta = garantir_escrita(Path(args.pasta))
+    numeros = set(args.numero) if args.numero else None
+    plano = revisao_visual.planejar(pasta, numeros, config.atual().ia_modelo_revisao, args.quadros)
+    print(revisao_visual.texto_do_resumo(plano))
+    if not args.confirmar:
+        print("\nNada foi enviado. Para pedir a revisão, rode de novo com --confirmar.")
+        return 0
+    if not plano.pendentes:
+        print(f"Nada a revisar. Relatório em {revisao_visual.escrever_relatorio(pasta)}")
+        return 0
+    resultados = revisao_visual.revisar(pasta, plano, agente.cliente_anthropic(), progresso=print)
+    codigo = _imprimir(resultados)
+    print(f"Relatório em {pasta / revisao_visual.ARQUIVO}")
+    return codigo
+
+
+def _registrar_agente(comandos) -> None:
+    c = comandos.add_parser("mcp", help="servidor MCP (stdio): a esteira como ferramentas para o agente, sem shell")
+    c.add_argument("--cortes", help="pasta dos episódios (padrão: ../2 - Cortes)")
+    c.set_defaults(funcao=_mcp)
+
+    c = comandos.add_parser("revisao-visual", help="quadros de cada corte.mp4 revisados por IA (revisao-visual.md)")
+    c.add_argument("pasta")
+    c.add_argument("--numero", type=int, action="append")
+    c.add_argument("--quadros", type=int, choices=[4, 5, 6], default=5, help="quadros por corte")
+    c.add_argument("--confirmar", action="store_true", help="manda os quadros ao modelo (gasta; ato do dono)")
+    c.set_defaults(funcao=_revisao_visual)
 
 
 def principal(argv: list[str] | None = None) -> int:
@@ -538,6 +588,7 @@ def principal(argv: list[str] | None = None) -> int:
 
     publicar.registrar(comandos)
     canal.registrar(comandos)
+    _registrar_agente(comandos)
 
     args = parser.parse_args(argv)
     erro_config = None if args.funcao in (_doctor, canal.executar) else _erro_de_configuracao()

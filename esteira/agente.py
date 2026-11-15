@@ -203,3 +203,97 @@ def aprendizado(pasta: Path) -> Path:
     c = comparar(proposta.get("cortes") or [], final.get("cortes") or [])
     caminhos.gravar_atomico(pasta / APRENDIZADO, texto_do_aprendizado(c, proposta.get("origem")))
     return pasta / APRENDIZADO
+
+
+# --- Claude pela API: revisão visual e classificador de pessoa real ---------------------------------------
+#
+# Cada chamada aqui gasta dinheiro. Quem chama decide quando (a revisão visual só com --confirmar do dono; o
+# classificador só dentro da geração de imagem que o dono já confirmou). A chave vem do Gerenciador de Credenciais,
+# como as das imagens de IA (`imagens conectar anthropic`), e nunca de arquivo nem de variável de ambiente.
+
+PROVEDOR_ANTHROPIC = "anthropic"
+# US$ por milhão de tokens (entrada, saída). Modelo fora da tabela: custo desconhecido, a estimativa diz isso.
+PRECOS_POR_MILHAO = {
+    "claude-opus-5-5": (4.00, 20.00),
+    "claude-sonnet-5-5": (2.00, 10.00),
+    "claude-haiku-5-5": (0.10, 0.50),
+}
+
+
+def custo_usd(modelo: str, entrada: int, saida: int) -> float | None:
+    preco = PRECOS_POR_MILHAO.get(modelo)
+    if preco is None:
+        return None
+    return round((entrada * preco[0] + saida * preco[1]) / 1_000_000, 4)
+
+
+def cliente_anthropic(ler_chave: Callable[[str], str | None] | None = None):
+    """O cliente do SDK `anthropic` com a chave guardada no Windows. Sem chave: SemChave, com o comando para guardar."""
+    from esteira.imagens_ia.chaves import ler_chave as ler_do_cofre
+    from esteira.imagens_ia.provedor import SemChave
+
+    chave = (ler_chave or ler_do_cofre)(PROVEDOR_ANTHROPIC)
+    if not chave:
+        raise SemChave(PROVEDOR_ANTHROPIC)
+    try:
+        import anthropic
+    except ImportError:
+        raise ErroAgente('falta o pacote anthropic: instale o extra "ia" (pip install -e ".[ia]")') from None
+    return anthropic.Anthropic(api_key=chave, max_retries=2)
+
+
+def _erros_da_api() -> tuple[type[BaseException], ...]:
+    try:
+        import anthropic
+    except ImportError:
+        return ()
+    return (anthropic.APIError,)
+
+
+def _mensagem_da_api(erro: BaseException) -> str:
+    codigo = getattr(erro, "status_code", None)
+    if codigo in (401, 403):
+        return f"chave da Anthropic recusada: rode python -m esteira imagens conectar {PROVEDOR_ANTHROPIC}"
+    if codigo == 429:
+        return "limite de uso da API da Anthropic: tente de novo mais tarde"
+    if codigo is not None and codigo >= 500:
+        return "API da Anthropic indisponível agora: tente de novo"
+    if codigo is not None:
+        return f"a API da Anthropic recusou o pedido ({codigo})"
+    return "sem conexão com a API da Anthropic"
+
+
+def pedir_json(
+    cliente, modelo: str, sistema: str, conteudo: list[dict], esquema: dict, max_tokens: int, esforco: str
+) -> tuple[dict, dict]:
+    """Uma chamada com saída estruturada (JSON no `esquema`). Devolve (resposta, uso em tokens).
+
+    Recusa do modelo, resposta cortada e erro da API viram ErroAgente com uma frase curta e sem segredo."""
+    try:
+        resposta = cliente.messages.create(
+            model=modelo,
+            max_tokens=max_tokens,
+            system=sistema,
+            messages=[{"role": "user", "content": conteudo}],
+            output_config={"effort": esforco, "format": {"type": "json_schema", "schema": esquema}},
+        )
+    except _erros_da_api() as erro:
+        raise ErroAgente(_mensagem_da_api(erro)) from None
+    uso = getattr(resposta, "usage", None)
+    gasto = {"entrada": int(getattr(uso, "input_tokens", 0) or 0), "saida": int(getattr(uso, "output_tokens", 0) or 0)}
+    if resposta.stop_reason == "refusal":
+        detalhes = getattr(resposta, "stop_details", None)
+        categoria = getattr(detalhes, "category", None)
+        raise ErroAgente(f"o modelo recusou o pedido{f' ({categoria})' if categoria else ''}")
+    if resposta.stop_reason == "max_tokens":
+        raise ErroAgente("a resposta do modelo foi cortada pelo limite de tokens")
+    texto = next((b.text for b in resposta.content if getattr(b, "type", "") == "text"), None)
+    if texto is None:
+        raise ErroAgente("a resposta do modelo veio sem texto")
+    try:
+        dados = json.loads(texto)
+    except json.JSONDecodeError as erro:
+        raise ErroAgente(f"a resposta do modelo tem JSON inválido: {erro.msg}") from None
+    if not isinstance(dados, dict):
+        raise ErroAgente("a resposta do modelo não é um objeto")
+    return dados, gasto

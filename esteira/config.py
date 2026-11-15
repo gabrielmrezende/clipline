@@ -47,6 +47,10 @@ class Config:
     limite_shorts: float = 180.0
     # Canal (clipline init): prefixo dos serviços no Gerenciador de Credenciais (ver docs/configuracao.md)
     credenciais_prefixo: str = "tudo-e-politica"
+    # IA da Anthropic (revisão visual e classificador de pessoa real). Desligada sem chave; a revisão só com --confirmar.
+    ia_classificador: bool = False
+    ia_modelo_classificador: str = "claude-haiku-5-5"
+    ia_modelo_revisao: str = "claude-sonnet-5-5"
     extras: dict = field(default_factory=dict, compare=False)
     # Entrada e idiomas (docs/entrada-e-idiomas.md)
     transcricao_idioma: str = "pt"  # código do Whisper; também escolhe as listas de esteira/idiomas.py
@@ -65,6 +69,10 @@ SECOES = {
 }
 SECOES.update({("transcricao", "idioma"): "transcricao_idioma", ("imagens", "licencas"): "imagens_licencas"})
 SECOES_DE_CAMINHOS = ("pastas", "identidade")  # lidas e conferidas por caminhos.py, fora da Config
+SECOES.update({
+    ("ia", "classificador"): "ia_classificador", ("ia", "modelo_classificador"): "ia_modelo_classificador",
+    ("ia", "modelo_revisao"): "ia_modelo_revisao",
+})
 
 
 def _converter(nome: str, valor, tipo):

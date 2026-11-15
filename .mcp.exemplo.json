@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "clipline": {
+      "type": "stdio",
+      "command": ".venv/Scripts/python.exe",
+      "args": ["-m", "esteira", "mcp"]
+    }
+  }
+}
