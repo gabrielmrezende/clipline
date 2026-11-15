@@ -5,6 +5,7 @@ import { BlocoImagens } from "../componentes/BlocoImagens";
 import { Aprovacao } from "../componentes/Aprovacao";
 import { BlocoMusica } from "../componentes/BlocoMusica";
 import { BlocoPublicacao } from "../componentes/BlocoPublicacao";
+import { EditorDeCorte } from "../componentes/EditorDeCorte";
 import { EditorLegenda } from "../componentes/EditorLegenda";
 import { EditorPost } from "../componentes/EditorPost";
 import { LinhaDoCorte } from "../componentes/LinhaDoCorte";
@@ -16,6 +17,7 @@ const CORTE_NAO_MONTADO = "corte não montado";
 
 const SECOES = [
   { id: "titulo-info", rotulo: "Informações" },
+  { id: "titulo-trecho", rotulo: "Trecho" },
   { id: "titulo-musica", rotulo: "Música" },
   { id: "titulo-imagens", rotulo: "Imagens" },
   { id: "titulo-legenda", rotulo: "Legenda" },
@@ -70,6 +72,7 @@ export function Corte() {
   const [montando, setMontando] = useState(false);
   const [comMomentos, setComMomentos] = useState(false);
   const [momentos, setMomentos] = useState<Momento[]>([]);
+  const [rodadaTrecho, setRodadaTrecho] = useState(0);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [elVideo, setElVideo] = useState<HTMLVideoElement | null>(null);
   // O <video> é recriado quando muda o arquivo: a linha do corte precisa do elemento da vez.
@@ -137,6 +140,12 @@ export function Corte() {
       .catch(() => {
         /* fica o que já estava na tela */
       });
+  }
+
+  /** Depois da troca do trecho: tudo o que a troca da música faz, mais a música e as imagens lidas de novo. */
+  function aoTerminarTrecho() {
+    aoTerminarTroca();
+    setRodadaTrecho((r) => r + 1);
   }
 
   /** Solta o corte.mp4 antes da troca: no Windows, arquivo aberto no player não pode ser trocado. */
@@ -224,8 +233,17 @@ export function Corte() {
             </ul>
           ) : null}
         </section>
+        <EditorDeCorte
+          key={`trecho-${ep}/${n}`}
+          ep={ep}
+          n={n}
+          soltarVideo={soltarVideo}
+          aoMudarAndamento={setMontando}
+          aoTerminar={aoTerminarTrecho}
+          montandoNaTela={montando}
+        />
         <BlocoMusica
-          key={`${ep}/${n}`}
+          key={`${ep}/${n}/${rodadaTrecho}`}
           ep={ep}
           n={n}
           videoFinal={bloco.video_final}
@@ -236,7 +254,7 @@ export function Corte() {
           montandoNaTela={montando}
         />
         <BlocoImagens
-          key={`imagens-${ep}/${n}`}
+          key={`imagens-${ep}/${n}/${rodadaTrecho}`}
           ep={ep}
           n={n}
           irPara={irPara}

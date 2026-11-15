@@ -446,3 +446,88 @@ export const gravarLegenda = (
   versao: string,
   telas: { indice: number; linhas: string[] }[],
 ) => enviarJson<{ versao: string; remontar: boolean }>(`${caminhoCorte(ep, n)}/legenda`, "PUT", { versao, telas });
+
+// --- trecho do corte (editor pela transcrição) ---------------------------------------------------
+
+export interface PalavraTrecho {
+  texto: string;
+  /** Segundos do episódio. */
+  inicio: number;
+  fim: number;
+  /** A voz do vozes.json (null sem ele) e o rótulo com o nome, como no `esteira trecho`. */
+  voz: string | null;
+  falante: string | null;
+  /** Pela regra do `validar`: o corte pode começar (ou terminar) nesta palavra sem cortar uma frase. */
+  pode_iniciar: boolean;
+  pode_terminar: boolean;
+}
+
+export interface OutroCorte {
+  numero: number;
+  titulo: string;
+  inicio: number;
+  fim: number;
+}
+
+export interface Trecho {
+  /** Versão do aprovados.json: a troca só vale para ela. */
+  versao: string;
+  inicio: number;
+  fim: number;
+  duracao_episodio: number;
+  /** Limites de duração do corte (clipline.toml; padrão 60 e 120 s). */
+  minima: number;
+  maxima: number;
+  /** A janela de transcrição trazida (segundos do episódio). */
+  de: number;
+  ate: number;
+  palavras: PalavraTrecho[];
+  /** Outros cortes que aparecem na janela. */
+  outros: OutroCorte[];
+  preparado: boolean;
+  montado: boolean;
+  /** O que o `validar` diz do trecho de agora. */
+  problemas: string[];
+  /** A troca de trecho em andamento (ou a última) deste corte. */
+  pedido: Pedido | null;
+}
+
+export interface ConferenciaTrecho {
+  /** O trecho pedido, já nas fronteiras das palavras. */
+  inicio: number;
+  fim: number;
+  duracao: number;
+  mudou: boolean;
+  /** Impedem a troca. */
+  problemas: string[];
+  avisos: string[];
+  /** O que muda no corte. */
+  resumo: string[];
+  /** O que se perde com a troca. */
+  perdas: string[];
+}
+
+export const lerTrecho = (ep: string, n: number | string, antes = 30, depois = 30) =>
+  pedir<Trecho>(`${caminhoCorte(ep, n)}/trecho?antes=${antes}&depois=${depois}`);
+
+export const conferirTrecho = (ep: string, n: number | string, inicio: number, fim: number) =>
+  enviarJson<ConferenciaTrecho>(`${caminhoCorte(ep, n)}/trecho/conferir`, "POST", { inicio, fim });
+
+export const trocarTrecho = (ep: string, n: number | string, inicio: number, fim: number, versao: string) =>
+  enviarJson<Pedido>(`${caminhoCorte(ep, n)}/trecho`, "POST", { inicio, fim, versao, confirmado: true });
+
+/** 724,06 -> "12:04,1"; com hora, "1:02:03,4" (o mesmo texto das mensagens do painel sobre o trecho). */
+export function tempoComDecimo(segundos: number): string {
+  const decimos = Math.round(Math.max(0, segundos) * 10);
+  const total = Math.floor(decimos / 10);
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = String(total % 60).padStart(2, "0");
+  const resto = `${s},${decimos % 10}`;
+  return h ? `${h}:${String(m).padStart(2, "0")}:${resto}` : `${m}:${resto}`;
+}
+
+/** 80,94 -> "80,9 s". */
+export function segundosTexto(segundos: number): string {
+  return `${segundos.toFixed(1).replace(".", ",")} s`;
+}
