@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "clipline"
-version = "0.2.0"
+version = "0.3.0"
 description = "Esteira de cortes verticais com revisão humana: transcrição, zoom em quem fala, legenda, música, imagens e publicação."
 readme = "README.md"
 license = "MIT"

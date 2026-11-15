@@ -11,25 +11,26 @@ Obrigado pelo interesse. O projeto é em português: código, comentários, mens
 ## Ambiente
 
 ```bash
+mkdir "Canal de teste" && cd "Canal de teste"
 git clone https://github.com/gabrielmrezende/clipline.git Automacao
 cd Automacao
-python -m venv .venv
-.venv/bin/pip install -e ".[dev,painel]"      # Windows: .venv\Scripts\pip
-cp -r Contexto.exemplo ../Contexto            # regras de exemplo, irmãs do repositório
-cd painel-web && npm ci && npm run build
+./scripts/instalar.sh            # Windows: powershell -ExecutionPolicy Bypass -File scripts\instalar.ps1
+pre-commit install               # opcional: ruff antes de cada commit
 ```
 
-O ffmpeg vem de `bin/` (Windows) ou do `PATH`. `clipline doctor` diz o que falta.
+O script cria o `.venv`, instala `.[painel,dev]`, gera o build do painel, cria as pastas do canal ao redor do clone
+(`python -m esteira init`) e roda o `doctor`. Passo a passo manual em [`docs/instalacao.md`](docs/instalacao.md).
+O ffmpeg vem de `bin/` (Windows) ou do `PATH`; Python 3.12 ou 3.13 e Node 22.12 ou mais novo.
 
 ## Testes
 
 | O quê | Comando |
 |---|---|
 | Esteira e API do painel | `python -m pytest -n auto` |
-| Lint do Python | `ruff check esteira tests .claude/hooks` |
+| Lint do Python | `ruff check esteira tests scripts .claude/hooks` |
 | Tipos do painel | `cd painel-web && npx tsc -b` |
 | Componentes do painel | `npm test` |
-| Ponta a ponta | `npm run e2e` (com `PLAYWRIGHT_CHROMIUM=/caminho/do/chrome` se não der para baixar o do Playwright) |
+| Ponta a ponta | `npm run e2e` (com `PLAYWRIGHT_CHROMIUM=/caminho/do/chrome` se não der para baixar o do Playwright; `ESTEIRA_E2E_PORTA` troca a porta 8766) |
 
 Os testes não usam GPU, rede nem vídeos reais. Modelos, APIs e downloads entram como dependências trocáveis por falsos;
 o ffmpeg gera vídeos sintéticos de poucos segundos. Um teste novo que precise da internet está errado.
