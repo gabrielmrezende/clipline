@@ -1,12 +1,14 @@
+import re
 import shutil
 from collections.abc import Callable, Sequence
 from pathlib import Path
 
 from esteira import config
 from esteira.caminhos import FONTES
+from esteira.dividida import intervalos_na_saida, legenda_no_meio, partir_legenda
 from esteira.legenda import escrever_ass, ocultar_durante
-from esteira.midia import ErroMidia, executar_ffmpeg, pico_de_audio, sondar
-from esteira.planos import Plano, dividir_em_segmentos, recorte
+from esteira.midia import ErroMidia, executar_ffmpeg, pico_de_audio, sondar, versao_ffmpeg
+from esteira.planos import PROPORCAO_PAINEL, Plano, dividir_em_segmentos, paineis, recorte_no_tempo
 from esteira.receita import ImagemNoVideo, Musica, Receita, duracao_principal
 
 ZOOM_IMAGEM = 1.08
@@ -22,9 +24,13 @@ ENCODERS = [
     ["-c:v", "libx264", "-preset", "medium", "-crf", "18"],
 ]
 SAIDA_COMUM = ["-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k", "-ar", "44100", "-ac", "2"]
+ALTURA_PAINEL = 960  # cada metade da tela dividida (1080x960)
+LIMITE_DO_FILTRO = 20000  # caracteres; filtro com trajetos acima disso vai num arquivo (a linha de comando do Windows
+# aceita 32767)
 
 
-def filtro_9x16(entrada: str, saida: str, corte: tuple[int, int, int, int]) -> str:
+def filtro_9x16(entrada: str, saida: str, corte: tuple[int, int, int | str, int | str]) -> str:
+    """`corte` é (w, h, x, y); x e y podem ser expressões do ffmpeg (acompanhamento suave)."""
     w, h, x, y = corte
     return (
         f"[{entrada}]crop={w}:{h}:{x}:{y},split=2[{saida}a][{saida}b];"
@@ -32,6 +38,38 @@ def filtro_9x16(entrada: str, saida: str, corte: tuple[int, int, int, int]) -> s
         f"[{saida}b]scale=1080:{ALTURA_FAIXA}[{saida}c];"
         f"[{saida}f][{saida}c]overlay=0:{Y_FAIXA},fps=30,setsar=1,format=yuv420p[{saida}]"
     )
+
+
+def filtro_dividido(
+    entrada: str, saida: str, cima: tuple[int, int, int | str, int | str], baixo: tuple[int, int, int | str, int | str]
+) -> str:
+    """Tela dividida: duas metades de 1080x960 empilhadas, cada uma com o seu recorte."""
+    metades = []
+    for nome, (w, h, x, y) in (("c", cima), ("b", baixo)):
+        metades.append(f"[{saida}{nome}]crop={w}:{h}:{x}:{y},scale=1080:{ALTURA_PAINEL},setsar=1[{saida}{nome}2]")
+    return (
+        f"[{entrada}]split=2[{saida}c][{saida}b];" + ";".join(metades) + ";"
+        f"[{saida}c2][{saida}b2]vstack=inputs=2,fps=30,setsar=1,format=yuv420p[{saida}]"
+    )
+
+
+def _filtro_do_plano(entrada: str, saida: str, plano: Plano, largura: int, altura: int, de: float, ate: float) -> str:
+    if plano.divisao:
+        cima, baixo = (recorte_no_tempo(p, largura, altura, de, ate, PROPORCAO_PAINEL) for p in paineis(plano))
+        return filtro_dividido(entrada, saida, cima, baixo)
+    return filtro_9x16(entrada, saida, recorte_no_tempo(plano, largura, altura, de, ate))
+
+
+def opcao_filtro_em_arquivo(versao: str) -> str:
+    """`-/filter_complex` (ffmpeg 7 em diante) ou `-filter_complex_script` (antes do 7; o 9 já não tem).
+    Versão sem número (compilação do git) conta pela data: o 7.0 saiu em abril de 2024."""
+    numero = re.search(r"version n?(\d+)\.", versao)
+    if numero:
+        return "-/filter_complex" if int(numero.group(1)) >= 7 else "-filter_complex_script"
+    data = re.search(r"version (\d{4})-(\d{2})", versao)
+    if data and (int(data.group(1)), int(data.group(2))) < (2024, 4):
+        return "-filter_complex_script"
+    return "-/filter_complex"
 
 
 def _filtro_segmentos(
@@ -42,7 +80,7 @@ def _filtro_segmentos(
     for i, (de, ate, plano) in enumerate(segmentos):
         a, b = de - deslocamento, ate - deslocamento
         partes.append(f"[0:v]trim=start={a:.3f}:end={b:.3f},setpts=PTS-STARTPTS[t{i}]")
-        partes.append(filtro_9x16(f"t{i}", f"v{i}", recorte(plano, largura, altura)))
+        partes.append(_filtro_do_plano(f"t{i}", f"v{i}", plano, largura, altura, de, ate))
         partes.append(
             f"[0:a]atrim=start={a:.3f}:end={b:.3f},asetpts=PTS-STARTPTS,"
             f"aresample=44100,aformat=channel_layouts=stereo[a{i}]"
@@ -207,7 +245,15 @@ def renderizar_final(
         rotulo_video = "vleg"
 
     args = [arg for entrada in entradas for arg in entrada]
-    args += ["-filter_complex", ";".join(partes), "-map", f"[{rotulo_video}]", "-map", f"[{rotulo_audio}]"]
+    grafo = ";".join(partes)
+    dinamico = any(p.trajeto or p.divisao for _, _, p in segmentos)
+    em_arquivo = dinamico and len(grafo) > LIMITE_DO_FILTRO
+    if em_arquivo:
+        args += [opcao_filtro_em_arquivo(versao_ffmpeg()), ".legenda_tmp/filtro.txt"]
+    else:
+        args += ["-filter_complex", grafo]
+    args += ["-map", f"[{rotulo_video}]", "-map", f"[{rotulo_audio}]"]
+    divididos = intervalos_na_saida(segmentos)
     temporaria = saida.parent / ".legenda_tmp"
     temporaria.mkdir(exist_ok=True)
     pico = 0.0
@@ -218,7 +264,14 @@ def renderizar_final(
 
     try:
         legenda = ocultar_durante(receita.legenda, [(i.inicio, i.fim) for i in imagens])
+        if divididos:
+            legenda = partir_legenda(legenda, divididos)
         escrever_ass(legenda, temporaria / "legenda.ass", ajustes.legenda_estilo, ajustes.legenda_cor_destaque)
+        if divididos:
+            ass = temporaria / "legenda.ass"
+            ass.write_text(legenda_no_meio(ass.read_text("utf-8"), divididos), "utf-8", newline="\n")
+        if em_arquivo:
+            (temporaria / "filtro.txt").write_text(grafo, "utf-8")
         shutil.copy(FONTES / "Montserrat-Bold.ttf", temporaria / "Montserrat-Bold.ttf")
         _codificar(args, saida, esperado, cwd=saida.parent, verificar=medir)
     finally:

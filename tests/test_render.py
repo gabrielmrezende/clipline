@@ -431,3 +431,155 @@ def test_filtro_de_voz_normalizada():
     assert filtro_voz_normalizada("a", "b", -14) == (
         "[a]loudnorm=I=-14:TP=-1.5:LRA=11,aresample=44100,aformat=sample_fmts=fltp:channel_layouts=stereo[b]"
     )
+
+
+# Acompanhamento suave e tela dividida (docs/enquadramento.md)
+
+FILTRO_DE_SEMPRE = (
+    "[0:v]trim=start=0.500:end=2.500,setpts=PTS-STARTPTS[t0];[t0]crop=562:540:103:162,split=2[v0a][v0b];"
+    "[v0a]scale=-2:1920,crop=1080:1920,gblur=sigma=40[v0f];[v0b]scale=1080:1036[v0c];"
+    "[v0f][v0c]overlay=0:442,fps=30,setsar=1,format=yuv420p[v0];"
+    "[0:a]atrim=start=0.500:end=2.500,asetpts=PTS-STARTPTS,aresample=44100,aformat=channel_layouts=stereo[a0];"
+    "[0:v]trim=start=3.500:end=4.500,setpts=PTS-STARTPTS[t1];[t1]crop=562:540:103:162,split=2[v1a][v1b];"
+    "[v1a]scale=-2:1920,crop=1080:1920,gblur=sigma=40[v1f];[v1b]scale=1080:1036[v1c];"
+    "[v1f][v1c]overlay=0:442,fps=30,setsar=1,format=yuv420p[v1];"
+    "[0:a]atrim=start=3.500:end=4.500,asetpts=PTS-STARTPTS,aresample=44100,aformat=channel_layouts=stereo[a1];"
+    "[0:v]trim=start=4.500:end=6.500,setpts=PTS-STARTPTS[t2];[t2]crop=832:800:1088:140,split=2[v2a][v2b];"
+    "[v2a]scale=-2:1920,crop=1080:1920,gblur=sigma=40[v2f];[v2b]scale=1080:1036[v2c];"
+    "[v2f][v2c]overlay=0:442,fps=30,setsar=1,format=yuv420p[v2];"
+    "[0:a]atrim=start=4.500:end=6.500,asetpts=PTS-STARTPTS,aresample=44100,aformat=channel_layouts=stereo[a2]"
+)
+
+
+def test_planos_de_sempre_geram_o_filtro_de_sempre():
+    from esteira.planos import Plano, dividir_em_segmentos
+
+    segmentos = dividir_em_segmentos(
+        [(1.0, 3.0), (4.0, 7.0)], [Plano(0, 5, x=0.2, y=0.4, zoom=2.0), Plano(5, 10, x=0.8, zoom=1.35)]
+    )
+    partes, rotulos = render._filtro_segmentos(segmentos, 1920, 1080, 0.5)
+    assert ";".join(partes) == FILTRO_DE_SEMPRE
+    assert rotulos == "[v0][a0][v1][a1][v2][a2]"
+
+
+def _vermelho_e_azul(caminho, segundos=4):
+    """Metade esquerda vermelha, direita azul, com som."""
+    executar_ffmpeg([
+        "-y", "-f", "lavfi", "-i",
+        f"color=c=red:s=1920x1080:r=30:d={segundos},drawbox=x=960:y=0:w=960:h=1080:color=blue:t=fill",
+        "-f", "lavfi", "-i", f"sine=frequency=440:duration={segundos}",
+        "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p", "-c:a", "aac", str(caminho),
+    ])
+    return caminho
+
+
+DIVISAO = [{"pessoa": "P1", "x": 0.25, "y": 0.5, "zoom": 2.0}, {"pessoa": "P2", "x": 0.75, "y": 0.5, "zoom": 2.0}]
+
+
+def test_suave_move_o_recorte_dentro_do_plano(tmp_path):
+    from esteira.planos import Plano
+
+    pasta = tmp_path / "Tudo é Política (teste)"
+    pasta.mkdir()
+    origem = _vermelho_e_azul(pasta / "origem.mp4")
+    cartao = gerar_video_teste(pasta / "fim.mp4", 1, 1080, 1920)
+    plano = Plano(0, 3, x=0.25, zoom=2.0, trajeto=[[0, 0.25, 0.5], [1, 0.25, 0.5], [2, 0.75, 0.5], [3, 0.75, 0.5]])
+    saida = pasta / "final.mp4"
+    renderizar_final(Receita([(0.0, 3.0)], [plano], [], encerramento=False), origem, cartao, pasta, saida)
+    assert sondar(saida).duracao == pytest.approx(3, abs=0.2)
+    assert _vermelho(_quadro(saida, 0.5, pasta / "a.png").getpixel((540, 960)))
+    assert _azul(_quadro(saida, 2.6, pasta / "b.png").getpixel((540, 960)))
+
+
+def test_suave_atravessa_pausa_removida(tmp_path):
+    from esteira.planos import Plano
+
+    pasta = tmp_path / "Tudo é Política (teste)"
+    pasta.mkdir()
+    origem = _vermelho_e_azul(pasta / "origem.mp4")
+    cartao = gerar_video_teste(pasta / "fim.mp4", 1, 1080, 1920)
+    plano = Plano(0, 4, x=0.25, zoom=2.0, trajeto=[[0, 0.25, 0.5], [2, 0.25, 0.5], [2.4, 0.75, 0.5], [4, 0.75, 0.5]])
+    saida = pasta / "final.mp4"
+    receita = Receita([(0.0, 1.5), (2.5, 4.0)], [plano], [], encerramento=False)  # 1,5 a 2,5 removido
+    renderizar_final(receita, origem, cartao, pasta, saida)
+    assert sondar(saida).duracao == pytest.approx(3, abs=0.2)
+    assert _vermelho(_quadro(saida, 1.2, pasta / "a.png").getpixel((540, 960)))
+    assert _azul(_quadro(saida, 1.8, pasta / "b.png").getpixel((540, 960)))  # o tempo do trecho recomeça certo
+
+
+def _brancos_na_emenda(quadro):
+    return sum(1 for x in range(200, 880, 4) for y in range(915, 1005, 3) if min(quadro.getpixel((x, y))) > 235)
+
+
+def test_tela_dividida_empilha_as_duas_pessoas_e_poe_a_legenda_na_emenda(tmp_path):
+    from esteira.planos import Plano
+
+    pasta = tmp_path / "Tudo é Política (teste)"
+    pasta.mkdir()
+    origem = _vermelho_e_azul(pasta / "origem.mp4")
+    cartao = gerar_video_teste(pasta / "fim.mp4", 1, 1080, 1920)
+    planos = [Plano(0, 1.5, x=0.25, zoom=2.0), Plano(1.5, 3, x=0.5, zoom=1.0, divisao=DIVISAO)]
+    legenda = [Cue(0, 1.4, ["CHEIA"]), Cue(1.6, 3, ["DIVIDIDA"])]
+    saida = pasta / "final.mp4"
+    renderizar_final(Receita([(0.0, 3.0)], planos, legenda, encerramento=False), origem, cartao, pasta, saida)
+    m = sondar(saida)
+    assert (m.largura, m.altura) == (1080, 1920) and m.duracao == pytest.approx(3, abs=0.2)
+    antes = _quadro(saida, 0.7, pasta / "a.png")
+    assert _brancos_na_legenda(antes) > 20 and _brancos_na_emenda(antes) == 0
+    depois = _quadro(saida, 2.3, pasta / "b.png")
+    for y in (100, 480, 850):
+        assert _vermelho(depois.getpixel((540, y)))  # metade de cima: pessoa da esquerda
+    for y in (1100, 1440, 1850):
+        assert _azul(depois.getpixel((540, y)))  # metade de baixo: pessoa da direita
+    assert _brancos_na_emenda(depois) > 20  # legenda na emenda, longe dos rostos
+    assert _brancos_na_legenda(depois) == 0
+
+
+def test_filtro_longo_vai_num_arquivo(tmp_path, monkeypatch):
+    from esteira.planos import Plano
+
+    monkeypatch.setattr(render, "LIMITE_DO_FILTRO", 10)
+    chamadas = []
+    original = render.executar_ffmpeg
+
+    def espiar(args, cwd=None, **kwargs):
+        chamadas.append((list(args), cwd))
+        return original(args, cwd, **kwargs)
+
+    monkeypatch.setattr(render, "executar_ffmpeg", espiar)
+    pasta = tmp_path / "Tudo é Política (teste)"
+    pasta.mkdir()
+    origem = _vermelho_e_azul(pasta / "origem.mp4")
+    cartao = gerar_video_teste(pasta / "fim.mp4", 1, 1080, 1920)
+    plano = Plano(0, 3, x=0.25, zoom=2.0, trajeto=[[0, 0.25, 0.5], [3, 0.75, 0.5]])
+    saida = pasta / "final.mp4"
+    renderizar_final(Receita([(0.0, 3.0)], [plano], [], encerramento=False), origem, cartao, pasta, saida)
+    args, _ = chamadas[0]
+    assert "-/filter_complex" in args and "-filter_complex" not in args
+    assert _azul(_quadro(saida, 2.8, pasta / "b.png").getpixel((540, 960)))
+    assert not (pasta / ".legenda_tmp").exists()
+
+
+def test_tela_dividida_com_um_quadro_so_e_erro(tmp_path):
+    from esteira.planos import Plano
+
+    pasta, origem, cartao = _cenario(tmp_path)
+    plano = Plano(0, 2, divisao=DIVISAO[:1])
+    with pytest.raises(ValueError, match="divisao"):
+        renderizar_final(Receita([(0.0, 2.0)], [plano], []), origem, cartao, pasta, pasta / "final.mp4")
+    assert not (pasta / "final.mp4").exists()
+
+
+@pytest.mark.parametrize(
+    ("versao", "opcao"),
+    [
+        ("ffmpeg version 9.0-full_build-www.gyan.dev Copyright", "-/filter_complex"),
+        ("ffmpeg version n7.1 Copyright", "-/filter_complex"),
+        ("ffmpeg version 6.1.1-essentials_build-www.gyan.dev", "-filter_complex_script"),
+        ("ffmpeg version 2023-11-02-git-abc-full_build-www.gyan.dev", "-filter_complex_script"),
+        ("ffmpeg version 2025-06-02-git-abc-full_build-www.gyan.dev", "-/filter_complex"),
+        ("ffmpeg version N-118000-gabc", "-/filter_complex"),
+    ],
+)
+def test_opcao_do_filtro_em_arquivo_pela_versao(versao, opcao):
+    assert render.opcao_filtro_em_arquivo(versao) == opcao
