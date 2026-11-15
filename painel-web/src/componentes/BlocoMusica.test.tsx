@@ -263,6 +263,34 @@ describe("BlocoMusica", () => {
     expect(chamadas.some((c) => c.url === "/api/tarefas/t1")).toBe(true);
   });
 
+  it("um pedido interrompido pelo fechamento do painel não roda sozinho: Tentar de novo reenvia", async () => {
+    const mensagem = "o painel foi fechado antes de montar este pedido";
+    const interrompido = pedido({ estado: "interrompido", mensagem, volume_db: -22 });
+    musicaDoCorte = { atual: null, anterior: null, pedido: interrompido };
+    const { aoTerminar } = await montar();
+    expect(screen.getByText(`Interrompido: ${mensagem}.`)).toBeTruthy();
+    await avancar(2000);
+    expect(chamadas.some((c) => c.url.startsWith("/api/tarefas/"))).toBe(false);
+    expect(aoTerminar).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Tentar de novo" }));
+    await avancar(0);
+    const posts = chamadas.filter((c) => c.metodo === "POST");
+    expect(posts.map((c) => [c.url, c.corpo])).toEqual([
+      ["/api/episodios/Ep%201/cortes/2/musica", { arquivo: "leve/Brisa.mp3", volume_db: -22 }],
+    ]);
+  });
+
+  it("Cancelar tira da fila e Descartar esquece o interrompido", async () => {
+    musicaDoCorte = { atual: null, anterior: null, pedido: pedido({ estado: "na fila" }) };
+    tarefas = [pedido({ estado: "cancelado", mensagem: "cancelado antes de começar" })];
+    await montar();
+    fireEvent.click(screen.getByRole("button", { name: "Cancelar o pedido" }));
+    await avancar(0);
+    expect(chamadas.filter((c) => c.metodo === "POST").map((c) => c.url)).toEqual(["/api/tarefas/t1/cancelar"]);
+    expect(screen.getByText("Cancelado antes de começar.")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Cancelar o pedido" })).toBeNull();
+  });
+
   it("mostra o erro e Tentar de novo reenvia o mesmo pedido", async () => {
     tarefas = [pedido({ estado: "erro", mensagem: "ffmpeg quebrou", volume_db: -22 })];
     await montar();

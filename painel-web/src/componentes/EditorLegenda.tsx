@@ -142,7 +142,7 @@ export function EditorLegenda({ ep, n, irPara, soltarVideo, aoMudarAndamento, ao
         ) : null}
         <span role="status">{salvo ? "Legenda salva. Monte o corte para ver no vídeo." : ""}</span>
       </p>
-      {pedido ? <AndamentoPedido pedido={pedido} /> : null}
+      {pedido ? <AndamentoPedido pedido={pedido} aoMudar={setPedido} /> : null}
     </section>
   );
 }

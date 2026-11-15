@@ -18,10 +18,12 @@ import {
   Alerta,
   AndamentoPedido,
   AvisosDoResumo,
+  NADA_PARA_REFAZER,
   PEDIDO_PERDIDO,
   ativo,
   ehDeImagens,
   mensagem,
+  paraRetomar,
   rotuloDeFotos,
   rotuloDeIa,
   textoDeFotos,
@@ -126,7 +128,7 @@ export function ImagensDoEpisodio({ ep, cortes }: Props) {
     void lerOrcamento();
     listarTarefas()
       .then((ts) => {
-        const retomar = ts.find((t) => ehDeImagens(t) && t.episodio === ep && ativo(t));
+        const retomar = paraRetomar(ts.filter((t) => ehDeImagens(t) && t.episodio === ep));
         if (vivo.current && retomar) setPedido(retomar);
       })
       .catch(() => {
@@ -186,6 +188,12 @@ export function ImagensDoEpisodio({ ep, cortes }: Props) {
 
   const ocupado = ativo(pedido) || enviando || preparando;
 
+  /** Refaz um pedido interrompido pelo mesmo caminho do botão (e a mesma confirmação); montar é por corte. */
+  const refazer: Record<string, (() => void) | undefined> = {
+    fotos: () => (resumo?.fotos === 0 ? setErroPedido(NADA_PARA_REFAZER) : void baixar()),
+    ia: () => (orcamento?.imagens === 0 ? setErroPedido(NADA_PARA_REFAZER) : void gerar()),
+  };
+
   return (
     <section aria-label="Imagens do episódio" className="bloco-imagens">
       <Alerta texto={avisoGlossario} />
@@ -201,7 +209,9 @@ export function ImagensDoEpisodio({ ep, cortes }: Props) {
       <Alerta texto={erroResumo === avisoGlossario ? null : erroResumo} />
       <Alerta texto={erroOrcamento} />
       <Alerta texto={erroPedido} />
-      {pedido ? <AndamentoPedido pedido={pedido} /> : null}
+      {pedido ? (
+        <AndamentoPedido pedido={pedido} aoMudar={setPedido} aoTentarDeNovo={refazer[pedido.tipo ?? ""]} />
+      ) : null}
       {cortes.length === 0 ? <p>Nenhum corte neste episódio.</p> : null}
       <ul className="resumo-cortes">
         {cortes.map((c) => {

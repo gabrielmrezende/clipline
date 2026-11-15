@@ -174,7 +174,8 @@ export interface MusicaResumo {
   volume_db: number;
 }
 
-export type EstadoPedido = "na fila" | "montando" | "pronto" | "erro";
+/** "interrompido": o painel fechou antes do fim; nada roda sozinho, o dono tenta de novo ou descarta. */
+export type EstadoPedido = "na fila" | "montando" | "pronto" | "erro" | "interrompido" | "cancelado";
 
 export interface Pedido {
   id: string;
@@ -193,6 +194,8 @@ export interface Pedido {
   tipo?: string;
   cortes?: number[];
   progresso?: string;
+  /** O dono pediu para parar: a IA para antes da próxima imagem. */
+  cancelando?: boolean;
 }
 
 export interface MusicaDoCorte {
@@ -364,6 +367,10 @@ export const gravarConfiguracaoDeImagens = (provedor: string, provedores: Config
 export const listarTarefas = () => pedir<Pedido[]>("/api/tarefas");
 
 export const consultarTarefa = (id: string) => pedir<Pedido>(`/api/tarefas/${encodeURIComponent(id)}`);
+
+/** Na fila: sai sem rodar. Interrompido: descartado. Gerando imagens de IA: para antes da próxima. */
+export const cancelarTarefa = (id: string) =>
+  enviarJson<Pedido>(`/api/tarefas/${encodeURIComponent(id)}/cancelar`, "POST", CONFIRMADO);
 
 export function plural(n: number, singular: string, pluralTexto: string): string {
   return `${n} ${n === 1 ? singular : pluralTexto}`;
