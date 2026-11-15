@@ -10,6 +10,7 @@ import json
 import os
 import subprocess
 import sys
+from collections.abc import Callable
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
@@ -57,8 +58,17 @@ def _ffmpeg() -> list[Item]:
     return itens
 
 
-def _gpu() -> list[Item]:
-    itens = [Item("faster-whisper", "ok" if _tem_modulo("faster_whisper") else "falta", "transcrição")]
+def _gpu(tem_cuda: Callable[[], bool] | None = None) -> list[Item]:
+    tem_whisper = _tem_modulo("faster_whisper")
+    itens = [Item("faster-whisper", "ok" if tem_whisper else "falta", "transcrição")]
+    if tem_whisper:
+        if tem_cuda is None:
+            from esteira.transcrever import cuda_disponivel as tem_cuda
+        if tem_cuda():
+            itens.append(Item("GPU da transcrição", "ok", "GPU NVIDIA com cuBLAS: large-v3 na GPU"))
+        else:
+            itens.append(Item("GPU da transcrição", "aviso", "sem GPU NVIDIA com driver e cuBLAS do CUDA 12: o "
+                              "transcrever usa a CPU (medium, bem mais lento)"))
     if _tem_modulo("torch"):
         try:
             import torch

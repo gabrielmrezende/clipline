@@ -159,3 +159,13 @@ def test_doctor_diz_se_a_chave_anthropic_existe_sem_mostrar():
     itens = _por_nome(diagnostico.doctor(ler_credencial=ler))
     assert itens["chave anthropic"].estado == "ok"
     assert "segredo" not in str([i.detalhe for i in itens.values()])
+
+
+def test_doctor_diz_onde_o_transcrever_vai_rodar(monkeypatch):
+    monkeypatch.setattr(diagnostico, "_tem_modulo", lambda nome: nome == "faster_whisper")
+    com_gpu = _por_nome(diagnostico._gpu(tem_cuda=lambda: True))
+    assert com_gpu["GPU da transcrição"].estado == "ok"
+    sem_gpu = _por_nome(diagnostico._gpu(tem_cuda=lambda: False))
+    assert sem_gpu["GPU da transcrição"].estado == "aviso" and "CPU" in sem_gpu["GPU da transcrição"].detalhe
+    monkeypatch.setattr(diagnostico, "_tem_modulo", lambda nome: False)
+    assert "GPU da transcrição" not in _por_nome(diagnostico._gpu(tem_cuda=lambda: True))

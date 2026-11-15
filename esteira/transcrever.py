@@ -114,8 +114,8 @@ def aviso_de_dispositivo(modos: list[tuple[str, str, str]]) -> str | None:
     nome, dispositivo, calculo = modos[0]
     if dispositivo != "cpu":
         return None
-    return (f"Transcrição na CPU (modelo {nome}, {calculo}), sem GPU NVIDIA. É bem mais lenta que na GPU: "
-            "um episódio longo pode levar horas.")
+    return (f"Transcrição na CPU (modelo {nome}, {calculo}). É bem mais lenta que numa GPU NVIDIA: um episódio longo "
+            "pode levar horas. A GPU precisa do driver e do cuBLAS do CUDA 12; o esteira doctor confere.")
 
 
 def criar_whisper(modo: tuple[str, str, str]):
