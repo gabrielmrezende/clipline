@@ -196,7 +196,7 @@ def _montar(args) -> int:
 
 
 def _imagens_conectar(provedor: str) -> int:
-    if provedor not in PROVEDORES:
+    if provedor not in PROVEDORES and provedor != agente.PROVEDOR_ANTHROPIC:  # anthropic: revisão visual e classificador
         print(f"Provedor desconhecido: {provedor}. Use um destes: {', '.join(PROVEDORES)}.", file=sys.stderr)
         return 2
     chave = getpass.getpass(f"Chave da API ({provedor}): ").strip()

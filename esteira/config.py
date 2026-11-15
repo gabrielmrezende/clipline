@@ -40,6 +40,10 @@ class Config:
     # YouTube
     youtube_categoria: str = "22"
     limite_shorts: float = 180.0
+    # IA da Anthropic (revisão visual e classificador de pessoa real). Desligada sem chave; a revisão só com --confirmar.
+    ia_classificador: bool = False
+    ia_modelo_classificador: str = "claude-haiku-5-5"
+    ia_modelo_revisao: str = "claude-sonnet-5-5"
     extras: dict = field(default_factory=dict, compare=False)
 
 
@@ -52,6 +56,10 @@ SECOES = {
     ("voz", "normalizar"): "normalizar_voz", ("voz", "lufs"): "voz_lufs",
     ("youtube", "categoria"): "youtube_categoria", ("youtube", "limite_shorts"): "limite_shorts",
 }
+SECOES.update({
+    ("ia", "classificador"): "ia_classificador", ("ia", "modelo_classificador"): "ia_modelo_classificador",
+    ("ia", "modelo_revisao"): "ia_modelo_revisao",
+})
 
 
 def _converter(nome: str, valor, tipo):
