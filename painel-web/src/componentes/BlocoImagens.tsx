@@ -26,10 +26,12 @@ import {
   Alerta,
   AndamentoPedido,
   AvisosDoResumo,
+  NADA_PARA_REFAZER,
   PEDIDO_PERDIDO,
   ativo,
   ehDeImagens,
   mensagem,
+  paraRetomar,
   rotuloDeFotos,
   rotuloDeIa,
   textoDeFotos,
@@ -180,12 +182,13 @@ export function BlocoImagens({
       });
     listarTarefas()
       .then((ts) => {
-        const retomar = ts.find(
-          (t) => ehDeImagens(t) && t.episodio === ep && (t.cortes ?? []).includes(Number(n)) && ativo(t),
+        // O que anda neste corte ou, se o último pedido foi interrompido pelo fechamento do painel, ele.
+        const retomar = paraRetomar(
+          ts.filter((t) => ehDeImagens(t) && t.episodio === ep && (t.cortes ?? []).includes(Number(n))),
         );
         if (vivo && retomar) {
           setPedido(retomar);
-          if (retomar.tipo === "montar") {
+          if (retomar.tipo === "montar" && ativo(retomar)) {
             montandoAgora.current = true;
             montagemRef.current.aoMudarAndamento?.(true);
           }
@@ -327,6 +330,14 @@ export function BlocoImagens({
     });
   }
 
+  /** Refaz um pedido interrompido pelo mesmo caminho do botão (e a mesma confirmação). */
+  function tentarDeNovo(tipo: string | undefined) {
+    if (tipo === "montar") return void montarDeNovo();
+    const nada = tipo === "fotos" ? resumo?.fotos === 0 : orcamento?.imagens === 0;
+    if (nada) return setErroPedido(NADA_PARA_REFAZER);
+    void (tipo === "fotos" ? baixar() : gerar());
+  }
+
   if (momentos === null || momentos.length === 0) {
     return erroLeitura ? (
       <p role="alert" className="mensagem-erro">
@@ -362,7 +373,9 @@ export function BlocoImagens({
       <Alerta texto={erroResumo === avisoGlossario ? null : erroResumo} />
       <Alerta texto={erroOrcamento} />
       <Alerta texto={erroPedido} />
-      {pedido ? <AndamentoPedido pedido={pedido} /> : null}
+      {pedido ? (
+        <AndamentoPedido pedido={pedido} aoMudar={setPedido} aoTentarDeNovo={() => tentarDeNovo(pedido.tipo)} />
+      ) : null}
       <ul className="momentos">
         {momentos.map((m) => (
           <CartaoMomento

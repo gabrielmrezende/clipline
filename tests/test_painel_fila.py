@@ -1,3 +1,4 @@
+import json
 import threading
 import time
 from pathlib import Path
@@ -5,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from esteira.musica import Faixa
-from esteira.painel.fila import Fila, Pedido, PedidoAtivo
+from esteira.painel.fila import Fila, NaoCancela, Pedido, PedidoAtivo
 from esteira.painel.troca_musica import Resultado
 from esteira.receita import Musica
 
@@ -188,7 +189,7 @@ def test_parar_espera_o_atual_e_descarta_os_da_fila(controle, fabrica):
     assert not parada.is_alive() and not fila._trabalhador.is_alive()
     assert fila.pedido(atual.id).estado == "pronto"
     descartado = fila.pedido(esperando.id)
-    assert descartado.estado == "erro"
+    assert descartado.estado == "interrompido"
     assert descartado.mensagem == "o painel foi fechado antes de montar este pedido"
     assert [c[1] for c in controle.chamadas] == [1]
 
@@ -294,7 +295,7 @@ def test_parar_interrompe_a_tarefa_no_proximo_progresso(fabrica):
     parada.join(LIMITE)
     assert not parada.is_alive() and not fila._trabalhador.is_alive()
     final = fila.pedido(p.id)
-    assert final.estado == "erro" and final.mensagem == "o painel foi fechado no meio deste pedido"
+    assert final.estado == "interrompido" and final.mensagem == "o painel foi fechado no meio deste pedido"
     assert passos == [1] and final.terminado is not None
 
 
@@ -376,3 +377,221 @@ def test_montando_corte_ve_os_dois_tipos(controle, fabrica):
         controle.liberar[2].set()
     assert esperar(lambda: fila.pedido(montar.id).estado == "pronto")
     assert esperar(lambda: not fila.montando_corte("ep1", 1) and not fila.montando_corte("ep1", 2))
+
+
+# --- histórico gravado, recuperação e cancelamento ----------------------------------------------------------------
+
+
+def _ler_arquivo(caminho):
+    for _ in range(50):  # a leitura pode cruzar com a troca do arquivo (no Windows, PermissionError)
+        try:
+            return json.loads(caminho.read_text("utf-8"))
+        except (OSError, ValueError):
+            time.sleep(0.01)
+    return json.loads(caminho.read_text("utf-8"))
+
+
+def _gravar_arquivo(caminho, pedidos):
+    caminho.write_text(json.dumps({"formato": 1, "pedidos": pedidos}), "utf-8")
+
+
+def _dict(id, estado, tipo="ia", **extra):
+    base = {
+        "id": id, "episodio": "ep1", "numero": 1, "arquivo": "", "volume_db": 0.0, "estado": estado,
+        "criado": 10.0, "tipo": tipo, "cortes": [1],
+    }
+    return {**base, **extra}
+
+
+def test_pedidos_vao_para_o_arquivo_a_cada_mudanca_de_estado(controle, fabrica, tmp_path):
+    arquivo = tmp_path / "painel-fila.json"
+    controle.preparar(1)
+    fila = fabrica(arquivo=arquivo, base=tmp_path, relogio=lambda: 50.0)
+    p = fila.pedir(Path("x/ep1"), 1, FAIXA, -18.0)
+    assert controle.iniciou[1].wait(LIMITE)
+    assert esperar(lambda: _ler_arquivo(arquivo)["pedidos"][0]["estado"] == "montando")
+    gravado = _ler_arquivo(arquivo)
+    assert gravado["formato"] == 1
+    assert gravado["pedidos"][0] == fila.pedido(p.id).como_dict()
+    controle.liberar[1].set()
+    assert esperar(lambda: _ler_arquivo(arquivo)["pedidos"][0]["estado"] == "pronto")
+    assert _ler_arquivo(arquivo)["pedidos"][0]["terminado"] == 50.0
+    assert not (tmp_path / "painel-fila.json.tmp").exists()  # gravação atômica
+
+
+def test_sem_arquivo_a_fila_fica_so_na_memoria(controle, fabrica, tmp_path):
+    fila = fabrica()
+    p = fila.pedir(Path("x/ep1"), 1, FAIXA, -18.0)
+    assert esperar(lambda: fila.pedido(p.id).estado == "pronto")
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_arquivo_fora_da_area_permitida_e_recusado(controle, tmp_path):
+    from esteira.caminhos import EscritaProibida
+
+    with pytest.raises(EscritaProibida):
+        Fila(controle, arquivo=Path(tmp_path.anchor) / "fora-do-clipline" / "painel-fila.json")
+
+
+def test_ao_abrir_ativos_viram_interrompidos_e_nao_rodam(controle, fabrica, tmp_path):
+    arquivo = tmp_path / "painel-fila.json"
+    _gravar_arquivo(arquivo, [
+        _dict("aaaa0001", "pronto", tipo="musica", arquivo="leve/a.mp3", volume_db=-20.0, terminado=11.0,
+              anterior={"arquivo": "b.mp3", "titulo": "B", "volume_db": -26.0}),
+        _dict("aaaa0002", "montando", progresso="Gerando 1 de 3…"),
+        _dict("aaaa0003", "na fila", tipo="fotos", cortes=[1, 2], numero=0),
+    ])
+    fila = fabrica(arquivo=arquivo, base=tmp_path, relogio=lambda: 99.0)
+    montando, na_fila = fila.pedido("aaaa0002"), fila.pedido("aaaa0003")
+    assert (montando.estado, montando.mensagem, montando.terminado) == (
+        "interrompido", "o painel foi fechado no meio deste pedido", 99.0)
+    assert (na_fila.estado, na_fila.mensagem) == ("interrompido", "o painel foi fechado antes de montar este pedido")
+    assert na_fila.cortes == [1, 2]
+    assert fila.ultimo_pronto("ep1", 1).anterior == {"arquivo": "b.mp3", "titulo": "B", "volume_db": -26.0}
+    assert [p.id for p in fila.pedidos()] == ["aaaa0003", "aaaa0002", "aaaa0001"]
+    assert not fila.montando() and fila.ativo("ep1", 1, "ia") is None
+    assert [p["estado"] for p in _ler_arquivo(arquivo)["pedidos"]] == ["pronto", "interrompido", "interrompido"]
+    time.sleep(0.05)
+    assert controle.chamadas == []  # nada roda sozinho
+    novo = fila.pedir_tarefa("ia", Path("x/ep1"), [1], tarefa())  # o corte não fica travado
+    assert esperar(lambda: fila.pedido(novo.id).estado == "pronto")
+
+
+def test_arquivo_ilegivel_comeca_vazio_e_entradas_ruins_sao_ignoradas(controle, fabrica, tmp_path, capsys):
+    arquivo = tmp_path / "painel-fila.json"
+    arquivo.write_text("{não é json", "utf-8")
+    assert fabrica(arquivo=arquivo, base=tmp_path).pedidos() == []
+    assert "ilegível" in capsys.readouterr().err
+    _gravar_arquivo(arquivo, [
+        "texto", {"id": "x"}, _dict("bbbb0001", "inventado"), _dict("bbbb0002", "pronto", cortes=["1"]),
+        _dict("bbbb0003", "pronto", numero="1"), _dict("bbbb0004", "erro", campo_novo=1),
+    ])
+    assert [p.id for p in fabrica(arquivo=arquivo, base=tmp_path).pedidos()] == ["bbbb0004"]
+
+
+def test_historico_gravado_tem_os_50_mais_recentes(controle, fabrica, tmp_path):
+    arquivo = tmp_path / "painel-fila.json"
+    _gravar_arquivo(arquivo, [_dict(f"c{n:07d}", "pronto", tipo="musica", numero=n, cortes=[n]) for n in range(60)])
+    fila = fabrica(arquivo=arquivo, base=tmp_path)
+    p = fila.pedir(Path("x/ep1"), 99, FAIXA, -18.0)
+    assert esperar(lambda: _ler_arquivo(arquivo)["pedidos"][-1]["estado"] == "pronto")
+    ids = [d["id"] for d in _ler_arquivo(arquivo)["pedidos"]]
+    assert len(ids) == 50 and ids[-1] == p.id and ids[0] == "c0000011"
+
+
+def test_falha_ao_gravar_so_avisa(controle, fabrica, tmp_path, capsys):
+    arquivo = tmp_path / "painel-fila.json"
+    arquivo.mkdir()  # um diretório no lugar do arquivo: a troca falha
+    fila = fabrica(arquivo=arquivo, base=tmp_path)
+    p = fila.pedir(Path("x/ep1"), 1, FAIXA, -18.0)
+    assert esperar(lambda: fila.pedido(p.id).estado == "pronto")
+    assert "Não consegui gravar a fila do painel" in capsys.readouterr().err
+
+
+def test_cancelar_na_fila_tira_da_fila_sem_rodar(controle, fabrica, tmp_path):
+    controle.preparar(1)
+    arquivo = tmp_path / "painel-fila.json"
+    fila = fabrica(arquivo=arquivo, base=tmp_path, relogio=lambda: 7.0)
+    primeiro = fila.pedir(Path("x/ep1"), 1, FAIXA, -18.0)
+    assert controle.iniciou[1].wait(LIMITE)
+    segundo = fila.pedir(Path("x/ep1"), 2, FAIXA, -18.0)
+    cancelado = fila.cancelar(segundo.id)
+    assert (cancelado.estado, cancelado.mensagem) == ("cancelado", "cancelado antes de começar")
+    assert cancelado.terminado == 7.0
+    assert not fila.montando_corte("ep1", 2)  # o corte fica livre para outro pedido
+    assert esperar(lambda: _ler_arquivo(arquivo)["pedidos"][-1]["estado"] == "cancelado")
+    with pytest.raises(NaoCancela, match="já terminou"):
+        fila.cancelar(segundo.id)
+    with pytest.raises(NaoCancela, match="não para no meio"):
+        fila.cancelar(primeiro.id)  # música: o ffmpeg não para no meio
+    with pytest.raises(KeyError):
+        fila.cancelar("naoexiste")
+    controle.liberar[1].set()
+    assert esperar(lambda: fila.pedido(primeiro.id).estado == "pronto")
+    time.sleep(0.05)
+    assert [c[1] for c in controle.chamadas] == [1]
+    assert fila.pedido(segundo.id).estado == "cancelado"
+
+
+def test_cancelar_interrompido_descarta(controle, fabrica, tmp_path):
+    arquivo = tmp_path / "painel-fila.json"
+    _gravar_arquivo(arquivo, [_dict("dddd0001", "na fila")])
+    fila = fabrica(arquivo=arquivo, base=tmp_path)
+    descartado = fila.cancelar("dddd0001")
+    assert descartado.estado == "cancelado"
+    assert descartado.mensagem == "interrompido e descartado: não vai rodar de novo"
+
+
+def test_cancelar_ia_no_meio_para_antes_da_proxima_imagem(fabrica):
+    passou, solto = threading.Event(), threading.Event()
+    passos = []
+
+    def gera_em_passos(progresso):
+        for i in (1, 2, 3):
+            progresso(f"Gerando {i} de 3…")
+            passos.append(i)
+            passou.set()
+            assert solto.wait(LIMITE)
+        return Resultado("pronto", "3 geradas", [], None)
+
+    fila = fabrica()
+    p = fila.pedir_tarefa("ia", Path("ep1"), [1], gera_em_passos)
+    assert passou.wait(LIMITE)
+    pedido = fila.cancelar(p.id)
+    assert (pedido.estado, pedido.cancelando) == ("montando", True)
+    assert fila.cancelar(p.id).cancelando  # repetir não muda nada
+    solto.set()
+    assert esperar(lambda: fila.pedido(p.id).estado == "cancelado")
+    final = fila.pedido(p.id)
+    assert final.mensagem == "cancelado no meio: o que já ficou pronto foi mantido"
+    assert passos == [1] and not final.cancelando and final.terminado is not None
+
+
+def test_cancelamento_que_chega_tarde_avisa(fabrica):
+    passou, solto = threading.Event(), threading.Event()
+
+    def uma_so(progresso):
+        progresso("Gerando 1 de 1…")
+        passou.set()
+        assert solto.wait(LIMITE)
+        return Resultado("pronto", "1 gerada", [], None)
+
+    fila = fabrica()
+    p = fila.pedir_tarefa("ia", Path("ep1"), [1], uma_so)
+    assert passou.wait(LIMITE)
+    fila.cancelar(p.id)
+    solto.set()
+    assert esperar(lambda: fila.pedido(p.id).estado == "pronto")
+    assert fila.pedido(p.id).avisos == ["O cancelamento chegou depois do último passo: o pedido terminou."]
+
+
+@pytest.mark.parametrize("tipo", ["fotos", "montar", "publicar"])
+def test_tipos_que_nao_param_no_meio_recusam_cancelar_montando(fabrica, tipo):
+    liberar, iniciou = threading.Event(), threading.Event()
+    fila = fabrica()
+    try:
+        p = fila.pedir_tarefa(tipo, Path("ep1"), [1], tarefa(liberar, iniciou))
+        assert iniciou.wait(LIMITE)
+        with pytest.raises(NaoCancela):
+            fila.cancelar(p.id)
+    finally:
+        liberar.set()
+    assert esperar(lambda: fila.pedido(p.id).estado == "pronto")
+
+
+def test_ouvintes_sao_avisados_a_cada_mudanca(fabrica):
+    liberar, iniciou = threading.Event(), threading.Event()
+    fila = fabrica()
+    avisos = []
+    parar_de_ouvir = fila.ouvir(lambda: avisos.append(1))
+    fila.ouvir(lambda: 1 / 0)  # um ouvinte quebrado não atrapalha os outros nem a fila
+    p = fila.pedir_tarefa("ia", Path("ep1"), [1], tarefa(liberar, iniciou, "Gerando 1 de 1…"))
+    assert iniciou.wait(LIMITE)
+    assert esperar(lambda: len(avisos) >= 3)  # na fila, montando e o progresso
+    liberar.set()
+    assert esperar(lambda: fila.pedido(p.id).estado == "pronto")
+    assert esperar(lambda: len(avisos) >= 4)
+    parar_de_ouvir()
+    antes = len(avisos)
+    fila.acordar()
+    assert len(avisos) == antes

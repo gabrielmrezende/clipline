@@ -572,6 +572,36 @@ describe("BlocoImagens", () => {
     expect(chamadas.some((c) => c.url === "/api/tarefas/t9")).toBe(true);
   });
 
+  it("retoma o pedido interrompido pelo fechamento do painel; Tentar de novo segue o caminho de Gerar", async () => {
+    const mensagem = "o painel foi fechado antes de montar este pedido";
+    const interrompido = { estado: "interrompido" as const, mensagem };
+    tarefasLista = [pedido({ id: "t9", tipo: "ia", ...interrompido }), pedido({ id: "t8", estado: "pronto" })];
+    await montar();
+    expect(screen.getByText("Interrompido: o painel foi fechado antes de montar este pedido.")).toBeTruthy();
+    expect((botaoIa() as HTMLButtonElement).disabled).toBe(false);
+    await avancar(2000);
+    expect(chamadas.some((c) => c.url.startsWith("/api/tarefas/"))).toBe(false); // nada roda nem é acompanhado
+    const orcamentos = chamadas.filter((c) => c.url.endsWith("/ia/orcamento")).length;
+    fireEvent.click(screen.getByRole("button", { name: "Tentar de novo" }));
+    await avancar(0);
+    expect(chamadas.filter((c) => c.url.endsWith("/ia/orcamento")).length).toBe(orcamentos + 1); // o custo de novo
+  });
+
+  it("Descartar o pedido interrompido cancela pela fila", async () => {
+    tarefasLista = [pedido({ id: "t9", tipo: "montar", estado: "interrompido", mensagem: "o painel foi fechado" })];
+    tarefa = [pedido({ id: "t9", tipo: "montar", estado: "cancelado", mensagem: "interrompido e descartado" })];
+    const aoMudarAndamento = vi.fn();
+    render(<BlocoImagens ep="Ep 1" n={2} irPara={vi.fn()} aoMudarAndamento={aoMudarAndamento} />);
+    await avancar(0);
+    await avancar(0);
+    expect(aoMudarAndamento).not.toHaveBeenCalledWith(true); // interrompido não trava a tela como "montando"
+    fireEvent.click(screen.getByRole("button", { name: "Descartar o pedido" }));
+    await avancar(0);
+    const post = chamadas.filter((c) => c.metodo === "POST");
+    expect(post.map((c) => [c.url, c.corpo])).toEqual([["/api/tarefas/t9/cancelar", { confirmado: true }]]);
+    expect(screen.getByText("Interrompido e descartado.")).toBeTruthy();
+  });
+
   it("sem momentos, avisa a tela e não desenha nada", async () => {
     momentos = [];
     const aoCarregar = vi.fn();

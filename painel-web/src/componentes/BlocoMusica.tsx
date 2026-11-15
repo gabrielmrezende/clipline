@@ -6,10 +6,13 @@ import {
   Pedido,
   caminhoCorte,
   caminhoEpisodio,
+  cancelarTarefa,
   enviarJson,
   pedir,
   pedirBlob,
 } from "../api";
+import { useAcompanharPedido } from "../useTarefas";
+import { frase } from "./imagensComum";
 
 interface Props {
   ep: string;
@@ -26,7 +29,6 @@ interface Props {
 }
 
 const VOLUME_PADRAO = -26;
-const ESPERA_MS = 2000;
 const CONFIRMACAO =
   "Este corte já tem vídeo final. O vídeo final não muda: depois, aprove de novo (ou refaça no CapCut). Montar mesmo assim?";
 const PEDIDO_PERDIDO =
@@ -73,7 +75,6 @@ export function BlocoMusica({
   const [escolhida, setEscolhida] = useState<string | null>(null);
   const [volumeEscolhido, setVolumeEscolhido] = useState<number | null>(null);
   const [pedido, setPedido] = useState<Pedido | null>(null);
-  const [tick, setTick] = useState(0);
   const [erroPedido, setErroPedido] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
   const [tocando, setTocando] = useState<string | null>(null);
@@ -83,7 +84,6 @@ export function BlocoMusica({
   const [erroPrevia, setErroPrevia] = useState<string | null>(null);
   const audio = useRef<HTMLAudioElement>(null);
   const urlPrevia = useRef<string | null>(null);
-  const terminados = useRef<Set<string>>(new Set());
   const aoTerminarRef = useRef(aoTerminar);
   aoTerminarRef.current = aoTerminar;
   const aoMudarAndamentoRef = useRef(aoMudarAndamento);
@@ -116,9 +116,7 @@ export function BlocoMusica({
       .catch((x) => vivo && setErroLeitura(mensagem(x)));
     void lerMusicaDoCorte().then((d) => {
       if (!vivo || !d || !d.pedido) return;
-      // Pedido já terminado nesta execução do painel: mostra o resultado sem recarregar nada.
-      if (!ativo(d.pedido)) terminados.current.add(d.pedido.id);
-      setPedido(d.pedido);
+      setPedido(d.pedido); // um pedido que já chegou terminado só mostra o resultado, sem recarregar nada
     });
     return () => {
       vivo = false;
@@ -136,37 +134,29 @@ export function BlocoMusica({
     aoMudarAndamentoRef.current?.(ocupado);
   }, [ocupado]);
 
-  // Consulta o pedido a cada 2 s até ele terminar.
-  useEffect(() => {
-    if (!pedido) return;
-    if (!ativo(pedido)) {
-      if (pedido.estado === "pronto" && !terminados.current.has(pedido.id)) {
-        terminados.current.add(pedido.id);
-        void lerMusicaDoCorte();
-        aoTerminarRef.current();
-      }
-      return;
+  // Acompanha o pedido até ele terminar: pelos eventos da fila, ou consultando a cada 2 s se eles falharem.
+  useAcompanharPedido(
+    pedido,
+    setPedido,
+    (final) => {
+      if (final.estado !== "pronto") return;
+      void lerMusicaDoCorte();
+      aoTerminarRef.current();
+    },
+    () => {
+      setErroPedido(PEDIDO_PERDIDO);
+      void lerMusicaDoCorte();
+    },
+  );
+
+  async function cancelarPedido(id: string) {
+    setErroPedido(null);
+    try {
+      setPedido(await cancelarTarefa(id));
+    } catch (x) {
+      setErroPedido(mensagem(x));
     }
-    let vivo = true;
-    const id = setTimeout(() => {
-      pedir<Pedido>(`/api/tarefas/${encodeURIComponent(pedido.id)}`)
-        .then((novo) => vivo && setPedido(novo))
-        .catch((x) => {
-          if (!vivo) return;
-          if (x instanceof ErroApi && x.status === 404) {
-            setPedido(null);
-            setErroPedido(PEDIDO_PERDIDO);
-            void lerMusicaDoCorte();
-            return;
-          }
-          setTick((t) => t + 1);
-        });
-    }, ESPERA_MS);
-    return () => {
-      vivo = false;
-      clearTimeout(id);
-    };
-  }, [pedido, tick, lerMusicaDoCorte]);
+  }
 
   function tocar(src: string, chave: string) {
     const el = audio.current;
@@ -272,6 +262,8 @@ export function BlocoMusica({
     montando: "Montando…",
     pronto: "Pronto: o corte.mp4 foi atualizado.",
     erro: pedido ? `Erro: ${pedido.mensagem}` : "",
+    interrompido: pedido ? `Interrompido: ${pedido.mensagem}.` : "",
+    cancelado: pedido ? frase(pedido.mensagem) : "",
   };
 
   return (
@@ -385,13 +377,18 @@ export function BlocoMusica({
           <p className={pedido.estado === "erro" ? "mensagem-erro" : undefined}>
             {textoEstado[pedido.estado]}
           </p>
-          {pedido.estado === "erro" ? (
+          {pedido.estado === "erro" || pedido.estado === "interrompido" ? (
             <button
               type="button"
               disabled={enviando}
               onClick={() => void enviar(pedido.arquivo, pedido.volume_db)}
             >
               Tentar de novo
+            </button>
+          ) : null}
+          {pedido.estado === "na fila" || pedido.estado === "interrompido" ? (
+            <button type="button" disabled={enviando} onClick={() => void cancelarPedido(pedido.id)}>
+              {pedido.estado === "na fila" ? "Cancelar o pedido" : "Descartar o pedido"}
             </button>
           ) : null}
           {pedido.avisos.length > 0 ? (
