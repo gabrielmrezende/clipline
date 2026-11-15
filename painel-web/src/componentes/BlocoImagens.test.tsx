@@ -1,7 +1,9 @@
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, vi } from "vitest";
 import type { Momento, Pedido } from "../api";
+import { haDialogo, responderDialogo, textoDoDialogo, tituloDoDialogo } from "../testes/dialogo";
 import { BlocoImagens } from "./BlocoImagens";
+import { ProvedorConfirmacao } from "./Confirmacao";
 
 const BASE = "/api/episodios/Ep%201/cortes/2";
 
@@ -110,7 +112,6 @@ let postBuscar: (chave: string, corpo: any) => Promise<Response>;
 let avisoGlossario: string | null;
 let postFotos: () => Promise<Response>;
 let postIa: () => Promise<Response>;
-let confirmar: ReturnType<typeof vi.fn>;
 let desatualizada: boolean;
 let postMontar: () => Promise<Response>;
 
@@ -162,10 +163,8 @@ beforeEach(() => {
   };
   postFotos = () => resposta(pedido(), 202);
   postIa = () => resposta(pedido({ tipo: "ia" }), 202);
-  confirmar = vi.fn(() => true);
   desatualizada = false;
   postMontar = () => resposta(pedido({ tipo: "montar" }), 202);
-  vi.stubGlobal("confirm", confirmar);
   vi.stubGlobal(
     "fetch",
     vi.fn((url: string, init?: RequestInit) => {
@@ -223,11 +222,20 @@ async function avancar(ms: number) {
   });
 }
 
+const comConfirmacao = { wrapper: ProvedorConfirmacao };
+
 async function montar(irPara = vi.fn()) {
-  const r = render(<BlocoImagens ep="Ep 1" n={2} irPara={irPara} />);
+  const r = render(<BlocoImagens ep="Ep 1" n={2} irPara={irPara} />, comConfirmacao);
   await avancar(0);
   await avancar(0);
   return { ...r, irPara };
+}
+
+/** Responde à confirmação aberta e deixa o pedido seguir. */
+async function responder(sim: boolean) {
+  responderDialogo(sim);
+  await avancar(0);
+  await avancar(0);
 }
 
 const candidataBtn = (k: number) => screen.getByRole("button", { name: new RegExp(`^Candidata ${k}\\b`) });
@@ -436,42 +444,40 @@ describe("BlocoImagens", () => {
     fireEvent.click(botaoFotos());
     await avancar(0);
     await avancar(0);
-    const texto = String(confirmar.mock.calls[0][0]);
-    expect(texto).toContain("2 fotos");
-    expect(texto).toContain("1,5 MB");
-    expect(texto).toContain("Wikimedia Commons");
+    expect(tituloDoDialogo()).toBe("Baixar 2 fotos (1,5 MB) de Wikimedia Commons?");
+    const texto = textoDoDialogo();
     expect(texto).toContain("tamanho desconhecido: f1-2.jpg");
     expect(texto).toContain("As fotos baixadas antes neste corte serão substituídas.");
+    expect(chamadas.filter((c) => c.metodo === "POST")).toHaveLength(0);
+    await responder(true);
     const posts = chamadas.filter((c) => c.metodo === "POST" && c.url === `${BASE}/fotos`);
     expect(posts.map((c) => c.corpo)).toEqual([{ confirmado: true }]);
   });
 
-  it("Baixar com confirm falso não envia nada", async () => {
-    confirmar.mockReturnValue(false);
+  it("Baixar cancelado não envia nada", async () => {
     await montar();
     fireEvent.click(botaoFotos());
     await avancar(0);
     await avancar(0);
-    expect(confirmar).toHaveBeenCalled();
+    expect(haDialogo()).toBe(true);
+    await responder(false);
+    expect(haDialogo()).toBe(false);
     expect(chamadas.filter((c) => c.metodo === "POST")).toHaveLength(0);
   });
 
-  it("Gerar as aprovadas confirma com o orçamento; com confirm falso, nada é enviado", async () => {
-    confirmar.mockReturnValue(false);
+  it("Gerar as aprovadas confirma com o orçamento; cancelado, nada é enviado", async () => {
     await montar();
     fireEvent.click(botaoIa());
     await avancar(0);
     await avancar(0);
-    const texto = String(confirmar.mock.calls[0][0]);
-    expect(texto).toContain("2 imagens");
-    expect(texto).toContain("openai");
-    expect(texto).toContain("gpt-image-1");
-    expect(texto).toContain("~US$ 0,10");
+    expect(tituloDoDialogo()).toBe("Gerar 2 imagens com openai (gpt-image-1), ~US$ 0,10?");
+    expect(textoDoDialogo()).toContain("Custo estimado~US$ 0,10");
+    await responder(false);
     expect(chamadas.filter((c) => c.metodo === "POST")).toHaveLength(0);
-    confirmar.mockReturnValue(true);
     fireEvent.click(botaoIa());
     await avancar(0);
     await avancar(0);
+    await responder(true);
     const posts = chamadas.filter((c) => c.metodo === "POST" && c.url === `${BASE}/ia`);
     expect(posts.map((c) => c.corpo)).toEqual([{ itens: orcamento.itens }]);
   });
@@ -487,18 +493,17 @@ describe("BlocoImagens", () => {
     momentos = [IA()];
     await montar();
     fireEvent.click(screen.getByRole("button", { name: "Gerar de novo" }));
-    expect(String(confirmar.mock.calls[0][0])).toContain("1 imagem, ~US$ 0,05");
-    await avancar(0);
+    expect(tituloDoDialogo()).toBe("Gerar de novo esta imagem: 1 imagem, ~US$ 0,05?");
+    await responder(true);
     const posts = chamadas.filter((c) => c.metodo === "POST" && c.url.endsWith("/momentos/i1/ia"));
     expect(posts.map((c) => c.corpo)).toEqual([{ confirmado: true }]);
   });
 
-  it("Gerar de novo com confirm falso não envia", async () => {
-    confirmar.mockReturnValue(false);
+  it("Gerar de novo cancelado não envia", async () => {
     momentos = [IA()];
     await montar();
     fireEvent.click(screen.getByRole("button", { name: "Gerar de novo" }));
-    await avancar(0);
+    await responder(false);
     expect(chamadas.filter((c) => c.metodo === "POST")).toHaveLength(0);
   });
 
@@ -511,6 +516,7 @@ describe("BlocoImagens", () => {
     fireEvent.click(botaoFotos());
     await avancar(0);
     await avancar(0);
+    await responder(true);
     expect(screen.getByText("Na fila")).toBeTruthy();
     expect((botaoFotos() as HTMLButtonElement).disabled).toBe(true);
     await avancar(2000);
@@ -534,6 +540,7 @@ describe("BlocoImagens", () => {
     fireEvent.click(botaoFotos());
     await avancar(0);
     await avancar(0);
+    await responder(true);
     await avancar(2000);
     expect(screen.getByText("Baixando…")).toBeTruthy();
   });
@@ -544,6 +551,7 @@ describe("BlocoImagens", () => {
     fireEvent.click(botaoFotos());
     await avancar(0);
     await avancar(0);
+    await responder(true);
     await avancar(2000);
     expect(screen.getByText("Erro: Wikimedia fora do ar")).toBeTruthy();
     await avancar(10000);
@@ -556,6 +564,7 @@ describe("BlocoImagens", () => {
     fireEvent.click(botaoFotos());
     await avancar(0);
     await avancar(0);
+    await responder(true);
     expect(screen.getByText("Já há um pedido de fotos em andamento para este corte.")).toBeTruthy();
   });
 
@@ -687,13 +696,14 @@ describe("BlocoImagens", () => {
     await avancar(0);
     expect(chamadas.filter((c) => c.url.endsWith("/ia/orcamento")).length).toBe(orcamentosAntes);
     expect((botaoIa() as HTMLButtonElement).disabled).toBe(true);
-    expect(confirmar).not.toHaveBeenCalled();
+    expect(haDialogo()).toBe(false);
     soltar();
     await avancar(0);
     await avancar(0);
     await avancar(0);
-    expect(confirmar).toHaveBeenCalledTimes(1);
-    expect(String(confirmar.mock.calls[0][0])).toContain("2 imagens");
+    expect(screen.getAllByRole("alertdialog")).toHaveLength(1);
+    expect(tituloDoDialogo()).toContain("2 imagens");
+    await responder(true);
     const indice = (f: (c: Chamada) => boolean) => chamadas.findIndex(f);
     const put = indice((c) => c.metodo === "PUT");
     const leitura = chamadas.findIndex((c, i) => i > put && c.url.endsWith("/ia/orcamento"));
@@ -724,8 +734,8 @@ describe("BlocoImagens", () => {
     await montar();
     fireEvent.click(screen.getByLabelText("Aprovado"));
     fireEvent.click(screen.getByRole("button", { name: "Gerar" }));
-    expect(String(confirmar.mock.calls[0][0])).toBe("Gerar esta imagem: 1 imagem, ~US$ 0,05?");
-    await avancar(0);
+    expect(tituloDoDialogo()).toBe("Gerar esta imagem: 1 imagem, ~US$ 0,05?");
+    await responder(true);
     expect(chamadas.filter((c) => c.metodo === "POST")).toHaveLength(0);
     soltar();
     await avancar(0);
@@ -736,18 +746,21 @@ describe("BlocoImagens", () => {
   });
 
   it("clique duplo em Gerar e em Baixar abre uma confirmação só", async () => {
-    confirmar.mockReturnValue(false);
     await montar();
     fireEvent.click(botaoIa());
     fireEvent.click(botaoIa());
     await avancar(0);
     await avancar(0);
-    expect(confirmar).toHaveBeenCalledTimes(1);
+    expect(screen.getAllByRole("alertdialog")).toHaveLength(1);
+    await responder(false);
+    expect(haDialogo()).toBe(false); // nenhuma segunda confirmação esperando na fila
     fireEvent.click(botaoFotos());
     fireEvent.click(botaoFotos());
     await avancar(0);
     await avancar(0);
-    expect(confirmar).toHaveBeenCalledTimes(2);
+    expect(screen.getAllByRole("alertdialog")).toHaveLength(1);
+    await responder(false);
+    expect(haDialogo()).toBe(false);
     expect(chamadas.filter((c) => c.metodo === "POST")).toHaveLength(0);
   });
 
@@ -809,15 +822,17 @@ describe("BlocoImagens", () => {
         aoMudarAndamento={aoMudarAndamento}
         aoTerminarMontagem={aoTerminarMontagem}
       />,
+      comConfirmacao,
     );
     await avancar(0);
     await avancar(0);
     fireEvent.click(screen.getByRole("button", { name: "Montar com as imagens" }));
     await avancar(0);
     await avancar(0);
-    expect(confirmar).toHaveBeenCalledWith(
-      "Montar o corte de novo com 2 imagens? O corte.mp4 atual será substituído (leva cerca de 1 minuto).",
-    );
+    expect(tituloDoDialogo()).toBe("Montar o corte de novo com 2 imagens?");
+    expect(textoDoDialogo()).toContain("O corte.mp4 atual será substituído (leva cerca de 1 minuto).");
+    expect(soltarVideo).not.toHaveBeenCalled();
+    await responder(true);
     expect(chamadas.find((c) => c.url === `${BASE}/montar`)?.corpo).toEqual({ confirmado: true });
     expect(soltarVideo).toHaveBeenCalled();
     expect(aoMudarAndamento).toHaveBeenCalledWith(true);
@@ -827,14 +842,14 @@ describe("BlocoImagens", () => {
     expect(aoTerminarMontagem).toHaveBeenCalledTimes(1);
   });
 
-  it("Montar com confirm falso não envia nem solta o vídeo", async () => {
-    confirmar.mockReturnValue(false);
+  it("Montar cancelado não envia nem solta o vídeo", async () => {
     const soltarVideo = vi.fn();
-    render(<BlocoImagens ep="Ep 1" n={2} irPara={vi.fn()} soltarVideo={soltarVideo} />);
+    render(<BlocoImagens ep="Ep 1" n={2} irPara={vi.fn()} soltarVideo={soltarVideo} />, comConfirmacao);
     await avancar(0);
     await avancar(0);
     fireEvent.click(screen.getByRole("button", { name: "Montar com as imagens" }));
     await avancar(0);
+    await responder(false);
     expect(chamadas.some((c) => c.url === `${BASE}/montar`)).toBe(false);
     expect(soltarVideo).not.toHaveBeenCalled();
   });

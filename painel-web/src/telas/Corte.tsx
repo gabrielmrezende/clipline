@@ -8,6 +8,7 @@ import { BlocoPublicacao } from "../componentes/BlocoPublicacao";
 import { EditorDeCorte } from "../componentes/EditorDeCorte";
 import { EditorLegenda } from "../componentes/EditorLegenda";
 import { EditorPost } from "../componentes/EditorPost";
+import { EsqueletoCorte } from "../componentes/Esqueleto";
 import { LinhaDoCorte } from "../componentes/LinhaDoCorte";
 import { Markdown } from "../componentes/Markdown";
 import { Players } from "../componentes/Players";
@@ -119,14 +120,7 @@ export function Corte() {
       </main>
     );
   }
-  if (!dados) {
-    return (
-      <main className="coluna">
-        {voltar}
-        <p>Carregando…</p>
-      </main>
-    );
-  }
+  if (!dados) return <EsqueletoCorte voltar={voltar} />;
 
   const { bloco, guia, imagens } = dados;
   const base = caminhoCorte(ep, n);
@@ -179,7 +173,7 @@ export function Corte() {
           versao={versaoVideo}
           montando={montando}
         />
-        <LinhaDoCorte video={elVideo} momentos={momentos} irPara={irPara} />
+        <LinhaDoCorte video={elVideo} momentos={momentos} irPara={irPara} ep={ep} n={n} versao={versaoVideo} />
       </div>
       <div className="folha">
         <header>

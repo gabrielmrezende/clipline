@@ -1,6 +1,8 @@
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, vi } from "vitest";
-import { EditorDeCorte, textoDaConfirmacao } from "./EditorDeCorte";
+import { responderDialogo, textoDoDialogo, tituloDoDialogo } from "../testes/dialogo";
+import { ProvedorConfirmacao } from "./Confirmacao";
+import { EditorDeCorte, opcoesDaConfirmacao } from "./EditorDeCorte";
 
 const BASE = "/api/episodios/Ep%201/cortes/2";
 
@@ -114,7 +116,7 @@ async function avancar(ms = 0) {
 
 async function abrir() {
   const props = { soltarVideo: vi.fn(), aoMudarAndamento: vi.fn(), aoTerminar: vi.fn() };
-  render(<EditorDeCorte ep="Ep 1" n={2} montandoNaTela={false} {...props} />);
+  render(<EditorDeCorte ep="Ep 1" n={2} montandoNaTela={false} {...props} />, { wrapper: ProvedorConfirmacao });
   await avancar();
   await avancar();
   return props;
@@ -200,21 +202,20 @@ describe("EditorDeCorte", () => {
   });
 
   it("a confirmação diz o que muda e o que se perde; cancelar não envia nada", async () => {
-    const confirmar = vi.spyOn(window, "confirm").mockReturnValue(false);
     const props = await abrir();
     fireEvent.click(palavra(1));
     await avancar();
     fireEvent.click(screen.getByRole("button", { name: "Trocar o trecho" }));
     await avancar();
-    const texto = confirmar.mock.calls[0][0] as string;
-    expect(texto).toContain("Trocar o trecho do corte 2 para 0:01,0 a 0:06,9 (5,9 s)?");
-    expect(texto).toContain("O que se perde:\n• Momento de imagem fora do trecho novo (fica descartado): 0:01 Ministro.");
+    expect(tituloDoDialogo()).toBe("Trocar o trecho do corte 2 para 0:01,0 a 0:06,9 (5,9 s)?");
+    expect(textoDoDialogo()).toContain("Perde: Momento de imagem fora do trecho novo (fica descartado): 0:01 Ministro.");
+    responderDialogo(false);
+    await avancar();
     expect(chamadas.some((c) => c.url === `${BASE}/trecho`)).toBe(false);
     expect(props.soltarVideo).not.toHaveBeenCalled();
   });
 
   it("confirmado: solta o vídeo, manda a versão e acompanha o pedido até o fim", async () => {
-    vi.spyOn(window, "confirm").mockReturnValue(true);
     trechos = [trecho(), trecho({ inicio: 1, versao: "V2", pedido: pedido({ estado: "pronto" }) })];
     tarefas = [pedido({ estado: "montando", progresso: "Preparando o trecho novo…" }),
       pedido({ estado: "pronto", mensagem: "Trecho novo: 0:01,0 a 0:06,9 (5,9 s).", avisos: ["aviso da troca"] })];
@@ -222,6 +223,8 @@ describe("EditorDeCorte", () => {
     fireEvent.click(palavra(1));
     await avancar();
     fireEvent.click(screen.getByRole("button", { name: "Trocar o trecho" }));
+    await avancar();
+    responderDialogo(true);
     await avancar();
     expect(props.soltarVideo).toHaveBeenCalled();
     expect(props.aoMudarAndamento).toHaveBeenLastCalledWith(true);
@@ -247,12 +250,13 @@ describe("EditorDeCorte", () => {
   });
 
   it("corte ainda não montado: não mexe no player", async () => {
-    vi.spyOn(window, "confirm").mockReturnValue(true);
     trechos = [trecho({ montado: false, preparado: false })];
     const props = await abrir();
     fireEvent.click(palavra(1));
     await avancar();
     fireEvent.click(screen.getByRole("button", { name: "Trocar o trecho" }));
+    await avancar();
+    responderDialogo(true);
     await avancar();
     expect(props.soltarVideo).not.toHaveBeenCalled();
     expect(props.aoMudarAndamento).toHaveBeenLastCalledWith(true);
@@ -290,17 +294,22 @@ describe("EditorDeCorte", () => {
   });
 });
 
-describe("textoDaConfirmacao", () => {
-  it("lista o que muda, o que se perde e os avisos", () => {
-    const texto = textoDaConfirmacao(4, conferencia(61.25, 140.5, { avisos: [] }));
-    expect(texto.split("\n")).toEqual([
-      "Trocar o trecho do corte 4 para 1:01,3 a 2:20,5 (79,3 s)?",
-      "",
-      "O que muda:",
-      "• O corte é preparado e montado de novo (leva cerca de 1 minuto).",
-      "",
-      "O que se perde:",
-      "• Momento de imagem fora do trecho novo (fica descartado): 0:01 Ministro.",
+describe("opcoesDaConfirmacao", () => {
+  it("lista o que muda, o que se perde e os avisos; com perda, o tom é de algo que não volta", () => {
+    const opcoes = opcoesDaConfirmacao(4, conferencia(61.25, 140.5, { avisos: ["sobrepõe o corte 3"] }));
+    expect(opcoes.titulo).toBe("Trocar o trecho do corte 4 para 1:01,3 a 2:20,5 (79,3 s)?");
+    expect(opcoes.itens).toEqual([
+      "O corte é preparado e montado de novo (leva cerca de 1 minuto).",
+      "Perde: Momento de imagem fora do trecho novo (fica descartado): 0:01 Ministro.",
+      "Atenção: sobrepõe o corte 3",
     ]);
+    expect(opcoes.tom).toBe("irreversivel");
+    expect(opcoes.aviso).toBeTruthy();
+  });
+
+  it("sem perda, a confirmação é a normal", () => {
+    const opcoes = opcoesDaConfirmacao(4, conferencia(61.25, 140.5, { perdas: [], avisos: [] }));
+    expect(opcoes.tom).toBe("normal");
+    expect(opcoes.aviso).toBeUndefined();
   });
 });

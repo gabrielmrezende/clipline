@@ -11,6 +11,7 @@ import {
   tempoComDecimo,
   trocarTrecho,
 } from "../api";
+import { OpcoesConfirmacao, useConfirmar } from "./Confirmacao";
 import { Alerta, AndamentoPedido, ativo, mensagem, useAcompanhamento, useUmaPorVez } from "./imagensComum";
 import "./EditorDeCorte.css";
 
@@ -46,11 +47,6 @@ const FOLGA = 0.001;
 const CORES_DE_VOZ = 4;
 const PEDIDO_PERDIDO = "O pedido se perdeu (o painel foi reiniciado?). Confira o trecho e peça de novo se precisar.";
 
-/** A confirmação da troca. Por enquanto, o window.confirm; o diálogo do painel entra aqui. */
-function confirmar(texto: string): Promise<boolean> {
-  return Promise.resolve(window.confirm(texto));
-}
-
 function outraPonta(ponta: Ponta): Ponta {
   return ponta === "inicio" ? "fim" : "inicio";
 }
@@ -78,16 +74,19 @@ function dentroDe(p: PalavraTrecho, inicio: number, fim: number): boolean {
   return p.inicio >= inicio - FOLGA && p.fim <= fim + FOLGA;
 }
 
-/** O texto da confirmação: o trecho novo, o que muda, o que se perde e os avisos. */
-export function textoDaConfirmacao(n: number | string, c: ConferenciaTrecho): string {
-  const linhas = [
-    `Trocar o trecho do corte ${n} para ${tempoComDecimo(c.inicio)} a ${tempoComDecimo(c.fim)} ` +
+/** A confirmação da troca: o trecho novo, o que muda, o que se perde e os avisos. Com perda, o tom é de algo que
+ * não volta (o botão fica vermelho e o foco começa em Cancelar). */
+export function opcoesDaConfirmacao(n: number | string, c: ConferenciaTrecho): OpcoesConfirmacao {
+  const itens = [...c.resumo, ...c.perdas.map((p) => `Perde: ${p}`), ...c.avisos.map((a) => `Atenção: ${a}`)];
+  return {
+    titulo:
+      `Trocar o trecho do corte ${n} para ${tempoComDecimo(c.inicio)} a ${tempoComDecimo(c.fim)} ` +
       `(${segundosTexto(c.duracao)})?`,
-  ];
-  if (c.resumo.length) linhas.push("", "O que muda:", ...c.resumo.map((r) => `• ${r}`));
-  if (c.perdas.length) linhas.push("", "O que se perde:", ...c.perdas.map((r) => `• ${r}`));
-  if (c.avisos.length) linhas.push("", "Atenção:", ...c.avisos.map((r) => `• ${r}`));
-  return linhas.join("\n");
+    aviso: c.perdas.length ? "Parte do que já foi feito neste corte não volta com a troca." : undefined,
+    itens: itens.length ? itens : undefined,
+    confirmar: "Confirmar a troca",
+    tom: c.perdas.length ? "irreversivel" : "normal",
+  };
 }
 
 /** O bloco "Trecho": a transcrição ao redor do corte, onde se marca um início e um fim novos. */
@@ -104,6 +103,7 @@ export function EditorDeCorte({ ep, n, soltarVideo, aoMudarAndamento, aoTerminar
   const [pedido, setPedido] = useState<Pedido | null>(null);
   const [ultimo, setUltimo] = useState<Pedido | null>(null);
   const [ocupado, umaPorVez] = useUmaPorVez();
+  const confirmar = useConfirmar();
   const palavrasRef = useRef<(HTMLSpanElement | null)[]>([]);
   const caixa = useRef<HTMLDivElement | null>(null);
   const rodadaConferir = useRef(0);
@@ -273,7 +273,7 @@ export function EditorDeCorte({ ep, n, soltarVideo, aoMudarAndamento, aoTerminar
   const aplicar = () =>
     umaPorVez(async () => {
       if (!conf || !pode) return;
-      if (!(await confirmar(textoDaConfirmacao(n, conf)))) return;
+      if (!(await confirmar(opcoesDaConfirmacao(n, conf)))) return;
       setErro(null);
       setUltimo(null);
       if (trecho.montado) soltarVideo();

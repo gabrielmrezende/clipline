@@ -31,6 +31,7 @@ from esteira.painel.rotas_musica import roteador as roteador_musica
 from esteira.painel.rotas_publicar import roteador as roteador_publicar
 from esteira.painel.rotas_tarefas import avisar_ao_fechar, fechar_eventos
 from esteira.painel.rotas_tarefas import roteador as roteador_tarefas
+from esteira.painel.rotas_revisao import roteador as roteador_revisao
 from esteira.painel.troca_musica import recuperar_trocas_interrompidas, trocar_musica
 from esteira.painel.troca_trecho import recuperar_trechos_interrompidos
 
@@ -139,6 +140,7 @@ def criar_app(
     app.include_router(roteador_publicar)
     app.include_router(roteador_tarefas)
     app.include_router(roteador_editor)
+    app.include_router(roteador_revisao)
 
     if estatico is not None and (Path(estatico) / "index.html").is_file():
         _servir_estatico(app, Path(estatico).resolve())

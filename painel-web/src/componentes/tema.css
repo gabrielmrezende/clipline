@@ -1,0 +1,71 @@
+/* Tema escolhido à mão. O escuro repete as cores do bloco "prefers-color-scheme: dark" do estilo.css
+ * (um teste confere que os dois continuam iguais); o claro é o :root de sempre, sem o bloco do sistema. */
+:root[data-tema="escuro"] {
+  color-scheme: dark;
+  --papel: #0e1627;
+  --nevoa: #152038;
+  --linha: #223050;
+  --linha-forte: #34446a;
+  --borda-campo: #5f719a;
+  --tinta: #e7ecf6;
+  --grafite: #9aa6c0;
+  --azul: #5b95ff;
+  --azul-escuro: #7eabff;
+  --azul-claro: #172a52;
+  --azul-texto: #9cbfff;
+  --sobre-azul: #06122b;
+  --monitor: #070d1b;
+  --monitor-2: #121c35;
+  --ok: #63d4a4;
+  --ok-fundo: #0f2e22;
+  --alerta: #f2c46e;
+  --alerta-fundo: #33270d;
+  --erro: #ff9d92;
+  --erro-fundo: #3a1517;
+  --cinza: #c9d1e1;
+  --cinza-fundo: #1b2742;
+}
+
+/* O seletor de tema no topo: três botões pequenos, o escolhido marcado. */
+.topo-acoes {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.alternar-tema {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--linha);
+  border-radius: 999px;
+  background: var(--nevoa);
+}
+.alternar-tema button {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  min-width: 36px;
+  height: 36px;
+  min-height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--grafite);
+  box-shadow: none;
+}
+.alternar-tema button:hover:not(:disabled) {
+  background: transparent;
+  color: var(--tinta);
+}
+.alternar-tema button[aria-pressed="true"],
+.alternar-tema button[aria-pressed="true"]:hover:not(:disabled) {
+  background: var(--papel);
+  color: var(--tinta);
+  box-shadow:
+    0 0 0 1px var(--linha-forte),
+    0 1px 2px rgba(10, 18, 38, 0.12);
+}
+.alternar-tema svg {
+  display: block;
+}

@@ -9,6 +9,7 @@ import {
   pedir,
 } from "../api";
 import { Calendario } from "../componentes/Calendario";
+import { EsqueletoCartoes, EsqueletoLinhas } from "../componentes/Esqueleto";
 import { ImagensDoEpisodio } from "../componentes/ImagensDoEpisodio";
 import { Markdown } from "../componentes/Markdown";
 import { Selo } from "../componentes/Selo";
@@ -62,7 +63,7 @@ function PainelCalendario({ ep }: { ep: string }) {
       .catch((x) => setErro(mensagem(x)));
   }, [ep]);
   if (erro) return <Erro texto={erro} />;
-  if (!dados) return <p>Carregando…</p>;
+  if (!dados) return <EsqueletoLinhas rotulo="Carregando o calendário…" linhas={4} />;
   return <Calendario itens={dados.itens} />;
 }
 
@@ -75,7 +76,7 @@ function PainelDescartados({ ep }: { ep: string }) {
       .catch((x) => setErro(mensagem(x)));
   }, [ep]);
   if (erro) return <Erro texto={erro} />;
-  if (texto === null) return <p>Carregando…</p>;
+  if (texto === null) return <EsqueletoLinhas rotulo="Carregando os descartados…" />;
   if (!texto.trim()) return <p>Nenhum candidato descartado.</p>;
   return <Markdown texto={texto} />;
 }
@@ -160,11 +161,15 @@ export function Episodio() {
       <div role="tabpanel" id={`painel-${aba}`} aria-labelledby={`aba-${aba}`}>
         {erro ? <Erro texto={erro} /> : null}
         {aba === "cortes" && !erro ? (
-          detalhe ? <Cortes ep={ep} cortes={detalhe.cortes} /> : <p>Carregando…</p>
+          detalhe ? <Cortes ep={ep} cortes={detalhe.cortes} /> : <EsqueletoCartoes />
         ) : null}
         {aba === "calendario" ? <PainelCalendario ep={ep} /> : null}
         {aba === "imagens" && !erro ? (
-          detalhe ? <ImagensDoEpisodio ep={ep} cortes={detalhe.cortes} /> : <p>Carregando…</p>
+          detalhe ? (
+            <ImagensDoEpisodio ep={ep} cortes={detalhe.cortes} />
+          ) : (
+            <EsqueletoLinhas rotulo="Carregando as imagens…" linhas={4} />
+          )
         ) : null}
         {aba === "descartados" ? <PainelDescartados ep={ep} /> : null}
       </div>

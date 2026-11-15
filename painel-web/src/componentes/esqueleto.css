@@ -1,0 +1,94 @@
+/* Esqueletos de carregamento: blocos na cor da névoa com um brilho que passa devagar. */
+.esqueleto {
+  /* Carregamento rápido não pisca: os blocos só aparecem depois de um instante. */
+  animation: esqueleto-surgir 0.2s ease-out 0.15s both;
+}
+.esqueleto-formas {
+  display: grid;
+  gap: 0.65rem;
+}
+.osso {
+  display: block;
+  height: 0.9rem;
+  max-width: 100%;
+  border-radius: 6px;
+  background-color: var(--nevoa);
+  background-image: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--papel) 65%, transparent),
+    transparent
+  );
+  background-size: 50% 100%;
+  background-repeat: no-repeat;
+  background-position: -150% 0;
+  animation: brilhar 1.6s ease-in-out infinite;
+}
+.osso-fino {
+  height: 4px;
+  border-radius: 4px;
+}
+.osso-pilula {
+  border-radius: 999px;
+}
+.esqueleto-episodios .esqueleto-formas {
+  gap: 0;
+  margin-top: 1.5rem;
+  border-top: 1px solid var(--linha);
+}
+.esqueleto-episodio {
+  display: grid;
+  gap: 0.6rem;
+  padding: 1.25rem 0;
+  border-bottom: 1px solid var(--linha);
+}
+.esqueleto-cartao {
+  display: grid;
+  gap: 0.6rem;
+  padding: 1.1rem 1.25rem 1.2rem;
+}
+.esqueleto-cartao:hover {
+  border-color: var(--linha);
+}
+.esqueleto-folha .esqueleto-formas {
+  gap: 0.75rem;
+  padding-top: 0.5rem;
+}
+.esqueleto-secao {
+  display: grid;
+  gap: 0.6rem;
+  margin-top: 1rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--linha);
+}
+.esqueleto-post .esqueleto-formas {
+  padding: 1.75rem 0;
+  border-top: 1px solid var(--linha);
+}
+.esqueleto-tela {
+  background:
+    linear-gradient(90deg, transparent, rgba(223, 230, 245, 0.06), transparent) -150% 0 / 50% 100% no-repeat,
+    var(--monitor-2);
+  animation: brilhar 1.6s ease-in-out infinite;
+}
+
+@keyframes brilhar {
+  to {
+    background-position: 250% 0;
+  }
+}
+@keyframes esqueleto-surgir {
+  from {
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .esqueleto,
+  .osso,
+  .esqueleto-tela {
+    animation: none;
+  }
+  .osso {
+    background-image: none;
+  }
+}

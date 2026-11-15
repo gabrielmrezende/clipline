@@ -13,6 +13,7 @@ import {
 } from "../api";
 import { useAcompanharPedido } from "../useTarefas";
 import { frase } from "./imagensComum";
+import { OpcoesConfirmacao, useConfirmar } from "./Confirmacao";
 
 interface Props {
   ep: string;
@@ -29,8 +30,11 @@ interface Props {
 }
 
 const VOLUME_PADRAO = -26;
-const CONFIRMACAO =
-  "Este corte já tem vídeo final. O vídeo final não muda: depois, aprove de novo (ou refaça no CapCut). Montar mesmo assim?";
+const CONFIRMACAO: OpcoesConfirmacao = {
+  titulo: "Montar mesmo assim?",
+  resumo: "Este corte já tem vídeo final. O vídeo final não muda: depois, aprove de novo (ou refaça no CapCut).",
+  confirmar: "Montar mesmo assim",
+};
 const PEDIDO_PERDIDO =
   "O pedido se perdeu (o painel foi reiniciado?). Confira a música e monte de novo se precisar.";
 
@@ -88,6 +92,8 @@ export function BlocoMusica({
   aoTerminarRef.current = aoTerminar;
   const aoMudarAndamentoRef = useRef(aoMudarAndamento);
   aoMudarAndamentoRef.current = aoMudarAndamento;
+  const confirmar = useConfirmar();
+  const confirmando = useRef(false);
 
   const atual = musica?.atual ?? null;
   const arquivoEscolhido = escolhida ?? atual?.arquivo ?? null;
@@ -215,9 +221,15 @@ export function BlocoMusica({
     }
   }
 
-  function montarComEsta() {
-    if (!arquivoEscolhido) return;
-    if (videoFinal.length > 0 && !window.confirm(CONFIRMACAO)) return;
+  async function montarComEsta() {
+    if (!arquivoEscolhido || confirmando.current) return; // clique duplo: uma confirmação só
+    if (videoFinal.length > 0) {
+      confirmando.current = true;
+      const sim = await confirmar(CONFIRMACAO).finally(() => {
+        confirmando.current = false;
+      });
+      if (!sim) return;
+    }
     void enviar(arquivoEscolhido, volume);
   }
 
@@ -362,7 +374,7 @@ export function BlocoMusica({
           type="button"
           className="primario"
           disabled={!arquivoEscolhido || ocupado || montandoNaTela}
-          onClick={montarComEsta}
+          onClick={() => void montarComEsta()}
         >
           Montar com esta música
         </button>
