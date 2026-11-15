@@ -1,5 +1,6 @@
 import asyncio
 import functools
+import threading
 import time
 from collections.abc import Callable
 from contextlib import asynccontextmanager
@@ -21,11 +22,14 @@ from esteira.montar import montar_episodio
 from esteira.pedidos import pessoas_do_glossario
 from esteira.painel.acesso import COOKIE, Cofre, Porteiro
 from esteira.painel.leitura import CaminhoProibido, NaoEncontrado
+from esteira.painel.fila import ARQUIVO as ARQUIVO_FILA
 from esteira.painel.fila import Fila
 from esteira.painel.rotas import _TRAVA_GRAVACAO, roteador
 from esteira.painel.rotas_imagens import roteador as roteador_imagens
 from esteira.painel.rotas_musica import roteador as roteador_musica
 from esteira.painel.rotas_publicar import roteador as roteador_publicar
+from esteira.painel.rotas_tarefas import avisar_ao_fechar, fechar_eventos
+from esteira.painel.rotas_tarefas import roteador as roteador_tarefas
 from esteira.painel.troca_musica import recuperar_trocas_interrompidas, trocar_musica
 
 ESPERA_AO_DESLIGAR = 120  # segundos esperando a montagem atual quando o painel fecha
@@ -67,7 +71,10 @@ def criar_app(
 
     @asynccontextmanager
     async def _vida(app: FastAPI):
+        desfazer = avisar_ao_fechar(lambda: fechar_eventos(app))  # Ctrl+C fecha os eventos antes de tudo
         yield
+        fechar_eventos(app)
+        desfazer()
         if getattr(app.state.fila, "montando", lambda: False)():
             print("Esperando a montagem em andamento terminar (até 2 min)...")
         await asyncio.to_thread(app.state.fila.parar, ESPERA_AO_DESLIGAR)
@@ -90,11 +97,12 @@ def criar_app(
     app.state.tem_chave = tem_chave
     app.state.config_ia = Path(config_ia)
     app.state.montar = montar
+    app.state.fechando = threading.Event()
     if fila is None:
         fila = Fila(executar=functools.partial(
             trocar_musica, montar=montar, base=app.state.cortes,
             pasta_musicas=app.state.pasta_musicas, trava=_TRAVA_GRAVACAO,
-        ))
+        ), arquivo=app.state.cortes / ARQUIVO_FILA, base=app.state.cortes)
     app.state.fila = fila
     if rede:
         if cofre is None:
@@ -125,6 +133,7 @@ def criar_app(
     app.include_router(roteador_musica)
     app.include_router(roteador_imagens)
     app.include_router(roteador_publicar)
+    app.include_router(roteador_tarefas)
 
     if estatico is not None and (Path(estatico) / "index.html").is_file():
         _servir_estatico(app, Path(estatico).resolve())

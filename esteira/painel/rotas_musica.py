@@ -174,15 +174,3 @@ def previa(ep: str, n: int, corpo: PedidoPrevia, requisicao: Request):
 def _falha_previa(motivo: str) -> JSONResponse:
     return JSONResponse({"detail": f"Não consegui gerar a prévia: {motivo}"}, status_code=422)
 
-
-@roteador.get("/tarefas")
-def tarefas(requisicao: Request) -> list[dict]:
-    return [p.como_dict() for p in requisicao.app.state.fila.pedidos()]
-
-
-@roteador.get("/tarefas/{id}")
-def tarefa(id: str, requisicao: Request) -> dict:
-    pedido = requisicao.app.state.fila.pedido(id)
-    if pedido is None:
-        raise NaoEncontrado("tarefa não encontrada")
-    return pedido.como_dict()
