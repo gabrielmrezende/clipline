@@ -7,6 +7,7 @@ import { BlocoMusica } from "../componentes/BlocoMusica";
 import { BlocoPublicacao } from "../componentes/BlocoPublicacao";
 import { EditorLegenda } from "../componentes/EditorLegenda";
 import { EditorPost } from "../componentes/EditorPost";
+import { EsqueletoCorte } from "../componentes/Esqueleto";
 import { LinhaDoCorte } from "../componentes/LinhaDoCorte";
 import { Markdown } from "../componentes/Markdown";
 import { Players } from "../componentes/Players";
@@ -116,14 +117,7 @@ export function Corte() {
       </main>
     );
   }
-  if (!dados) {
-    return (
-      <main className="coluna">
-        {voltar}
-        <p>Carregando…</p>
-      </main>
-    );
-  }
+  if (!dados) return <EsqueletoCorte voltar={voltar} />;
 
   const { bloco, guia, imagens } = dados;
   const base = caminhoCorte(ep, n);

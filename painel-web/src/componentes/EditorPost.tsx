@@ -1,6 +1,7 @@
 import { ChangeEvent, useCallback, useEffect, useRef, useState } from "react";
 import { CamposPost, ErroApi, Post, caminhoCorte, enviarJson, pedir } from "../api";
 import { useConfirmar } from "./Confirmacao";
+import { EsqueletoLinhas } from "./Esqueleto";
 
 interface Props {
   ep: string;
@@ -190,7 +191,7 @@ export function EditorPost({ ep, n, recarregarSinal }: Props) {
     }
   }
 
-  if (carregando) return <p>Carregando o post…</p>;
+  if (carregando) return <EsqueletoLinhas rotulo="Carregando o post…" linhas={4} className="esqueleto-post" />;
 
   const quebrado = erroLeitura !== null;
   const leitura = Object.entries(post?.somente_leitura ?? {});

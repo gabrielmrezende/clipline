@@ -1,6 +1,7 @@
 import { CSSProperties, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { ErroApi, Resumo, pedir } from "../api";
+import { EsqueletoEpisodios } from "../componentes/Esqueleto";
 
 export function Episodios() {
   const [lista, setLista] = useState<Resumo[] | null>(null);
@@ -20,7 +21,7 @@ export function Episodios() {
           {erro}
         </p>
       ) : null}
-      {!lista && !erro ? <p>Carregando…</p> : null}
+      {!lista && !erro ? <EsqueletoEpisodios /> : null}
       {lista && lista.length === 0 ? <p>Nenhum episódio em 2 - Cortes.</p> : null}
       <ul className="episodios">
         {lista?.map((r) => (

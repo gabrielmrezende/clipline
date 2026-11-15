@@ -1,12 +1,16 @@
+import { Suspense, lazy } from "react";
 import { Link, NavLink, Route, Routes, useLocation } from "react-router-dom";
 import { AlternarTema } from "./componentes/AlternarTema";
 import { ErroDaTela } from "./componentes/ErroDaTela";
+import { EsqueletoCorte, EsqueletoTela } from "./componentes/Esqueleto";
 import { MarcaClipline } from "./componentes/MarcaClipline";
-import { Configuracoes } from "./telas/Configuracoes";
-import { Corte } from "./telas/Corte";
-import { Entrada } from "./telas/Entrada";
-import { Episodio } from "./telas/Episodio";
-import { Episodios } from "./telas/Episodios";
+
+// Cada tela vem num pedaço próprio, baixado na primeira visita: a lista de episódios não carrega o corte.
+const Configuracoes = lazy(() => import("./telas/Configuracoes").then((m) => ({ default: m.Configuracoes })));
+const Corte = lazy(() => import("./telas/Corte").then((m) => ({ default: m.Corte })));
+const Entrada = lazy(() => import("./telas/Entrada").then((m) => ({ default: m.Entrada })));
+const Episodio = lazy(() => import("./telas/Episodio").then((m) => ({ default: m.Episodio })));
+const Episodios = lazy(() => import("./telas/Episodios").then((m) => ({ default: m.Episodios })));
 
 export function App() {
   const { pathname } = useLocation();
@@ -31,7 +35,10 @@ export function App() {
         </div>
       </header>
       <ErroDaTela key={pathname}>
-        <Rotas />
+        {/* Enquanto o código da tela chega, o esqueleto dela. */}
+        <Suspense fallback={largo ? <EsqueletoCorte /> : <EsqueletoTela />}>
+          <Rotas />
+        </Suspense>
       </ErroDaTela>
     </>
   );
