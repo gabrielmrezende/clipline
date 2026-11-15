@@ -11,7 +11,9 @@ license = "MIT"
 requires-python = ">=3.12,<3.14"
 dependencies = [
     "faster-whisper",
-    "av<18",
+    # O faster-whisper 1.2.1 chama av.open(..., metadata_errors="ignore") e o av 19 tirou esse parâmetro: a
+    # transcrição falha com TypeError. O av 18.1 foi testado e decodifica igual ao 17.
+    "av<19",
     "pillow",
     "opencv-python",
     "nvidia-cublas-cu12; platform_system != 'Darwin'",

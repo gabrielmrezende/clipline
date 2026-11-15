@@ -14,6 +14,19 @@ updates:
       python:
         patterns: ["*"]
         update-types: [minor, patch]
+    ignore:
+      # O CI não instala o faster-whisper: um av novo passaria verde e quebraria a transcrição (o 19 quebra).
+      # Suba o teto à mão depois de transcrever um episódio de verdade com a versão nova.
+      - dependency-name: "av"
+        versions: [">=19"]
+      # O extra vozes foi testado na GPU com torch/torchaudio 2.5.1, pyannote.audio 3.4 e huggingface_hub 0.36
+      # (docs/resultados/2026-teste-capcut-f1.md). As quatro só mudam juntas e depois de um teste real numa GPU:
+      # o pyannote 4 troca use_auth_token por token, e o huggingface_hub 1.0 tira o use_auth_token que o
+      # pyannote 3 usa. O CI testa o vozes só com falsos e não pegaria nada disso.
+      - dependency-name: "torch"
+      - dependency-name: "torchaudio"
+      - dependency-name: "pyannote.audio"
+      - dependency-name: "huggingface_hub"
 
   - package-ecosystem: npm
     directory: "/painel-web"
