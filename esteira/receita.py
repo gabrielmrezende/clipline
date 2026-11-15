@@ -4,7 +4,7 @@ from pathlib import Path
 
 from esteira.legenda import _chave
 from esteira.modelos import Cue
-from esteira.planos import Plano
+from esteira.planos import Plano, plano_em_dict
 from esteira.caminhos import gravar_atomico
 
 NOME_ARQUIVO = "montagem.json"
@@ -50,7 +50,9 @@ def duracao_principal(receita: Receita) -> float:
 
 
 def gravar_receita(pasta: Path, receita: Receita) -> None:
-    texto = json.dumps(asdict(receita), ensure_ascii=False, indent=2)
+    dados = asdict(receita)
+    dados["planos"] = [plano_em_dict(p) for p in receita.planos]  # sem trajeto/divisao vazios: o arquivo de sempre
+    texto = json.dumps(dados, ensure_ascii=False, indent=2)
     gravar_atomico(Path(pasta) / NOME_ARQUIVO, texto)
 
 

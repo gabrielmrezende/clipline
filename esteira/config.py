@@ -51,6 +51,9 @@ class Config:
     ia_classificador: bool = False
     ia_modelo_classificador: str = "claude-haiku-5-5"
     ia_modelo_revisao: str = "claude-sonnet-5-5"
+    # Enquadramento: o recorte acompanha o rosto dentro do plano; diálogo rápido sai em tela dividida
+    enquadramento_suave: bool = False
+    enquadramento_tela_dividida: bool = False
     extras: dict = field(default_factory=dict, compare=False)
     # Entrada e idiomas (docs/entrada-e-idiomas.md)
     transcricao_idioma: str = "pt"  # código do Whisper; também escolhe as listas de esteira/idiomas.py
@@ -66,6 +69,8 @@ SECOES = {
     ("voz", "normalizar"): "normalizar_voz", ("voz", "lufs"): "voz_lufs",
     ("youtube", "categoria"): "youtube_categoria", ("youtube", "limite_shorts"): "limite_shorts",
     ("credenciais", "prefixo"): "credenciais_prefixo",
+    ("enquadramento", "suave"): "enquadramento_suave",
+    ("enquadramento", "tela_dividida"): "enquadramento_tela_dividida",
 }
 SECOES.update({("transcricao", "idioma"): "transcricao_idioma", ("imagens", "licencas"): "imagens_licencas"})
 SECOES_DE_CAMINHOS = ("pastas", "identidade")  # lidas e conferidas por caminhos.py, fora da Config

@@ -63,3 +63,7 @@ prefixo = "tudo-e-politica"
 classificador = false              # true: um modelo confere se o prompt de IA retrata pessoa real antes de gerar
 modelo_classificador = "claude-haiku-5-5"
 modelo_revisao = "claude-sonnet-5-5"  # revisao-visual
+
+[enquadramento]                    # ver docs/enquadramento.md; vale no próximo `planos` (ou `planos --forcar`)
+suave = false                      # true: dentro de cada plano, o recorte acompanha o rosto de quem fala
+tela_dividida = false              # true: diálogo rápido entre duas pessoas na mesma cena sai empilhado
