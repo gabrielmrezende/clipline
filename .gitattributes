@@ -1,0 +1,4 @@
+# Fim de linha fixo onde o interpretador se importa; o resto segue a configuração de cada máquina.
+*.sh        text eol=lf
+Dockerfile  text eol=lf
+*.ps1       text eol=crlf

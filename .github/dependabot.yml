@@ -1,0 +1,47 @@
+# Atualizações de dependências: uma vez por mês, agrupadas por ecossistema para virar poucos pull requests.
+# Versões menores e correções vêm juntas; uma versão maior vem num pull request próprio, para ser revisada à parte.
+version: 2
+updates:
+  - package-ecosystem: pip
+    directory: "/"
+    schedule:
+      interval: monthly
+    # pyproject.toml só sobe o mínimo quando a versão nova sai da faixa; requirements-ci.txt sobe a versão fixa
+    versioning-strategy: increase-if-necessary
+    commit-message:
+      prefix: "build(deps)"
+    groups:
+      python:
+        patterns: ["*"]
+        update-types: [minor, patch]
+
+  - package-ecosystem: npm
+    directory: "/painel-web"
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: "build(painel)"
+    groups:
+      painel:
+        patterns: ["*"]
+        update-types: [minor, patch]
+    ignore:
+      # React 19 fica para uma rodada própria (muda a renderização e os tipos); tire daqui quando for a hora.
+      - dependency-name: "react"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "react-dom"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/react"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/react-dom"
+        update-types: ["version-update:semver-major"]
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: "ci"
+    groups:
+      actions:
+        patterns: ["*"]

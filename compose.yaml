@@ -1,0 +1,55 @@
+# O painel de revisão e a esteira (em CPU) num contêiner, com as pastas do canal montadas como volumes.
+#
+#   docker compose up --build                       # painel em http://localhost:8765
+#   docker compose run --rm clipline python -m esteira doctor
+#
+# A pasta do canal é a que fica acima deste repositório (a mesma que a esteira usa fora do Docker). Para usar outra:
+#   CLIPLINE_CANAL="/caminho/do/Meu Canal" docker compose up
+# As pastas precisam existir; scripts/instalar.sh (ou .ps1) cria as que faltam.
+name: clipline
+
+services:
+  clipline:
+    build: .
+    image: clipline:local
+    init: true
+    ports:
+      # só neste computador; para o celular na Wi-Fi, use o painel fora do Docker com --rede e código de acesso
+      - "127.0.0.1:8765:8765"
+    volumes:
+      - type: bind
+        source: ${CLIPLINE_CANAL:-..}/1 - Programas
+        target: /canal/1 - Programas
+        read_only: true # a esteira só lê os episódios
+      - type: bind
+        source: ${CLIPLINE_CANAL:-..}/2 - Cortes
+        target: /canal/2 - Cortes
+      - type: bind
+        source: ${CLIPLINE_CANAL:-..}/3 - Identidade
+        target: /canal/3 - Identidade
+        read_only: true
+      - type: bind
+        source: ${CLIPLINE_CANAL:-..}/Contexto
+        target: /canal/Contexto
+        read_only: true
+      # biblioteca de música (os .mp3 ficam fora do git) e o histórico de uso dela
+      - type: bind
+        source: ./musicas
+        target: /canal/Automacao/musicas
+      # modelos de rosto (.onnx; ver modelos/LEIA.md)
+      - type: bind
+        source: ./modelos
+        target: /canal/Automacao/modelos
+        read_only: true
+      # modelos do Whisper e outros downloads, para não baixar de novo a cada contêiner
+      - type: volume
+        source: cache
+        target: /home/clipline/.cache
+      # configuração opcional do canal: tire o comentário depois de criar o clipline.toml
+      # - type: bind
+      #   source: ./clipline.toml
+      #   target: /canal/Automacao/clipline.toml
+      #   read_only: true
+
+volumes:
+  cache:

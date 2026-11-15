@@ -76,7 +76,7 @@ describe("Episodio", () => {
       await act(async () => {});
       unmount();
     };
-    const base = (fetch as unknown as ReturnType<typeof vi.fn>).getMockImplementation()!;
+    const base = vi.mocked(fetch).getMockImplementation()!;
     vi.stubGlobal(
       "fetch",
       vi.fn((url: string, init?: RequestInit) => {

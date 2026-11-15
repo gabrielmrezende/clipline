@@ -1,0 +1,26 @@
+# Como citar o clipline. O GitHub mostra "Cite this repository" a partir deste arquivo.
+# A versão acompanha o pyproject.toml.
+cff-version: 1.2.0
+message: "Se você usar o clipline num trabalho, cite-o com os dados abaixo."
+type: software
+title: "clipline"
+abstract: >-
+  Esteira de cortes verticais com revisão humana: transcrição com Whisper, zoom em quem fala, legenda, música,
+  imagens, painel de revisão web e publicação no YouTube, Instagram e TikTok com confirmação do dono do canal.
+authors:
+  - given-names: Gabriel
+    family-names: Rezende
+    alias: gabrielmrezende
+version: 0.2.0
+license: MIT
+repository-code: "https://github.com/gabrielmrezende/clipline"
+url: "https://github.com/gabrielmrezende/clipline"
+keywords:
+  - vídeo
+  - cortes verticais
+  - shorts
+  - transcrição
+  - whisper
+  - ffmpeg
+  - fastapi
+  - react
