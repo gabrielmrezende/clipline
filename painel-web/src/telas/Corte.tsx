@@ -170,7 +170,7 @@ export function Corte() {
           versao={versaoVideo}
           montando={montando}
         />
-        <LinhaDoCorte video={elVideo} momentos={momentos} irPara={irPara} />
+        <LinhaDoCorte video={elVideo} momentos={momentos} irPara={irPara} ep={ep} n={n} versao={versaoVideo} />
       </div>
       <div className="folha">
         <header>

@@ -26,6 +26,7 @@ from esteira.painel.rotas import _TRAVA_GRAVACAO, roteador
 from esteira.painel.rotas_imagens import roteador as roteador_imagens
 from esteira.painel.rotas_musica import roteador as roteador_musica
 from esteira.painel.rotas_publicar import roteador as roteador_publicar
+from esteira.painel.rotas_revisao import roteador as roteador_revisao
 from esteira.painel.troca_musica import recuperar_trocas_interrompidas, trocar_musica
 
 ESPERA_AO_DESLIGAR = 120  # segundos esperando a montagem atual quando o painel fecha
@@ -125,6 +126,7 @@ def criar_app(
     app.include_router(roteador_musica)
     app.include_router(roteador_imagens)
     app.include_router(roteador_publicar)
+    app.include_router(roteador_revisao)
 
     if estatico is not None and (Path(estatico) / "index.html").is_file():
         _servir_estatico(app, Path(estatico).resolve())

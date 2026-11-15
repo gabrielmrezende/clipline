@@ -190,6 +190,11 @@
 .remocoes summary:hover {
   color: var(--monitor-texto);
 }
+.nota-remocoes {
+  margin: 0.25rem 0;
+  color: var(--monitor-suave);
+  font-size: 0.75rem;
+}
 .remocoes ul {
   max-height: 14rem;
   margin: 0.25rem 0 0;
