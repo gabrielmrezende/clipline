@@ -10,7 +10,7 @@ from esteira.musica import Faixa
 from esteira.painel.troca_musica import Resultado, resumir_erro
 
 ATIVOS = ("na fila", "montando")
-MONTAGEM = ("musica", "montar")  # os dois refazem o corte.mp4: um de cada vez por corte
+MONTAGEM = ("musica", "montar", "trecho")  # todos refazem o corte.mp4: um de cada vez por corte
 LIMITE_LISTA = 50
 FECHADO_ANTES = "o painel foi fechado antes de montar este pedido"
 FECHADO_NO_MEIO = "o painel foi fechado no meio deste pedido"
