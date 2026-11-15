@@ -85,3 +85,18 @@ def test_volume_baixo_ate_menos_30_e_aceito(tmp_path):
     assert validar_receita(_receita(tmp_path, Musica(str(musica), -31)), tmp_path) == [
         "volume da música fora de -30 a -18 dB",
     ]
+
+
+def test_montagem_de_sempre_nao_ganha_campos_novos(tmp_path):
+    gravar_receita(tmp_path, Receita([(1.0, 3.0)], [Plano(1.0, 3.0, 0.3, 0.5, 1.35)], []))
+    texto = (tmp_path / "montagem.json").read_text("utf-8")
+    assert "trajeto" not in texto and "divisao" not in texto
+
+
+def test_receita_com_trajeto_e_divisao_ida_e_volta(tmp_path):
+    divisao = [{"pessoa": "P1", "x": 0.3, "y": 0.45, "zoom": 1.35}, {"pessoa": "P2", "x": 0.7, "y": 0.42, "zoom": 1.7}]
+    suave = Plano(1.0, 3.0, 0.3, 0.5, 1.35, trajeto=[[1.0, 0.3, 0.5], [3.0, 0.35, 0.5]])
+    planos = [suave, Plano(3.0, 5.0, divisao=divisao)]
+    r = Receita([(1.0, 5.0)], planos, [])
+    gravar_receita(tmp_path, r)
+    assert ler_receita(tmp_path) == r
