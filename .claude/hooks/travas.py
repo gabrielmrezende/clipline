@@ -13,6 +13,7 @@ A defesa completa é que confirmar só exista no painel, com clique humano. Ver 
 import json
 import re
 import sys
+from pathlib import Path
 
 FERRAMENTAS_DE_ESCRITA = {"Write", "Edit", "MultiEdit", "NotebookEdit"}
 
@@ -47,6 +48,32 @@ CAMINHOS_PROIBIDOS = [
     (r"(^|[\\/])\.claude[\\/](settings(\.local)?\.json|hooks[\\/])", "As travas do agente só mudam pelo dono."),
     (r"(^|[\\/])\.env($|\.)", "Arquivos de segredo não são editados pelo agente."),
 ]
+
+
+# Canal com outra pasta de programas ([pastas] programas no clipline.toml): ela também é só leitura. E o próprio
+# clipline.toml decide onde a esteira grava, então só o dono muda.
+CAMINHOS_PROIBIDOS.append((r"(^|[\\/])clipline\.toml$", "A configuração do canal (clipline.toml) é do dono."))
+
+
+def pasta_de_programas_configurada(arquivo: Path) -> str | None:
+    """O nome da pasta de programas no clipline.toml, se não for o padrão. Sem tomllib ou sem arquivo, None."""
+    try:
+        import tomllib
+
+        nome = Path(str(tomllib.loads(arquivo.read_text("utf-8"))["pastas"]["programas"]).strip()).name
+    except (ImportError, OSError, ValueError, KeyError, TypeError):
+        return None
+    return nome if nome and nome.casefold() != "1 - programas" else None
+
+
+def proteger_pasta_de_programas(nome: str | None) -> None:
+    if nome:
+        motivo = f"{nome}/ é só leitura (pasta de programas do clipline.toml)."
+        PASTAS_PROTEGIDAS.append((re.escape(nome), motivo))
+        CAMINHOS_PROIBIDOS.append((rf"(^|[\\/]){re.escape(nome)}([\\/]|$)", motivo))
+
+
+proteger_pasta_de_programas(pasta_de_programas_configurada(Path(__file__).resolve().parents[2] / "clipline.toml"))
 
 
 def decidir(chamada: dict) -> str | None:

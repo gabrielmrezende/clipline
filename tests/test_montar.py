@@ -276,3 +276,86 @@ def test_montar_sem_imagens(tmp_path):
     registro = json.loads((corte / "trabalho" / "registro.json").read_text("utf-8"))
     assert registro["imagens"] == []
     assert not _vermelho_em(corte / "corte.mp4", 2.0, tmp_path / "q.png")
+
+
+# --- identidade configurável: encerramentos e sobreposição ---------------------------------------------------
+
+
+def _render_que_guarda(chamadas):
+    def renderizar(receita, video, cartao, pasta, saida, sobreposicao=None, imagens=()):
+        chamadas.append((receita.encerramento, cartao, sobreposicao))
+        return []
+
+    return renderizar
+
+
+def test_sem_videos_de_encerramento_o_corte_sai_sem_encerramento(tmp_path, monkeypatch):
+    from esteira import cortar
+
+    pasta, _ = _preparado(tmp_path)
+    chamadas = []
+    monkeypatch.setattr(cortar, "ENCERRAMENTOS", [])
+    monkeypatch.setattr(montar, "renderizar_final", _render_que_guarda(chamadas))
+    monkeypatch.setattr(montar, "_sobreposicao", lambda: (_ for _ in ()).throw(AssertionError("não precisava")))
+    assert montar_episodio(pasta)[1].startswith("ok")
+    assert chamadas == [(False, None, None)]
+    assert ler_receita(pasta / "01-bom-corte" / "trabalho").encerramento is True  # a receita gravada não muda
+
+
+def test_com_encerramentos_o_rodizio_e_a_sobreposicao_seguem_como_antes(tmp_path, monkeypatch):
+    from esteira import cortar
+
+    pasta, _ = _preparado(tmp_path, [BOM, OUTRO])
+    chamadas = []
+    videos = [tmp_path / "fim-a.mp4", tmp_path / "fim-b.mp4"]
+    monkeypatch.setattr(cortar, "ENCERRAMENTOS", videos)
+    monkeypatch.setattr(montar, "renderizar_final", _render_que_guarda(chamadas))
+    monkeypatch.setattr(montar, "_sobreposicao", lambda: tmp_path / "por-cima.png")
+    assert all(r.startswith("ok") for r in montar_episodio(pasta).values())
+    assert chamadas == [(True, videos[0], tmp_path / "por-cima.png"), (True, videos[1], tmp_path / "por-cima.png")]
+
+
+def _assets_falsos(tmp_path, monkeypatch, arroba):
+    from esteira import caminhos, config
+
+    padrao = tmp_path / "assets" / "encerramento.png"
+    monkeypatch.setattr(caminhos, "AUTOMACAO", tmp_path)
+    monkeypatch.setattr(caminhos, "SOBREPOSICAO_PADRAO", padrao)
+    monkeypatch.setattr(caminhos, "SOBREPOSICAO", padrao)
+    monkeypatch.setattr(config, "atual", lambda: config.Config(arroba=arroba))
+    geradas = []
+
+    def gerar(saida):
+        geradas.append(saida)
+        saida.parent.mkdir(parents=True, exist_ok=True)
+        saida.write_bytes(b"png")
+        return saida
+
+    monkeypatch.setattr(montar, "gerar_sobreposicao", gerar)
+    return padrao, geradas
+
+
+def test_sobreposicao_do_canal_original_e_a_do_repositorio(tmp_path, monkeypatch):
+    padrao, geradas = _assets_falsos(tmp_path, monkeypatch, "@tudoepoliticabr")
+    assert montar._sobreposicao() == padrao and geradas == [padrao]
+    assert montar._sobreposicao() == padrao and geradas == [padrao]  # já existe: não gera de novo
+
+
+def test_canal_novo_ganha_sobreposicao_propria_fora_do_git(tmp_path, monkeypatch):
+    _, geradas = _assets_falsos(tmp_path, monkeypatch, "@Meu.Canal")
+    esperada = tmp_path / "assets" / "encerramento-meu-canal.png"
+    assert montar._sobreposicao() == esperada and geradas == [esperada]
+
+
+def test_sobreposicao_configurada_que_falta_e_erro_e_nada_e_gravado(tmp_path, monkeypatch):
+    import pytest
+
+    from esteira import caminhos
+
+    _, geradas = _assets_falsos(tmp_path, monkeypatch, "@outro")
+    monkeypatch.setattr(caminhos, "SOBREPOSICAO", tmp_path / "3 - Identidade" / "por-cima.png")
+    with pytest.raises(ErroMidia, match="sobreposição não encontrada"):
+        montar._sobreposicao()
+    monkeypatch.setattr(caminhos, "SOBREPOSICAO", None)
+    assert montar._sobreposicao() is None
+    assert geradas == []

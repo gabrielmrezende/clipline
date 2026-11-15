@@ -74,20 +74,100 @@ def _gpu() -> list[Item]:
     return itens
 
 
+ORIGEM_DA_RAIZ = {
+    "padrão": "padrão: a pasta acima do repositório",
+    "clipline.toml": "[pastas] raiz do clipline.toml",
+    "CLIPLINE_RAIZ": "variável de ambiente CLIPLINE_RAIZ",
+}
+
+
+def _configuracao() -> tuple[list[Item], object | None]:
+    """O clipline.toml e a Config lida dele (None se estiver quebrado)."""
+    from esteira import config
+
+    erro = caminhos.ERRO_CONFIG
+    ajustes = None
+    if not erro:
+        try:
+            ajustes = config.atual()
+        except config.ErroConfig as falha:
+            erro = str(falha)
+    if erro:
+        return [Item("clipline.toml", "falta", f"{erro} (nada é gravado até corrigir)")], None
+    if config.ARQUIVO.is_file():
+        return [Item("clipline.toml", "ok", str(config.ARQUIVO))], ajustes
+    return [Item("clipline.toml", "ok", "ausente: valem os padrões (modelo em clipline.exemplo.toml)")], ajustes
+
+
+def _pastas() -> list[Item]:
+    """As pastas em uso, de onde vieram e se existem."""
+    origem = ORIGEM_DA_RAIZ.get(caminhos.PASTAS.origem_raiz, caminhos.PASTAS.origem_raiz)
+    raiz = caminhos.RAIZ
+    itens = [Item("pasta raiz", "ok" if raiz.is_dir() else "falta",
+                  f"{raiz} ({origem})" if raiz.is_dir() else f"{raiz} não existe ({origem}); rode clipline init")]
+    contexto = caminhos.CONTEXTO
+    itens.append(Item("pasta de contexto", "ok" if contexto.is_dir() else "falta",
+                      str(contexto) if contexto.is_dir() else f"{contexto} não existe; rode clipline init "
+                      "ou copie Contexto.exemplo/ para lá"))
+    itens.append(Item("glossário", "ok" if (contexto / "glossario.md").is_file() else "falta",
+                      "nomes da transcrição e pessoas reais (glossario.md na pasta de contexto)"))
+    for nome, pasta, papel in (
+        ("pasta de programas", caminhos.PROGRAMAS, "episódios gravados, só leitura"),
+        ("pasta de cortes", caminhos.CORTES, "saída da esteira"),
+        ("pasta de identidade", caminhos.IDENTIDADE, "logo e encerramentos"),
+    ):
+        itens.append(Item(nome, "ok" if pasta.is_dir() else "aviso",
+                          f"{pasta} ({papel})" if pasta.is_dir() else f"{pasta} não existe ({papel})"))
+    return itens
+
+
+def _identidade(ajustes) -> list[Item]:
+    """Nome, arroba, encerramentos, logo e sobreposição em uso; avisa quando ainda são os do canal original."""
+    from esteira import config
+
+    itens = []
+    if ajustes is not None:
+        original = config.Config()
+        if ajustes.canal == original.canal or ajustes.arroba == original.arroba:
+            itens.append(Item("identidade do canal", "aviso",
+                              f"{ajustes.canal} ({ajustes.arroba}) é a identidade padrão do canal original; "
+                              "se o seu canal é outro, rode clipline init"))
+        else:
+            itens.append(Item("identidade do canal", "ok", f"{ajustes.canal} ({ajustes.arroba})"))
+    encerramentos = caminhos.ENCERRAMENTOS
+    faltando = [e.name for e in encerramentos if not e.is_file()]
+    if not encerramentos:
+        itens.append(Item("encerramentos", "ok", "nenhum: os cortes terminam sem vídeo de encerramento"))
+    else:
+        itens.append(Item("encerramentos", "ok" if not faltando else "aviso",
+                          f"{len(encerramentos)} vídeos, todos presentes" if not faltando
+                          else f"faltam: {', '.join(faltando)}"))
+    logo = caminhos.LOGO
+    itens.append(Item("logo", "ok" if logo.is_file() else "aviso",
+                      str(logo) if logo.is_file() else f"não encontrada: {logo} (cartão de notícia e sobreposição)"))
+    if ajustes is not None:
+        sobreposicao = caminhos.sobreposicao_do_canal(ajustes.arroba, config.Config().arroba)
+        if sobreposicao is None:
+            detalhe, estado = "nenhuma: nada por cima do encerramento", "ok"
+        elif sobreposicao.is_file():
+            detalhe, estado = str(sobreposicao), "ok"
+        elif sobreposicao.parent == caminhos.AUTOMACAO / "assets":
+            detalhe, estado = f"{sobreposicao} (gerada da logo e da arroba na primeira montagem)", "ok"
+        else:
+            detalhe, estado = f"não encontrada: {sobreposicao} ([identidade] sobreposicao)", "aviso"
+        itens.append(Item("sobreposição", estado, detalhe))
+        prefixo = ajustes.credenciais_prefixo
+        padrao = " (padrão)" if prefixo == config.Config().credenciais_prefixo else ""
+        itens.append(Item("credenciais", "ok", f"prefixo {prefixo}{padrao} no Gerenciador de Credenciais"))
+    return itens
+
+
 def _arquivos() -> list[Item]:
     from esteira.rostos import MODELO_DETECTOR, MODELO_RECONHECEDOR, MODELOS
 
     itens = []
     for modelo in (MODELO_DETECTOR, MODELO_RECONHECEDOR):
         itens.append(Item(f"modelos/{modelo}", "ok" if (MODELOS / modelo).is_file() else "falta", "ver modelos/LEIA.md"))
-    itens.append(Item("Contexto/", "ok" if caminhos.CONTEXTO.is_dir() else "falta",
-                      str(caminhos.CONTEXTO) if caminhos.CONTEXTO.is_dir() else "copie Contexto.exemplo/ para ../Contexto"))
-    itens.append(Item("Contexto/glossario.md", "ok" if (caminhos.CONTEXTO / "glossario.md").is_file() else "falta",
-                      "nomes da transcrição e pessoas reais"))
-    itens.append(Item("2 - Cortes/", "ok" if caminhos.CORTES.is_dir() else "aviso", str(caminhos.CORTES)))
-    faltando = [e.name for e in caminhos.ENCERRAMENTOS if not e.is_file()]
-    itens.append(Item("encerramentos", "ok" if not faltando else "aviso",
-                      "todos presentes" if not faltando else f"faltam: {', '.join(faltando)}"))
     catalogo = caminhos.MUSICAS / "catalogo.json"
     itens.append(Item("musicas/catalogo.json", "ok" if catalogo.is_file() else "aviso", "biblioteca de música"))
     estatico = Path(__file__).parent / "painel" / "estatico" / "index.html"
@@ -108,9 +188,13 @@ def _credenciais(ler=None) -> list[Item]:
                 return keyring.get_password(servico, campo)
             except Exception:
                 return None
-    from esteira.imagens_ia.chaves import SERVICO as SERVICO_IA
-    from esteira.publicar.credenciais import SERVICO as SERVICO_REDES
+    from esteira.imagens_ia.chaves import servico as servico_ia
+    from esteira.publicar.credenciais import servico as servico_redes
 
+    try:
+        SERVICO_IA, SERVICO_REDES = servico_ia(), servico_redes()
+    except ValueError:  # clipline.toml quebrado: o item clipline.toml já diz o que corrigir
+        return []
     itens = []
     for provedor in ("openai", "google"):
         itens.append(Item(f"chave {provedor}", "ok" if ler(SERVICO_IA, f"{provedor}:chave") else "aviso", "imagens de IA"))
@@ -135,7 +219,9 @@ def _tarefa_publicacao(executar=None) -> list[Item]:
 def doctor(ler_credencial=None, executar_tarefa=None) -> list[Item]:
     versao = f"{sys.version_info.major}.{sys.version_info.minor}"
     itens = [Item("Python", "ok" if sys.version_info[:2] == (3, 12) else "aviso", f"{versao} (o projeto é testado no 3.12)")]
-    return itens + _ffmpeg() + _gpu() + _arquivos() + _credenciais(ler_credencial) + _tarefa_publicacao(executar_tarefa)
+    configuracao, ajustes = _configuracao()
+    return (itens + _ffmpeg() + _gpu() + configuracao + _pastas() + _identidade(ajustes) + _arquivos()
+            + _credenciais(ler_credencial) + _tarefa_publicacao(executar_tarefa))
 
 
 def hash_das_regras(contexto: Path | None = None) -> str:

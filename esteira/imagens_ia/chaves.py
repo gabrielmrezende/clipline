@@ -1,4 +1,10 @@
-SERVICO = "tudo-e-politica-imagens"
+from esteira import config
+
+SERVICO = "tudo-e-politica-imagens"  # o nome padrão; o que vale é servico(), que segue [credenciais] prefixo
+
+
+def servico() -> str:
+    return config.servico_de_credenciais("imagens")
 
 
 def _keyring():
@@ -8,11 +14,11 @@ def _keyring():
 
 
 def ler_chave(provedor: str) -> str | None:
-    return _keyring().get_password(SERVICO, f"{provedor}:chave")
+    return _keyring().get_password(servico(), f"{provedor}:chave")
 
 
 def gravar_chave(provedor: str, chave: str) -> None:
-    _keyring().set_password(SERVICO, f"{provedor}:chave", chave)
+    _keyring().set_password(servico(), f"{provedor}:chave", chave)
 
 
 def tem_chave(provedor: str) -> bool:

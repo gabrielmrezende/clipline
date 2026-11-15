@@ -5,7 +5,8 @@ editorial; o dono do canal aprova. O roteiro completo, etapa por etapa, está em
 [`docs/operacao.md`](docs/operacao.md). Leia-o antes de começar um episódio.
 
 Abra a sessão dentro desta pasta (`Automacao/`). As pastas irmãs (`../Contexto`, `../2 - Cortes`,
-`../1 - Programas`) entram pelo `additionalDirectories` de `.claude/settings.json`.
+`../1 - Programas`) entram pelo `additionalDirectories` de `.claude/settings.json`. Se o canal mudou as pastas no
+`clipline.toml` (`[pastas]`), valem as que `esteira doctor` mostra no lugar desses caminhos.
 
 ## Regras invioláveis
 
