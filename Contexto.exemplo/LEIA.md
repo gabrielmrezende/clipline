@@ -1,7 +1,8 @@
 # Contexto de exemplo
 
-Modelos das regras editoriais que o Claude Code lê antes de sugerir qualquer coisa. Copie esta pasta para
-`../Contexto/` (irmã de `Automacao/`) e reescreva com as regras do seu canal:
+Modelos das regras editoriais que o Claude Code lê antes de sugerir qualquer coisa. O `clipline init` copia esta
+pasta para a pasta de contexto do canal (por padrão `../Contexto/`, irmã de `Automacao/`). Sem o init, copie à mão;
+nos dois casos, reescreva com as regras do seu canal:
 
 ```powershell
 Copy-Item -Recurse Contexto.exemplo ..\Contexto

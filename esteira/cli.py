@@ -5,7 +5,7 @@ import os
 import sys
 from pathlib import Path
 
-from esteira import agente, caminhos, config, contrato, diagnostico, falantes
+from esteira import agente, canal, caminhos, config, contrato, diagnostico, falantes
 
 from esteira.caminhos import CONTEXTO, CORTES, MUSICAS, EscritaProibida, garantir_escrita
 from esteira.cartao import gerar_cartao
@@ -504,10 +504,11 @@ def principal(argv: list[str] | None = None) -> int:
     c.set_defaults(funcao=_painel)
 
     publicar.registrar(comandos)
+    canal.registrar(comandos)
 
     args = parser.parse_args(argv)
-    erro_config = None if args.funcao is _doctor else _erro_de_configuracao()
-    if erro_config:  # doctor mostra o erro
+    erro_config = None if args.funcao in (_doctor, canal.executar) else _erro_de_configuracao()
+    if erro_config:  # doctor mostra o erro; init cria as pastas mesmo assim
         print(f"Erro: {erro_config}. Corrija o clipline.toml (clipline doctor mostra o que está em uso).",
               file=sys.stderr)
         return 1
