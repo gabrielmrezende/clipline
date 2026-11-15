@@ -33,6 +33,11 @@ include = ["esteira*"]
 [tool.setuptools.package-data]
 "esteira.painel" = ["estatico/**/*"]
 
+[project.urls]
+Repository = "https://github.com/gabrielmrezende/clipline"
+Issues = "https://github.com/gabrielmrezende/clipline/issues"
+Changelog = "https://github.com/gabrielmrezende/clipline/blob/master/CHANGELOG.md"
+
 [tool.ruff]
 line-length = 120
 target-version = "py312"
