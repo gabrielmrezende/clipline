@@ -182,3 +182,87 @@ def test_consultar_desiste_se_busca_continua_ocupada(monkeypatch):
     monkeypatch.setattr(wikimedia, "abrir", lambda url, metodo="GET": Ocupada())
     with pytest.raises(ValueError, match="too-busy"):
         wikimedia.consultar({"action": "query"})
+
+
+@pytest.mark.parametrize("nome,tipo", [
+    ("CC0", "cc0"), ("Public domain", "dominio-publico"), ("PD-US", "dominio-publico"), ("CC BY 2.0", "cc-by"),
+    ("CC BY-SA 4.0", "cc-by-sa"), ("CC-BY-SA-3.0", "cc-by-sa"), ("CC BY-NC-SA 4.0", None), ("Fair use", None),
+])
+def test_tipo_de_licenca(nome, tipo):
+    assert wikimedia.tipo_de_licenca(nome) == tipo
+
+
+def test_lista_de_licencas_explicita():
+    assert licenca_aceita("CC BY-SA 4.0", ("cc0", "dominio-publico", "cc-by")) is False
+    assert licenca_aceita("CC BY 4.0", ("cc0", "dominio-publico", "cc-by")) is True
+    assert licenca_aceita("CC0", ("cc-by-sa",)) is False
+
+
+def test_busca_usa_as_licencas_do_clipline_toml(monkeypatch):
+    from esteira import config
+
+    paginas = [_pagina("File:Sa.jpg", 1), _pagina("File:By.jpg", 2, licenca="CC BY 4.0"),
+               _pagina("File:Zero.jpg", 3, licenca="CC0")]
+    todas = buscar_candidatas("x", lambda p: _resposta(paginas))
+    assert [c.titulo for c in todas] == ["File:Sa.jpg", "File:By.jpg", "File:Zero.jpg"]  # padrão: como sempre
+    monkeypatch.setattr(config, "atual", lambda: config.Config(imagens_licencas=("cc0", "cc-by")))
+    assert [c.titulo for c in buscar_candidatas("x", lambda p: _resposta(paginas))] == ["File:By.jpg", "File:Zero.jpg"]
+    so_zero = buscar_candidatas("x", lambda p: _resposta(paginas), aceitas=("cc0",))
+    assert [c.titulo for c in so_zero] == ["File:Zero.jpg"]
+
+
+def test_aviso_compartilha_igual_so_com_foto_cc_by_sa():
+    by = {"autor": "Fulano", "licenca": "CC BY 4.0", "pagina": "https://c/A1"}
+    sa = {"autor": "Beltrana", "licenca": "CC BY-SA 4.0", "pagina": "https://c/A2"}
+    assert wikimedia.aviso_compartilha_igual([by]) is None
+    assert wikimedia.aviso_compartilha_igual([]) is None
+    aviso = wikimedia.aviso_compartilha_igual([by, sa])
+    assert "CC BY-SA" in aviso and "mesma licença" in aviso
+
+
+def _momento_com_fotos(tmp_path, licencas):
+    from esteira.pedidos import Momento
+
+    candidatas = [{"titulo": f"File:A{i}.jpg", "pagina": f"https://c/A{i}", "autor": f"Autor{i}", "licenca": licenca}
+                  for i, licenca in enumerate(licencas, 1)]
+    m = Momento(12.0, 15.0, "fala", "foto", "Yas Marina", busca="x", candidatas=candidatas,
+                escolhas=list(range(1, len(licencas) + 1)))
+    nomes = [f"0012-yas-marina-{k}.jpg" for k in range(1, len(licencas) + 1)]
+    for nome in nomes:
+        (tmp_path / nome).write_bytes(b"jpg")
+    return m, set(nomes)
+
+
+def test_guia_traz_o_aviso_depois_dos_creditos_cc_by_sa(tmp_path):
+    from esteira.fluxo_imagens import _bloco_guia
+
+    m, geradas = _momento_com_fotos(tmp_path, ["CC BY 4.0", "CC BY-SA 4.0"])
+    linhas = _bloco_guia(tmp_path, m, "0012-yas-marina", geradas, [], {}).splitlines()
+    i = linhas.index("Créditos:")
+    assert linhas[i + 1:] == [
+        "1. Autor1, CC BY 4.0, https://c/A1",
+        "2. Autor2, CC BY-SA 4.0, https://c/A2",
+        wikimedia.AVISO_COMPARTILHA_IGUAL,
+    ]
+
+
+def test_guia_sem_cc_by_sa_fica_como_sempre(tmp_path):
+    from esteira.fluxo_imagens import _bloco_guia
+
+    m, geradas = _momento_com_fotos(tmp_path, ["CC BY 4.0", "CC0"])
+    texto = _bloco_guia(tmp_path, m, "0012-yas-marina", geradas, [], {})
+    assert texto.endswith("Créditos:\n1. Autor1, CC BY 4.0, https://c/A1\n2. Autor2, CC0, https://c/A2")
+
+
+def test_resumo_da_publicacao_traz_o_aviso(tmp_path):
+    from esteira.publicar.agendar import _creditos_das_fotos
+
+    sa = {"autor": "F", "licenca": "CC BY-SA 4.0", "pagina": "p"}
+    zero = {"autor": "B", "licenca": "CC0", "pagina": "q"}
+    imagens = [
+        {"tipo": "foto", "arquivo": "imagens-sugeridas/a-1.jpg", "credito": sa},
+        {"tipo": "foto", "arquivo": "imagens-sugeridas/b-1.jpg", "credito": zero},
+    ]
+    esperado = ["- F, CC BY-SA 4.0, p", "- B, CC0, q", wikimedia.AVISO_COMPARTILHA_IGUAL]
+    assert _creditos_das_fotos(tmp_path, imagens) == esperado
+    assert _creditos_das_fotos(tmp_path, imagens[1:]) == ["- B, CC0, q"]

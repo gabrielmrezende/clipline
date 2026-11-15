@@ -21,6 +21,7 @@ from esteira.publicar.post import (
 )
 from esteira.receita import ler_receita
 from esteira.revisao import video_final_desatualizado
+from esteira.wikimedia import aviso_compartilha_igual
 
 FUSO = timezone(timedelta(hours=-3))
 REDES = ("youtube", "instagram", "tiktok")
@@ -123,6 +124,7 @@ def _credito(pasta_corte: Path) -> str | None:
 def _creditos_das_fotos(pasta_corte: Path, imagens: list[dict]) -> list[str]:
     creditos = ler_creditos(pasta_corte / TRABALHO)
     linhas = []
+    usados = []
     for imagem in imagens:
         if imagem.get("tipo") != "foto":
             continue
@@ -131,8 +133,11 @@ def _creditos_das_fotos(pasta_corte: Path, imagens: list[dict]) -> list[str]:
         c = imagem.get("credito") if isinstance(imagem.get("credito"), dict) else creditos.get(nome)
         if c:
             linhas.append(f"- {c.get('autor', '')}, {c.get('licenca', '')}, {c.get('pagina', '')}")
+            usados.append(c)
         else:
             linhas.append(f"- {nome}: crédito não encontrado (confira o guia.md)")
+    if aviso := aviso_compartilha_igual(usados):
+        linhas.append(aviso)
     return linhas
 
 

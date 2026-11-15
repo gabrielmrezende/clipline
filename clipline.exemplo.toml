@@ -21,3 +21,10 @@ lufs = -14.0                       # alvo de volume integrado
 [youtube]
 categoria = "22"
 limite_shorts = 180
+
+[transcricao]
+idioma = "pt"                      # código do Whisper ("pt", "en", "es"...); escolhe também as listas da limpeza
+                                   # e do filtro de pessoa real (docs/entrada-e-idiomas.md)
+
+[imagens]
+licencas = ["cc0", "dominio-publico", "cc-by", "cc-by-sa"]   # licenças aceitas nas fotos do Wikimedia

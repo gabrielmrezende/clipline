@@ -4,6 +4,7 @@ import unicodedata
 from pathlib import Path
 
 from esteira.caminhos import CORTES, garantir_escrita
+from esteira.entrada import ler_origem
 from esteira.midia import ErroMidia, sondar
 
 
@@ -29,17 +30,21 @@ def criar_episodio(video: Path, quadro: str, numero: int, convidado: str, base: 
 
     pasta.mkdir(parents=True, exist_ok=True)
     info = Path(video).stat()
+    dados = {
+        "video": origem,
+        "quadro": quadro,
+        "numero": numero,
+        "convidado": convidado,
+        "duracao": midia.duracao,
+        "tamanho": info.st_size,
+        "modificado": info.st_mtime,
+    }
+    baixado = ler_origem(Path(video))  # vídeo de `esteira baixar`: de onde veio (link, canal, licença)
+    if baixado is not None:
+        dados["baixado_de"] = baixado
     arquivo.write_text(
         json.dumps(
-            {
-                "video": origem,
-                "quadro": quadro,
-                "numero": numero,
-                "convidado": convidado,
-                "duracao": midia.duracao,
-                "tamanho": info.st_size,
-                "modificado": info.st_mtime,
-            },
+            dados,
             ensure_ascii=False,
             indent=2,
         ),

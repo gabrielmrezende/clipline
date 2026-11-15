@@ -42,3 +42,21 @@ def test_recusa_outro_video_na_mesma_pasta(tmp_path):
 
 def test_slug():
     assert slug("Como é o A-29?") == "como-e-o-a-29"
+
+
+def test_video_baixado_leva_a_origem_para_o_episodio(tmp_path):
+    from esteira.entrada import arquivo_de_origem
+
+    v = gerar_video_teste(tmp_path / "baixado-abc.mp4", 1)
+    arquivo_de_origem(v).write_text(json.dumps({"url": "https://exemplo.org/v/abc", "licenca": "CC BY"}), "utf-8")
+    p = criar_episodio(v, "Entre Assuntos", 4, "Ana", tmp_path / "cortes")
+    dados = json.loads((p / "episodio.json").read_text("utf-8"))
+    assert dados["baixado_de"] == {"url": "https://exemplo.org/v/abc", "licenca": "CC BY"}
+    assert dados["video"] == str(v.resolve())
+
+
+def test_video_comum_nao_ganha_campo_novo(tmp_path):
+    v = gerar_video_teste(tmp_path / "e.mp4", 1)
+    p = criar_episodio(v, "Entre Assuntos", 3, "Arthur", tmp_path)
+    assert set(json.loads((p / "episodio.json").read_text("utf-8"))) == {
+        "video", "quadro", "numero", "convidado", "duracao", "tamanho", "modificado"}

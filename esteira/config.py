@@ -7,6 +7,7 @@ Os nomes dos serviços no Gerenciador de Credenciais NÃO estão aqui de propós
 guardadas.
 """
 
+import re
 import tomllib
 from dataclasses import dataclass, field, fields
 from functools import lru_cache
@@ -16,6 +17,7 @@ from esteira.caminhos import AUTOMACAO
 
 ARQUIVO = AUTOMACAO / "clipline.toml"
 ESTILOS_LEGENDA = ("fixa", "palavra")
+LICENCAS_WIKIMEDIA = ("cc0", "dominio-publico", "cc-by", "cc-by-sa")  # todas aceitas por padrão, como sempre
 
 
 class ErroConfig(ValueError):
@@ -41,6 +43,9 @@ class Config:
     youtube_categoria: str = "22"
     limite_shorts: float = 180.0
     extras: dict = field(default_factory=dict, compare=False)
+    # Entrada e idiomas (docs/entrada-e-idiomas.md)
+    transcricao_idioma: str = "pt"  # código do Whisper; também escolhe as listas de esteira/idiomas.py
+    imagens_licencas: tuple = LICENCAS_WIKIMEDIA  # licenças aceitas na busca de fotos do Wikimedia
 
 
 _TIPOS = {f.name: f.type for f in fields(Config) if f.name != "extras"}
@@ -52,6 +57,7 @@ SECOES = {
     ("voz", "normalizar"): "normalizar_voz", ("voz", "lufs"): "voz_lufs",
     ("youtube", "categoria"): "youtube_categoria", ("youtube", "limite_shorts"): "limite_shorts",
 }
+SECOES.update({("transcricao", "idioma"): "transcricao_idioma", ("imagens", "licencas"): "imagens_licencas"})
 
 
 def _converter(nome: str, valor, tipo):
@@ -61,6 +67,8 @@ def _converter(nome: str, valor, tipo):
         return valor
     if tipo in ("str", str) and isinstance(valor, str):
         return valor
+    if tipo in ("tuple", tuple) and isinstance(valor, list) and all(isinstance(v, str) for v in valor):
+        return tuple(valor)
     raise ErroConfig(f"clipline.toml: {nome} com tipo errado ({type(valor).__name__})")
 
 
@@ -85,7 +93,16 @@ def ler(caminho: Path = ARQUIVO) -> Config:
         raise ErroConfig(f"clipline.toml: legenda_estilo deve ser um destes: {', '.join(ESTILOS_LEGENDA)}")
     if not 0 < config.duracao_minima < config.duracao_maxima:
         raise ErroConfig("clipline.toml: duracao_minima precisa ser positiva e menor que duracao_maxima")
+    _validar_entrada_e_idiomas(config)
     return config
+
+
+def _validar_entrada_e_idiomas(config: Config) -> None:
+    if not re.fullmatch(r"[a-z]{2,3}", config.transcricao_idioma):
+        raise ErroConfig('clipline.toml: [transcricao] idioma deve ser um código do Whisper, como "pt", "en" ou "es"')
+    if not config.imagens_licencas or any(nome not in LICENCAS_WIKIMEDIA for nome in config.imagens_licencas):
+        validas = ", ".join(LICENCAS_WIKIMEDIA)
+        raise ErroConfig(f"clipline.toml: [imagens] licencas deve listar uma ou mais destas: {validas}")
 
 
 @lru_cache(maxsize=1)

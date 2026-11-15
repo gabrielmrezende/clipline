@@ -1,11 +1,12 @@
 import argparse
+import functools
 import getpass
 import json
 import os
 import sys
 from pathlib import Path
 
-from esteira import agente, contrato, diagnostico, falantes
+from esteira import agente, config, contrato, diagnostico, entrada, falantes
 
 from esteira.caminhos import CONTEXTO, CORTES, MUSICAS, EscritaProibida, garantir_escrita
 from esteira.cartao import gerar_cartao
@@ -31,7 +32,7 @@ from esteira.publicar.http import ErroRede
 from esteira.publicar.post import ErroPost
 from esteira.receita import NOME_ARQUIVO
 from esteira.revisao import escrever_revisao
-from esteira.transcrever import carregar_glossario, ler_palavras, transcrever
+from esteira.transcrever import aviso_de_dispositivo, carregar_glossario, escolher_modos, ler_palavras, transcrever
 from esteira.validar import validar_trecho
 from esteira import vozes as modulo_vozes
 
@@ -39,7 +40,11 @@ from esteira import vozes as modulo_vozes
 def _transcrever(args) -> int:
     pasta = criar_episodio(Path(args.video), args.quadro, args.numero, args.convidado)
     nomes = carregar_glossario(CONTEXTO / "glossario.md")
-    palavras = transcrever(Path(args.video), pasta, nomes, forcar=args.forcar)
+    modos = escolher_modos(args.dispositivo)
+    if aviso := aviso_de_dispositivo(modos):
+        print(aviso)
+    palavras = transcrever(Path(args.video), pasta, nomes, forcar=args.forcar, modos=modos,
+                           idioma=config.atual().transcricao_idioma)
     print(f"{len(palavras)} palavras em {pasta / 'transcricao'}")
     return 0
 
@@ -47,9 +52,8 @@ def _transcrever(args) -> int:
 def _vozes(args) -> int:
     pasta = garantir_escrita(Path(args.pasta))
     try:
-        trechos = modulo_vozes.separar_vozes(
-            Path(args.video), pasta, args.pessoas, criar=modulo_vozes.criar_pipeline, forcar=args.forcar
-        )
+        criar = functools.partial(modulo_vozes.criar_pipeline, args.dispositivo)
+        trechos = modulo_vozes.separar_vozes(Path(args.video), pasta, args.pessoas, criar=criar, forcar=args.forcar)
     except (modulo_vozes.ErroVozes, FileExistsError) as erro:
         print(f"Erro: {erro}", file=sys.stderr)
         return 1
@@ -385,6 +389,27 @@ def _painel(args, servir=None, cofre=None) -> int:
     return 0
 
 
+def _baixar(args) -> int:
+    """Sem --confirmar, só mostra o que seria baixado e o aviso de direitos; nada é gravado."""
+    try:
+        if not args.confirmar:
+            origem, destino = entrada.consultar(args.url)
+            for linha in entrada.resumo(origem, destino):
+                print(linha)
+            print(entrada.AVISO_DIREITOS)
+            print("Nada foi baixado. Se você tem os direitos sobre este vídeo, rode de novo com --confirmar.")
+            return 0
+        print(entrada.AVISO_DIREITOS)
+        video, _ = entrada.baixar(args.url, forcar=args.forcar)
+    except entrada.ErroEntrada as erro:
+        print(f"Erro: {erro}", file=sys.stderr)
+        return 1
+    print(f"Baixado: {video}")
+    print(f"Origem: {entrada.arquivo_de_origem(video)}")
+    print(f'Próximo passo: esteira transcrever "{video}" --quadro <quadro> --numero <n> --convidado <nome>')
+    return 0
+
+
 def principal(argv: list[str] | None = None) -> int:
     sys.stdout.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser(prog="esteira")
@@ -396,6 +421,8 @@ def principal(argv: list[str] | None = None) -> int:
     c.add_argument("--numero", type=int, required=True)
     c.add_argument("--convidado", required=True)
     c.add_argument("--forcar", action="store_true")
+    c.add_argument("--dispositivo", choices=["auto", "cuda", "cpu"], default="auto",
+                   help="auto: GPU NVIDIA se houver, senão CPU (mais lenta)")
     c.set_defaults(funcao=_transcrever)
 
     c = comandos.add_parser("vozes")
@@ -403,6 +430,8 @@ def principal(argv: list[str] | None = None) -> int:
     c.add_argument("pasta")
     c.add_argument("--pessoas", type=_positivo, default=3)
     c.add_argument("--forcar", action="store_true")
+    c.add_argument("--dispositivo", choices=["auto", "cuda", "cpu"], default="auto",
+                   help="auto: GPU NVIDIA se houver, senão CPU (mais lenta)")
     c.set_defaults(funcao=_vozes)
 
     c = comandos.add_parser("validar", help="confere os arquivos do agente e os tempos dos cortes")
@@ -491,6 +520,12 @@ def principal(argv: list[str] | None = None) -> int:
     c.add_argument("--porta", type=_positivo, default=8765)
     c.add_argument("--cortes")
     c.set_defaults(funcao=_painel)
+
+    c = comandos.add_parser("baixar", help="baixa um vídeo por link (yt-dlp) para a pasta 0 - Entrada")
+    c.add_argument("url")
+    c.add_argument("--confirmar", action="store_true", help="baixa de fato (sem ele, só mostra o resumo)")
+    c.add_argument("--forcar", action="store_true", help="baixa de novo um vídeo que já está na pasta")
+    c.set_defaults(funcao=_baixar)
 
     publicar.registrar(comandos)
 

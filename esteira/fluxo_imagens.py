@@ -268,10 +268,14 @@ def _bloco_guia(
         linhas.append(linha_fonte(m.veiculo, m.data))
     elif presentes:
         linhas.append("Créditos:")
+        usados = []
         for k, nome in presentes:
             # A procedência gravada no download; sem ela (corte antigo), a candidata escolhida agora.
             c = creditos.get(nome) or m.candidatas[m.escolhas[k - 1] - 1]
+            usados.append(c)
             linhas.append(f"{k}. {c.get('autor', '')}, {c.get('licenca', '')}, {c.get('pagina', '')}")
+        if aviso := wikimedia.aviso_compartilha_igual(usados):
+            linhas.append(aviso)
     return "\n".join(linhas)
 
 
