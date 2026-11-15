@@ -49,7 +49,9 @@ docker compose run --rm clipline python -m esteira status "/canal/2 - Cortes/<ep
 O `compose.yaml` monta as pastas do canal (por padrão, a pasta acima do repositório; troque com
 `CLIPLINE_CANAL=/caminho/do/canal`): `1 - Programas/`, `3 - Identidade/` e `Contexto/` só para leitura e
 `2 - Cortes/` para gravação. Também monta `musicas/` e `modelos/` do repositório e guarda os downloads do Whisper num
-volume. As pastas precisam existir; o script de instalação cria as que faltam.
+volume. As pastas precisam existir; o script de instalação cria as que faltam. O contêiner roda sem root, com o
+uid 1000; no Linux, se o seu usuário tiver outro uid, acrescente `user: "<uid>:<gid>"` ao serviço para ele conseguir
+gravar em `2 - Cortes/` e `musicas/`.
 
 O painel publica a porta só em `127.0.0.1` do computador. Dentro do contêiner ele escuta em todas as interfaces
 (`scripts/painel_conteiner.py`, que se recusa a rodar fora de um contêiner), porque o Docker não alcança o
