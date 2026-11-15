@@ -1,12 +1,13 @@
 import re
 from collections.abc import Callable
 
+from esteira import config, idiomas
 from esteira.modelos import Edicao, Palavra
 
 PAUSA_LONGA = 0.5
 PAUSA_MANTIDA = 0.15
 MARGEM = 0.05
-PROTEGIDAS = {"né", "tá", "não", "muito", "nunca", "sim", "isso"}
+PROTEGIDAS = idiomas.PROTEGIDAS[idiomas.PADRAO]  # o padrão; a limpeza usa a lista do idioma do canal
 SILENCIO_SUFICIENTE = 0.7  # fração da pausa que precisa estar em silêncio no áudio para ser cortada
 PAUSA_COM_SOM = "pausa com som mantida"
 
@@ -30,21 +31,24 @@ def tem_som_pelos_silencios(silencios: list[tuple[float, float]], vozes: list[tu
             return True
         return any(min(ate, b) - max(de, a) > 0.3 for a, b in vozes)
     return tem_som
-HESITACOES = {"hum", "hã", "ahn", "éé", "hmm", "ãh", "eh"}
+HESITACOES = idiomas.HESITACOES[idiomas.PADRAO]
 
 
 def _normalizar(texto: str) -> str:
     return re.sub(r"[^\w-]", "", texto).lower()
 
 
-def _motivo_remocao(palavras: list[Palavra], indice: int) -> str | None:
+def _motivo_remocao(
+    palavras: list[Palavra], indice: int,
+    hesitacoes: frozenset[str] = HESITACOES, protegidas: frozenset[str] = PROTEGIDAS,
+) -> str | None:
     atual = _normalizar(palavras[indice].texto)
-    if atual in HESITACOES:
+    if atual in hesitacoes:
         return "hesitação"
     texto = palavras[indice].texto
     fecha_frase = texto.endswith((".", "?", "!")) and not texto.endswith("...")
     enfase = texto.endswith((",", ";", "!", "…"))  # "muito, muito grave": repetição de propósito
-    if indice + 1 < len(palavras) and atual not in PROTEGIDAS and not fecha_frase and not enfase:
+    if indice + 1 < len(palavras) and atual not in protegidas and not fecha_frase and not enfase:
         seguinte = palavras[indice + 1]
         if atual == _normalizar(seguinte.texto) and seguinte.inicio - palavras[indice].fim < PAUSA_LONGA:
             return "repetição"
@@ -52,16 +56,20 @@ def _motivo_remocao(palavras: list[Palavra], indice: int) -> str | None:
 
 
 def planejar_limpeza(
-    palavras: list[Palavra], inicio: float, fim: float, tem_som: TemSom | None = None
+    palavras: list[Palavra], inicio: float, fim: float, tem_som: TemSom | None = None, idioma: str | None = None
 ) -> tuple[list[tuple[float, float]], list[Edicao]]:
-    """Faixas mantidas e edições. Com `tem_som`, uma pausa só é cortada se o áudio confirmar o silêncio."""
+    """Faixas mantidas e edições. Com `tem_som`, uma pausa só é cortada se o áudio confirmar o silêncio.
+
+    `idioma` escolhe as hesitações e as repetições protegidas (sem ele, o `[transcricao] idioma` do clipline.toml)."""
+    idioma = idioma or config.atual().transcricao_idioma
+    hesitacoes, protegidas = idiomas.hesitacoes(idioma), idiomas.protegidas(idioma)
     trecho = [p for p in palavras if p.inicio >= inicio - 0.01 and p.fim <= fim + 0.01]
     edicoes: list[Edicao] = []
     mantidas: list[Palavra] = []
     entre: list[Palavra] = []
     cortes: list[tuple[float, float]] = []
     for indice, palavra in enumerate(trecho):
-        motivo = _motivo_remocao(trecho, indice)
+        motivo = _motivo_remocao(trecho, indice, hesitacoes, protegidas)
         if motivo:
             edicoes.append(Edicao(palavra.inicio, palavra.fim, motivo, palavra.texto))
             entre.append(palavra)
