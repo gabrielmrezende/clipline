@@ -200,3 +200,30 @@ A lista no topo do bloco mostra o estado de cada rede e deixa cancelar o que ain
 `POST /api/sair` apaga o cookie do aparelho. Para derrubar todos os aparelhos, gere um código novo com
 `painel codigo`. Na rede, a sessão dura 7 dias e cada aparelho que erra o código 5 vezes fica travado por 1 minuto
 (o tempo dobra a cada nova trava, até 15 minutos), sem bloquear os outros.
+
+## Fila de tarefas
+
+Trocar a música, montar, baixar fotos, gerar imagens de IA e agendar a publicação entram numa fila única: um pedido
+de cada vez, na ordem dos cliques. O bloco de cada um mostra `Na fila`, o andamento e o resultado.
+
+- **Histórico.** A fila fica em `painel-fila.json`, na pasta de cortes (`2 - Cortes/`, ou a de `--cortes`), com os 50
+  pedidos mais recentes. Fechar e abrir o painel não perde o histórico. Ela fica ali, e não em `logs/`, porque os
+  pedidos falam dos episódios dessa pasta: um `--cortes` de teste tem a sua própria fila e não mistura com a do canal.
+  Não precisa editar nem apagar esse arquivo; se ele estiver ilegível, o painel avisa no terminal e começa vazio.
+- **Fechou no meio.** Ao abrir, o que estava montando e o que ainda esperava na fila aparece como `Interrompido`, com
+  o motivo. Nada roda sozinho, porque alguns pedidos gastam dinheiro (imagem de IA). No bloco, `Tentar de novo` refaz
+  o pedido pelo mesmo caminho do botão de antes, com a mesma confirmação (o custo das imagens, por exemplo), e
+  `Descartar o pedido` tira o aviso. A troca de música interrompida continua sendo desfeita ao abrir o painel.
+- **Cancelar.** Um pedido `Na fila` tem o botão `Cancelar o pedido`: ele sai da fila sem rodar. Um pedido que já
+  começou não para no meio, com uma exceção: a geração de imagens de IA tem `Parar antes da próxima imagem`. As
+  imagens já geradas ficam (e já foram pagas); a próxima não começa. Se o pedido já estava na última imagem, ele
+  termina e o painel avisa.
+- **Tempo real.** O navegador acompanha a fila por eventos (`GET /api/tarefas/eventos`, `text/event-stream`), com a
+  mesma sessão e a mesma defesa de origem das outras rotas. A conexão só fica aberta enquanto algum pedido anda, uma
+  por aba, e se renova a cada 5 minutos. Se os eventos falharem (painel fechado, proxy no meio, navegador antigo), o
+  painel volta a perguntar a cada 2 s e tenta os eventos de novo depois de 30 s. Ao fechar o painel (Ctrl+C), as
+  conexões terminam na hora, sem deixar o terminal esperando.
+
+Rotas: `GET /api/tarefas` (a lista), `GET /api/tarefas/{id}` (um pedido), `POST /api/tarefas/{id}/cancelar` (com o
+corpo `{"confirmado": true}`; 409 se já terminou ou se não para no meio) e `GET /api/tarefas/eventos` (evento
+`tarefas` com a lista inteira a cada mudança e um comentário de vida a cada 15 s).
