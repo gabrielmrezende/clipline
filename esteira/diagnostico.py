@@ -118,6 +118,8 @@ def _pastas() -> list[Item]:
     ):
         itens.append(Item(nome, "ok" if pasta.is_dir() else "aviso",
                           f"{pasta} ({papel})" if pasta.is_dir() else f"{pasta} não existe ({papel})"))
+    if caminhos.ENTRADA.is_dir():  # opcional: só aparece para quem já baixou por link
+        itens.append(Item("pasta de entrada", "ok", f"{caminhos.ENTRADA} (vídeos baixados com baixar)"))
     return itens
 
 

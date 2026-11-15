@@ -38,6 +38,7 @@ contexto = "Contexto"              # regras editoriais e glossario.md
 programas = "1 - Programas"        # episódios gravados; a esteira só lê
 cortes = "2 - Cortes"              # saída; a esteira só grava aqui e no próprio repositório
 identidade = "3 - Identidade"      # logo e vídeos de encerramento
+# entrada = "0 - Entrada"          # vídeos baixados por link com `baixar` (só existe se você baixar)
 
 [identidade]
 # Relativos à pasta de identidade (ou absolutos).

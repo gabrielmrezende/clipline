@@ -229,3 +229,16 @@ def test_variavel_de_ambiente_errada_nao_quebra_a_importacao():
     assert feito.returncode == 1, feito.stderr
     assert feito.stdout.startswith("CLIPLINE_RAIZ: a pasta de programas")
     assert feito.stderr.startswith("Erro: CLIPLINE_RAIZ: a pasta de programas") and "Traceback" not in feito.stderr
+
+
+def test_pasta_de_entrada_padrao_e_configurada(tmp_path):
+    automacao = _automacao(tmp_path)
+    assert caminhos.resolver({}, {}, automacao).entrada == automacao.parent / "0 - Entrada"
+    dados = {"pastas": {"raiz": "../../Outro", "entrada": "Baixados"}}
+    assert caminhos.resolver(dados, {}, automacao).entrada == tmp_path / "Outro" / "Baixados"
+
+
+def test_a_entrada_do_baixar_segue_a_configuracao():
+    from esteira import entrada
+
+    assert entrada.PASTA == caminhos.ENTRADA

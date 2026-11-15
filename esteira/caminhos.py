@@ -29,7 +29,10 @@ ENCERRAMENTOS_PADRAO = tuple(
     f"Encerramentos/Final Corte ({nome}).mp4" for nome in ("Gabriel 1", "Tigas 1", "Gabriel 2", "Tigas 2")
 )
 LOGO_PADRAO = "Logos/Logo sem Fundo.png"
-CHAVES_PASTAS = ("raiz", *PASTAS_PADRAO)
+# Para onde o `baixar` grava os vídeos vindos de um link. Opcional e fora de PASTAS_PADRAO: o `init` não a cria,
+# porque só existe para quem baixa por link.
+ENTRADA_PADRAO = "0 - Entrada"
+CHAVES_PASTAS = ("raiz", *PASTAS_PADRAO, "entrada")
 CHAVES_IDENTIDADE = ("encerramentos", "logo", "sobreposicao")
 
 
@@ -48,6 +51,7 @@ class Pastas:
     encerramentos: tuple[Path, ...]  # vazio: corte sem encerramento
     logo: Path
     sobreposicao: Path | None  # None: nada por cima do encerramento
+    entrada: Path | None = None  # vídeos baixados por link (`baixar`); o resolver sempre preenche
 
 
 def _secao(dados: Mapping, nome: str, aceitas: tuple[str, ...]) -> Mapping:
@@ -115,7 +119,7 @@ def resolver(dados: Mapping, ambiente: Mapping[str, str], automacao: Path = AUTO
 
     def pasta(chave: str) -> Path:
         if chave not in pastas:
-            return raiz / PASTAS_PADRAO[chave]
+            return raiz / (ENTRADA_PADRAO if chave == "entrada" else PASTAS_PADRAO[chave])
         return _juntar(raiz, _texto("pastas", chave, pastas[chave]))
 
     cortes, programas, pasta_identidade = pasta("cortes"), pasta("programas"), pasta("identidade")
@@ -139,6 +143,7 @@ def resolver(dados: Mapping, ambiente: Mapping[str, str], automacao: Path = AUTO
         encerramentos=_encerramentos(identidade, pasta_identidade),
         logo=logo,
         sobreposicao=_sobreposicao(identidade, pasta_identidade, automacao),
+        entrada=pasta("entrada"),
     )
 
 
@@ -172,6 +177,7 @@ CONTEXTO = PASTAS.contexto
 PROGRAMAS = PASTAS.programas
 CORTES = PASTAS.cortes
 IDENTIDADE = PASTAS.identidade
+ENTRADA = PASTAS.entrada
 BIN = AUTOMACAO / "bin"
 MUSICAS = AUTOMACAO / "musicas"
 FONTES = AUTOMACAO / "assets" / "fonts"

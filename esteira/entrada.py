@@ -16,7 +16,7 @@ from pathlib import Path
 from esteira import caminhos
 from esteira.midia import binario
 
-PASTA = caminhos.RAIZ / "0 - Entrada"
+PASTA = caminhos.ENTRADA  # [pastas] entrada no clipline.toml; padrão: "0 - Entrada" na raiz
 SUFIXO_ORIGEM = ".origem.json"
 # Até 1080p (o episódio vira 1080x1920; mais que isso só pesa), de preferência H.264 + AAC, que o ffmpeg lê rápido.
 FORMATO = "bv*[height<=1080][ext=mp4]+ba[ext=m4a]/bv*[height<=1080]+ba/b[height<=1080]/bv*+ba/b"

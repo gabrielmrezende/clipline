@@ -107,6 +107,7 @@ configuração de hoje (pastas, encerramentos na mesma ordem, logo, sobreposiç�
 | `programas` | caminho | `"1 - Programas"` | Episódios gravados. A esteira só lê. Relativa à raiz |
 | `cortes` | caminho | `"2 - Cortes"` | Saída: uma pasta por episódio. Relativa à raiz |
 | `identidade` | caminho | `"3 - Identidade"` | Logo e vídeos de encerramento. Relativa à raiz |
+| `entrada` | caminho | `"0 - Entrada"` | Vídeos baixados por link com `baixar` (`docs/entrada-e-idiomas.md`). Relativa à raiz; só é criada quando você baixa |
 
 Todos aceitam caminho absoluto e `~`. Prefira a barra normal (`D:/Canais/Meu Canal`), que funciona no Windows; no
 TOML, a barra invertida precisa ir dobrada.
