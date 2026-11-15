@@ -16,6 +16,9 @@ import sys
 from pathlib import Path
 
 FERRAMENTAS_DE_ESCRITA = {"Write", "Edit", "MultiEdit", "NotebookEdit"}
+# Ferramentas que rodam um comando no shell. O Claude Code no Windows também oferece a PowerShell: sem ela aqui, o
+# mesmo comando proibido passaria só por trocar de ferramenta.
+FERRAMENTAS_DE_SHELL = {"Bash", "PowerShell"}
 
 # (padrão, motivo). Procurados no comando inteiro, sem diferenciar maiúsculas.
 COMANDOS_PROIBIDOS = [
@@ -29,6 +32,9 @@ COMANDOS_PROIBIDOS = [
     (r"\$env:HF_TOKEN|%HF_TOKEN%|\$HF_TOKEN|\bprintenv\b|\bGet-ChildItem\s+env:", "Tokens não são lidos pelo agente."),
     (r"\bgit\s+push\b.*(--force|-f\b)|\bgit\s+reset\s+--hard\b", "Operação destrutiva de git exige o dono."),
     (r"\bschtasks\b", "O Agendador de Tarefas é configurado pelo dono."),
+    (r"\b(Register|Unregister|Set|New)-ScheduledTask\b|\bcrontab\b|\bsystemctl\b|\blaunchctl\b",
+     "Tarefas agendadas (Agendador, cron, systemd, launchd) são configuradas pelo dono."),
+    (r"\bpublicar\s+desinstalar-tarefa\b", "A tarefa de publicação é do dono."),
 ]
 
 # Escrever ou apagar em pastas protegidas, pelo shell.
@@ -80,7 +86,7 @@ def decidir(chamada: dict) -> str | None:
     """O motivo da recusa, ou None se a chamada pode seguir."""
     ferramenta = chamada.get("tool_name", "")
     entrada = chamada.get("tool_input") or {}
-    if ferramenta == "Bash":
+    if ferramenta in FERRAMENTAS_DE_SHELL:
         comando = str(entrada.get("command", ""))
         for padrao, motivo in COMANDOS_PROIBIDOS:
             if re.search(padrao, comando, re.IGNORECASE):

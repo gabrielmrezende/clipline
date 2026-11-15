@@ -84,3 +84,38 @@ def test_chamada_permitida_nao_imprime_nada():
 def test_falha_fechada_com_json_ilegivel():
     saida = json.loads(_rodar(b"{isto nao e json"))
     assert saida["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+
+def _powershell(comando: str) -> dict:
+    return {"tool_name": "PowerShell", "tool_input": {"command": comando}}
+
+
+@pytest.mark.parametrize("comando", [
+    r'.venv\Scripts\python.exe -m esteira montar "x" --numero 2 --forcar',
+    'python -m esteira publicar agendar "x" --numero 1 --data "2026-12-01 18:00" --confirmar',
+    r'Remove-Item "..\1 - Programas\Ep.mp4"',
+    'Get-ChildItem env:',
+])
+def test_a_ferramenta_powershell_tem_as_mesmas_travas(comando):
+    assert travas.decidir(_powershell(comando))
+
+
+def test_powershell_deixa_o_trabalho_normal():
+    assert travas.decidir(_powershell('python -m esteira status "x" --json')) is None
+
+
+@pytest.mark.parametrize("comando", [
+    "crontab -l | crontab -",
+    "systemctl --user enable --now clipline.timer",
+    "launchctl bootstrap gui/501 ~/Library/LaunchAgents/clipline.plist",
+    'Register-ScheduledTask -TaskName x -Action $a',
+    'python -m esteira publicar desinstalar-tarefa',
+])
+def test_nega_agendadores_de_qualquer_sistema(comando):
+    assert travas.decidir(_bash(comando))
+
+
+def test_o_hook_cobre_a_ferramenta_powershell_no_settings():
+    settings = json.loads((HOOK.parent.parent / "settings.json").read_text("utf-8"))
+    matcher = settings["hooks"]["PreToolUse"][0]["matcher"].split("|")
+    assert {"Bash", "PowerShell", "Write", "Edit"} <= set(matcher)

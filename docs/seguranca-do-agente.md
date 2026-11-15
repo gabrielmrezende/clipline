@@ -47,9 +47,12 @@ O `.claude/settings.json` do repositório não mudou. Tirar o shell do agente é
 
 - O servidor MCP só tira poder quando o shell sai. Com `Bash` liberado, o agente ainda roda qualquer comando, e quem
   segura é o hook, que lê o texto.
-- O hook confere `Bash`, `Write`, `Edit`, `MultiEdit` e `NotebookEdit`. A ferramenta `PowerShell` que o Claude Code
-  oferece no Windows não passa por ele (nem o matcher do `settings.json` nem o `decidir` olham para ela). Enquanto o
-  shell estiver liberado, negue `PowerShell` nas permissões ou estenda o hook.
+- O hook confere `Bash`, `PowerShell`, `Write`, `Edit`, `MultiEdit` e `NotebookEdit`. A `PowerShell`, que o Claude
+  Code oferece no Windows, passa pelas mesmas regras do `Bash` desde a 0.3.0 (antes, trocar de ferramenta escapava
+  das travas). Uma ferramenta de shell nova que o Claude Code venha a ter precisa entrar no matcher do
+  `settings.json` e em `FERRAMENTAS_DE_SHELL` do hook.
+- Agendadores de qualquer sistema (`schtasks`, `Register-ScheduledTask`, `crontab`, `systemctl`, `launchctl`) e
+  `publicar desinstalar-tarefa` são do dono.
 - No modo sem shell, `Write` e `Edit` continuam (o agente escreve `candidatos.md` e `calendario.md`). Por eles ainda
   dá para gravar `aprovados.json`, `pedidos.json` e `post.md` sem contrato nem versão; o hook só barra os caminhos
   protegidos. O `validar` pega o formato, mas não devolve ao dono um `aprovado` que o agente tenha mudado.
