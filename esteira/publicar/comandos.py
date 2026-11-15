@@ -5,15 +5,20 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+from esteira import config
 from esteira.caminhos import AUTOMACAO, CORTES
+from esteira.publicar import agendador, registro
+from esteira.publicar.agendador import ErroTarefa
 from esteira.publicar.agendar import FUSO, REDES, ErroAgendar, confirmar, preparar_pedido, resumo
 from esteira.publicar.config import ler_modos
 from esteira.publicar.fila import Ocupado, achar, gravar_fila, ler_fila, trava
 from esteira.publicar.rodar import TRAVA, _redes_reais, _relato, rodar_tudo
-from esteira.publicar.tarefa import comandos_schtasks
 
 ENVIADOS = ("publicado", "privado", "rascunho")
 LUGAR = {"youtube": "no Studio", "instagram": "no app", "tiktok": "no app"}
+# Trocados nos testes: quem roda os comandos do agendador e onde ficam os arquivos do usuário.
+EXECUTAR = agendador.executar_no_sistema
+CASA: Path | None = None
 
 
 def _seguro(funcao):
@@ -25,6 +30,8 @@ def _seguro(funcao):
             raise ErroAgendar("outra execução em andamento (publicar rodar ou agendar); tente em alguns minutos") from None
         except subprocess.CalledProcessError as erro:
             raise ErroAgendar(f"schtasks falhou (código {erro.returncode})") from None
+        except ErroTarefa as erro:
+            raise ErroAgendar(str(erro)) from None
         except ImportError as erro:
             raise ErroAgendar(f"falta instalar um pacote: {erro.name or erro}") from None
         except json.JSONDecodeError as erro:
@@ -79,8 +86,19 @@ def mostrar_fila(args) -> int:
 
 
 def rodar(args) -> int:
-    for linha in rodar_tudo():
-        print(linha)
+    """Roda a fila e grava cada linha em logs/publicar.log (com data e hora e rotação por tamanho)."""
+    with registro.registro() as (log, tarefa_antiga):
+        try:
+            linhas = rodar_tudo()
+        except Exception as erro:  # a tarefa agendada não tem terminal: o erro precisa ficar no log
+            log.exception("erro: %s", erro)
+            raise
+        if linhas and tarefa_antiga:
+            linhas.append(registro.TAREFA_ANTIGA)
+        for linha in linhas:
+            log.info(linha)
+            if not tarefa_antiga:  # com a tarefa antiga, a saída já é o próprio log
+                print(linha)
     return 0
 
 
@@ -127,18 +145,41 @@ def _marcar(args) -> int:
     return 0
 
 
+def _casa() -> Path:
+    return Path(CASA) if CASA is not None else Path.home()
+
+
 def instalar_tarefa(args) -> int:
-    lista = comandos_schtasks(Path(sys.executable), AUTOMACAO)
+    plano = agendador.plano_instalar(
+        agendador.sistema_atual(), Path(sys.executable), AUTOMACAO, config.ler().canal, _casa(), EXECUTAR,
+    )
     if not args.confirmar:
-        print("Vou criar estas tarefas no Agendador do Windows:")
-        for comando in lista:
-            print(subprocess.list2cmdline(comando))
+        if plano.sistema == "windows":
+            print("Vou criar estas tarefas no Agendador do Windows:")
+        else:
+            print(f"Vou criar a tarefa de publicação {plano.onde}:")
+        for linha in agendador.descrever(plano):
+            print(linha)
         print("\nNada foi criado. Para confirmar, rode de novo com --confirmar.")
         return 0
     (Path(AUTOMACAO) / "logs").mkdir(exist_ok=True)
-    for comando in lista:
-        subprocess.run(comando, check=True)
-    print("Tarefas criadas.")
+    for aviso in agendador.aplicar(plano, EXECUTAR):
+        print(aviso)
+    print("Tarefas criadas." if plano.sistema == "windows" else f"Tarefa criada {plano.onde}.")
+    return 0
+
+
+def desinstalar_tarefa(args) -> int:
+    plano = agendador.plano_desinstalar(agendador.sistema_atual(), config.ler().canal, _casa(), EXECUTAR)
+    if not args.confirmar:
+        print(f"Vou remover a tarefa de publicação {plano.onde}:")
+        for linha in agendador.descrever(plano):
+            print(linha)
+        print("\nNada foi removido. Para confirmar, rode de novo com --confirmar.")
+        return 0
+    for aviso in agendador.aplicar(plano, EXECUTAR):
+        print(aviso)
+    print(f"Tarefa removida {plano.onde}.")
     return 0
 
 
@@ -181,3 +222,7 @@ def registrar(comandos_cli) -> None:
     c = acoes.add_parser("instalar-tarefa")
     c.add_argument("--confirmar", action="store_true")
     c.set_defaults(funcao=_seguro(instalar_tarefa))
+
+    c = acoes.add_parser("desinstalar-tarefa")
+    c.add_argument("--confirmar", action="store_true")
+    c.set_defaults(funcao=_seguro(desinstalar_tarefa))
