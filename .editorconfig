@@ -1,0 +1,29 @@
+# https://editorconfig.org: o mesmo estilo em qualquer editor.
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 4
+
+[*.py]
+max_line_length = 120
+
+[*.{ts,tsx,js,mjs,cjs,json,css,html,yml,yaml,cff,webmanifest}]
+indent_size = 2
+
+[*.md]
+# dois espaços no fim da linha são quebra de linha no Markdown
+trim_trailing_whitespace = false
+max_line_length = 120
+
+[*.ps1]
+# o Windows PowerShell 5.1 lê um .ps1 sem BOM como ANSI e estraga os acentos
+charset = utf-8-bom
+end_of_line = crlf
+
+[*.{bat,cmd}]
+end_of_line = crlf
