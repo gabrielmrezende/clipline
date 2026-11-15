@@ -5,7 +5,9 @@ import threading
 from collections.abc import Callable
 from typing import Protocol
 
-SERVICO = "tudo-e-politica-painel"
+from esteira import config
+
+SERVICO = "tudo-e-politica-painel"  # o nome padrão; o que vale é servico(), que segue [credenciais] prefixo
 ALFABETO = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"  # sem I, L, O, 0 e 1, que se confundem
 TAMANHO_CODIGO = 8
 ITERACOES = 200_000
@@ -14,6 +16,10 @@ MAX_ERROS = 5
 TRAVA_SEGUNDOS = 60
 TRAVA_MAXIMA = 15 * 60  # a cada nova trava do mesmo aparelho o tempo dobra, até 15 min
 COOKIE = "painel_sessao"
+
+
+def servico() -> str:
+    return config.servico_de_credenciais("painel")
 
 
 class Cofre(Protocol):
@@ -29,10 +35,10 @@ class CofreKeyring:
         return keyring
 
     def ler(self, campo: str) -> str | None:
-        return self._keyring().get_password(SERVICO, campo)
+        return self._keyring().get_password(servico(), campo)
 
     def gravar(self, campo: str, valor: str) -> None:
-        self._keyring().set_password(SERVICO, campo, valor)
+        self._keyring().set_password(servico(), campo, valor)
 
 
 class CodigoErrado(Exception):

@@ -7,7 +7,7 @@ from esteira.publicar.agendar import FUSO
 from esteira.publicar.config import ler_modos
 from esteira.publicar.envio import MAX_TENTATIVAS, assinatura, enviar
 from esteira.publicar.fila import ARQUIVO, Item, Ocupado, gravar_fila, ler_fila, trava
-from esteira.publicar.post import ErroPost, ler_post
+from esteira.publicar.post import ErroPost, ler_extras_youtube, ler_post
 
 TRAVA = AUTOMACAO / "publicar.trava"
 INTERROMPIDO = "envio interrompido: confira no app e use publicar marcar"
@@ -34,7 +34,8 @@ def _material(pasta: Path, numero: int):
     videos = [p for p in final.glob("*") if p.suffix.lower() == ".mp4"] if final.exists() else []
     if len(videos) != 1:
         raise ErroPost(f"video-final/ com {len(videos)} vídeos: deixe exatamente um")
-    return videos[0], ler_post(pasta_corte / "post.md")
+    post = pasta_corte / "post.md"
+    return videos[0], ler_post(post), ler_extras_youtube(post)
 
 
 def rodar_episodio(pasta: Path, agora: datetime, modos: dict, redes_api: dict) -> list[str]:
@@ -56,16 +57,17 @@ def rodar_episodio(pasta: Path, agora: datetime, modos: dict, redes_api: dict) -
     )
     for item in vencidos:
         try:
-            video, textos = _material(pasta, item.numero)
+            video, textos, extras = _material(pasta, item.numero)
         except ErroPost as erro:
             item.estado, item.erro = "erro", str(erro)
             gravar_fila(pasta, itens)
         else:
-            if item.assinatura and assinatura(video, textos, item.rede) != item.assinatura:
+            if item.assinatura and assinatura(video, textos, item.rede, extras) != item.assinatura:
                 item.estado, item.erro = "erro", MUDOU
                 gravar_fila(pasta, itens)
             else:
-                enviar(pasta, itens, item, video, textos, modos.get(item.rede, ""), redes_api[item.rede])
+                enviar(pasta, itens, item, video, textos, modos.get(item.rede, ""), redes_api[item.rede],
+                       extras_youtube=extras)
         linhas.append(_relato(item))
     return linhas
 

@@ -4,6 +4,7 @@ import unicodedata
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
+from esteira import config, idiomas
 from esteira.receita import TOLERANCIA
 from esteira.caminhos import gravar_atomico
 
@@ -11,16 +12,9 @@ TIPOS = ("foto", "noticia", "ia")
 ARQUIVO = "pedidos.json"
 SECOES_DE_PESSOAS = ("Apresentadores", "Convidados", "Pessoas", "Apelidos", "Cargos")
 # Cargos que, num canal de política, apontam para uma pessoa real ("o presidente" é o presidente de agora).
-# Em português e em inglês (os prompts costumam ir em inglês). Sem acento: a comparação normaliza.
-CARGOS = (
-    "presidente", "presidenta", "vice-presidente", "ex-presidente", "primeiro-ministro", "primeira-ministra",
-    "ministro", "ministra", "senador", "senadora", "deputado", "deputada", "governador", "governadora",
-    "prefeito", "prefeita", "vereador", "vereadora", "chanceler", "papa", "rei", "rainha", "principe", "princesa",
-    "candidato", "candidata", "ditador", "ditadora", "stf",
-    "president", "vice president", "prime minister", "minister", "senator", "congressman", "congresswoman",
-    "member of congress", "governor", "mayor", "chancellor", "pope", "king", "queen", "prince", "princess",
-    "dictator", "candidate", "head of state", "supreme court justice",
-)
+# As listas por idioma estão em esteira/idiomas.py; o filtro usa a do idioma do canal mais a do inglês (os prompts
+# costumam ir em inglês). Este é o padrão, o de um canal em português.
+CARGOS = idiomas.cargos(idiomas.PADRAO)
 IMAGEM_MINIMA = 2.0
 IMAGEM_MAXIMA = 5.0
 MAXIMO_ESCOLHAS = 3
@@ -101,11 +95,13 @@ def _normalizar(texto: str) -> str:
     return re.sub(r"\s+", " ", sem_acento).strip().lower()
 
 
-def _pessoa_citada(prompt: str, pessoas: list[str], cargos: tuple[str, ...] = CARGOS) -> str | None:
+def _pessoa_citada(prompt: str, pessoas: list[str], cargos: tuple[str, ...] | None = None) -> str | None:
     """O nome (do glossário) ou o cargo público que o prompt cita; None se nenhum.
 
     É uma lista, não um classificador: pega o óbvio. Descrição que identifica alguém sem nome nem cargo passa,
-    e por isso o dono aprova cada prompt no painel antes de gerar."""
+    e por isso o dono aprova cada prompt no painel antes de gerar. Sem `cargos`, os do idioma do canal."""
+    if cargos is None:
+        cargos = idiomas.cargos(config.atual().transcricao_idioma)
     texto = _normalizar(prompt)
     for pessoa in pessoas:
         nome = _normalizar(pessoa)

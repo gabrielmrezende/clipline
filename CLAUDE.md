@@ -5,7 +5,8 @@ editorial; o dono do canal aprova. O roteiro completo, etapa por etapa, está em
 [`docs/operacao.md`](docs/operacao.md). Leia-o antes de começar um episódio.
 
 Abra a sessão dentro desta pasta (`Automacao/`). As pastas irmãs (`../Contexto`, `../2 - Cortes`,
-`../1 - Programas`) entram pelo `additionalDirectories` de `.claude/settings.json`.
+`../1 - Programas`) entram pelo `additionalDirectories` de `.claude/settings.json`. Se o canal mudou as pastas no
+`clipline.toml` (`[pastas]`), valem as que `esteira doctor` mostra no lugar desses caminhos.
 
 ## Regras invioláveis
 
@@ -59,3 +60,7 @@ Em `aprovados.json` e `pedidos.json`, grave também, no nível de cima, de onde 
 `.venv\Scripts\python.exe -m esteira <comando>`. Os principais: `transcrever`, `vozes`, `validar`,
 `planos`, `preparar`, `imagens`, `montar`, `revisao`, `trecho`, `status`, `doctor`, `painel`,
 `publicar`. Rode `esteira doctor` quando algo falhar por ambiente (ffmpeg, GPU, modelos, chaves).
+
+`baixar <url>` só mostra o resumo e o aviso de direitos: baixar é do dono (`--confirmar`). `revisao-visual` só
+mostra o custo: pedir a revisão é do dono. Se o servidor MCP do clipline estiver ligado (`docs/mcp.md`), prefira as
+ferramentas dele ao shell: elas passam pelo contrato e nunca confirmam nada.

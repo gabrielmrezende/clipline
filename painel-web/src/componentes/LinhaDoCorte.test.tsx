@@ -1,5 +1,5 @@
-import { act, fireEvent, render, screen } from "@testing-library/react";
-import { vi } from "vitest";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { afterEach, vi } from "vitest";
 import type { Momento } from "../api";
 import { LinhaDoCorte } from "./LinhaDoCorte";
 
@@ -76,5 +76,89 @@ describe("LinhaDoCorte", () => {
     });
     expect(screen.getByRole("button", { name: /0:10/ }).className).toContain("agora");
     expect(screen.getByRole("button", { name: /0:52/ }).className).not.toContain("agora");
+  });
+});
+
+describe("LinhaDoCorte com as remoções da limpeza", () => {
+  const REMOCOES = {
+    remocoes: [
+      { tempo: 12.4, duracao: 0.62, motivo: "pausa", texto: "", episodio: 112.4 },
+      { tempo: 30, duracao: 0.4, motivo: "hesitação e repetição", texto: "hum o", episodio: 131 },
+      { tempo: 1, duracao: 1.3, motivo: "trecho removido", texto: "", episodio: 100 },
+      { tempo: 140, duracao: 1, motivo: "pausa", texto: "", episodio: 250 },
+    ],
+    removido: 3.32,
+    avisos: [],
+  };
+  let urls: string[];
+
+  function servir(corpo: unknown, status = 200) {
+    urls = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((url: string) => {
+        urls.push(url);
+        return Promise.resolve(
+          new Response(JSON.stringify(corpo), { status, headers: { "Content-Type": "application/json" } }),
+        );
+      }),
+    );
+  }
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("marca cada remoção no tempo do corte, mesmo sem imagens, e ignora o que passa do fim", async () => {
+    servir(REMOCOES);
+    const { container } = render(
+      <LinhaDoCorte video={videoDe(100)} momentos={[]} irPara={vi.fn()} ep="Ep 1" n={2} />,
+    );
+    await waitFor(() => expect(container.querySelectorAll(".linha-remocao")).toHaveLength(3));
+    expect(urls).toEqual(["/api/episodios/Ep%201/cortes/2/remocoes"]);
+    const marcas = Array.from(container.querySelectorAll<HTMLElement>(".linha-remocao"));
+    expect(marcas.map((m) => m.style.left)).toEqual(["12.4%", "30%", "1%"]);
+    expect(marcas.map((m) => m.classList.contains("pausa"))).toEqual([true, false, false]);
+    expect(marcas.every((m) => m.getAttribute("aria-hidden") === "true")).toBe(true);
+    const legenda = container.querySelector(".legenda-linha") as HTMLElement;
+    expect(within(legenda).queryByText("imagem")).toBeNull();
+    expect(within(legenda).getByText("fala tirada")).toBeTruthy();
+    expect(within(legenda).getByText("pausa tirada")).toBeTruthy();
+  });
+
+  it("a lista das remoções leva o player um pouco antes da emenda", async () => {
+    servir(REMOCOES);
+    const irPara = vi.fn();
+    render(<LinhaDoCorte video={videoDe(100)} momentos={MOMENTOS} irPara={irPara} ep="Ep 1" n={2} />);
+    const resumo = await screen.findByText("O que a limpeza tirou: 3 trechos, 2,3 s");
+    expect(resumo.tagName).toBe("SUMMARY");
+    fireEvent.click(screen.getByRole("button", { name: /Hesitação e repetição: “hum o”/ }));
+    expect(irPara).toHaveBeenCalledWith(28);
+    fireEvent.click(screen.getByRole("button", { name: "0:01: Trecho removido, 1,3 s" }));
+    expect(irPara).toHaveBeenLastCalledWith(0);
+    expect(screen.getByRole("button", { name: "0:12: Pausa, 0,6 s" }).title).toBe("Ouvir a partir de 0:10");
+  });
+
+  it("sem resposta do painel, fica só com as imagens", async () => {
+    servir({ detail: "?" }, 404);
+    const { container } = render(
+      <LinhaDoCorte video={videoDe(100)} momentos={MOMENTOS} irPara={vi.fn()} ep="Ep 1" n={2} />,
+    );
+    await waitFor(() => expect(urls).toHaveLength(1));
+    await act(async () => {});
+    expect(container.querySelector(".linha-remocao")).toBeNull();
+    expect(container.querySelector(".remocoes")).toBeNull();
+    expect(screen.getAllByRole("button")).toHaveLength(2);
+  });
+
+  it("sem ep e n não pede nada; com aviso, mostra o aviso na lista", async () => {
+    servir({ ...REMOCOES, avisos: ["sem edicoes.md: os motivos das remoções não aparecem"] });
+    const { rerender } = render(<LinhaDoCorte video={videoDe(100)} momentos={MOMENTOS} irPara={vi.fn()} />);
+    await act(async () => {});
+    expect(urls).toEqual([]);
+    rerender(<LinhaDoCorte video={videoDe(100)} momentos={MOMENTOS} irPara={vi.fn()} ep="Ep 1" n={2} versao="1" />);
+    expect(await screen.findByText(/sem edicoes.md/)).toBeTruthy();
+    rerender(<LinhaDoCorte video={videoDe(100)} momentos={MOMENTOS} irPara={vi.fn()} ep="Ep 1" n={2} versao="2" />);
+    await waitFor(() => expect(urls).toHaveLength(2));
   });
 });

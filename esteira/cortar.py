@@ -46,7 +46,10 @@ def ler_aprovados(pasta: Path) -> list[Corte]:
     return [Corte(**c) for c in dados["cortes"]]
 
 
-def escolher_encerramento(numero: int) -> Path:
+def escolher_encerramento(numero: int) -> Path | None:
+    """Um vídeo de encerramento por corte, em rodízio. None quando não há nenhum ([identidade] encerramentos = [])."""
+    if not ENCERRAMENTOS:
+        return None
     return ENCERRAMENTOS[(numero - 1) % len(ENCERRAMENTOS)]
 
 

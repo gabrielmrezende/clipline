@@ -200,3 +200,59 @@ A lista no topo do bloco mostra o estado de cada rede e deixa cancelar o que ain
 `POST /api/sair` apaga o cookie do aparelho. Para derrubar todos os aparelhos, gere um código novo com
 `painel codigo`. Na rede, a sessão dura 7 dias e cada aparelho que erra o código 5 vezes fica travado por 1 minuto
 (o tempo dobra a cada nova trava, até 15 minutos), sem bloquear os outros.
+
+## Fila de tarefas
+
+Trocar a música, montar, baixar fotos, gerar imagens de IA e agendar a publicação entram numa fila única: um pedido
+de cada vez, na ordem dos cliques. O bloco de cada um mostra `Na fila`, o andamento e o resultado.
+
+- **Histórico.** A fila fica em `painel-fila.json`, na pasta de cortes (`2 - Cortes/`, ou a de `--cortes`), com os 50
+  pedidos mais recentes. Fechar e abrir o painel não perde o histórico. Ela fica ali, e não em `logs/`, porque os
+  pedidos falam dos episódios dessa pasta: um `--cortes` de teste tem a sua própria fila e não mistura com a do canal.
+  Não precisa editar nem apagar esse arquivo; se ele estiver ilegível, o painel avisa no terminal e começa vazio.
+- **Fechou no meio.** Ao abrir, o que estava montando e o que ainda esperava na fila aparece como `Interrompido`, com
+  o motivo. Nada roda sozinho, porque alguns pedidos gastam dinheiro (imagem de IA). No bloco, `Tentar de novo` refaz
+  o pedido pelo mesmo caminho do botão de antes, com a mesma confirmação (o custo das imagens, por exemplo), e
+  `Descartar o pedido` tira o aviso. A troca de música interrompida continua sendo desfeita ao abrir o painel.
+- **Cancelar.** Um pedido `Na fila` tem o botão `Cancelar o pedido`: ele sai da fila sem rodar. Um pedido que já
+  começou não para no meio, com uma exceção: a geração de imagens de IA tem `Parar antes da próxima imagem`. As
+  imagens já geradas ficam (e já foram pagas); a próxima não começa. Se o pedido já estava na última imagem, ele
+  termina e o painel avisa.
+- **Tempo real.** O navegador acompanha a fila por eventos (`GET /api/tarefas/eventos`, `text/event-stream`), com a
+  mesma sessão e a mesma defesa de origem das outras rotas. A conexão só fica aberta enquanto algum pedido anda, uma
+  por aba, e se renova a cada 5 minutos. Se os eventos falharem (painel fechado, proxy no meio, navegador antigo), o
+  painel volta a perguntar a cada 2 s e tenta os eventos de novo depois de 30 s. Ao fechar o painel (Ctrl+C), as
+  conexões terminam na hora, sem deixar o terminal esperando.
+
+Rotas: `GET /api/tarefas` (a lista), `GET /api/tarefas/{id}` (um pedido), `POST /api/tarefas/{id}/cancelar` (com o
+corpo `{"confirmado": true}`; 409 se já terminou ou se não para no meio) e `GET /api/tarefas/eventos` (evento
+`tarefas` com a lista inteira a cada mudança e um comentário de vida a cada 15 s).
+
+## Trecho
+
+O bloco **Trecho** da tela do corte troca o início e o fim do corte sem editar o `aprovados.json` à mão (é o que
+antes exigia mudar o JSON e rodar `preparar --numero N --forcar` e `montar --numero N`).
+
+- A transcrição mostra 30 s antes e depois do corte, com quem fala em cada trecho (cores e nomes do `vozes`), as
+  pausas longas e os outros cortes em cinza. O trecho de agora fica sublinhado; o novo, destacado.
+- Clique numa palavra para marcar o início; com Shift, marca o fim. A escolha `O clique marca` inverte isso (útil no
+  celular, sem Shift). No teclado: as setas andam pelas palavras, `Home`/`End` e `PageUp`/`PageDown` saltam, `Enter`
+  marca e `Shift+Enter` marca a outra ponta. `Mostrar mais 30 s antes/depois` amplia a janela (até 10 min).
+- A duração aparece com os limites do `clipline.toml` (60 a 120 s, sem ele). Cada seleção é conferida com as regras do
+  `validar` (dentro do episódio, duração, ponta numa palavra, sem cortar frase no meio); um problema impede a troca.
+  Sobrepor outro corte só gera um aviso, como no `validar`, que não tem essa regra.
+- Antes de confirmar, o painel diz o que muda e o que se perde. Confirmado, a troca entra na fila (uma de cada vez
+  por corte, como a música e a montagem):
+  1. Copia o `aprovados.json` para `aprovados-anteriores/aprovados-AAAAMMDD-HHMMSS.json` e grava o trecho novo
+     (só `inicio` e `fim` desse corte mudam; `origem` e o resto ficam como estavam).
+  2. Se o corte já foi preparado, prepara de novo (`edicoes.md` e a legenda são refeitos) e, se ele tinha vídeo,
+     monta de novo. Corte ainda não preparado: só o `aprovados.json` muda.
+  3. Preserva o que o `preparar --forcar` desfaria: a música e o volume escolhidos (o `uso.json` fica como estava),
+     as telas da legenda corrigidas no painel (quando o texto daquela tela continua igual no trecho novo) e os
+     momentos de imagem do `pedidos.json`, que passam para os tempos novos com as imagens prontas renomeadas. Os
+     momentos que ficam fora do trecho novo são descartados, com o motivo, e aparecem como aviso.
+- Se o preparar ou a montagem falham, tudo volta ao que era. Se o painel cai no meio, a troca é desfeita na próxima
+  vez que ele abrir (o marcador fica em `trabalho/trecho-em-andamento.json`).
+- `video-final/` nunca é tocado. Se o corte estava aprovado, a aprovação deixa de valer: confira o corte novo e
+  aprove de novo. O enquadramento (`planos`) não é refeito: a parte nova fica no centro, sem zoom, até rodar
+  `planos --numero N --forcar` no terminal.

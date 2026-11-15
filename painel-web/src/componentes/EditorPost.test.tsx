@@ -1,5 +1,7 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, vi } from "vitest";
+import { botaoConfirmarDoDialogo, responderDialogo, tituloDoDialogo } from "../testes/dialogo";
+import { ProvedorConfirmacao } from "./Confirmacao";
 import { EditorPost } from "./EditorPost";
 
 const CAMPOS = {
@@ -59,7 +61,7 @@ afterEach(() => {
 });
 
 async function montar(sinal = 0) {
-  const r = render(<EditorPost ep="Ep 1" n={2} recarregarSinal={sinal} />);
+  const r = render(<EditorPost ep="Ep 1" n={2} recarregarSinal={sinal} />, { wrapper: ProvedorConfirmacao });
   await act(async () => {
     await vi.advanceTimersByTimeAsync(0);
   });
@@ -149,18 +151,22 @@ describe("EditorPost", () => {
 
   it("usar a versão do arquivo pede confirmação antes de trocar", async () => {
     conflitoComDisco({ instagram: "do disco" });
-    const confirmar = vi.spyOn(window, "confirm").mockReturnValueOnce(false).mockReturnValueOnce(true);
     await montar();
     const campo = screen.getByLabelText(/Instagram/) as HTMLTextAreaElement;
     await salvarRascunho(campo, "rascunho meu");
 
     fireEvent.click(screen.getByRole("button", { name: "Usar a versão do arquivo" }));
     await avancar(0);
-    expect(confirmar).toHaveBeenCalledWith("Descartar o que você escreveu e usar a versão do arquivo?");
+    expect(tituloDoDialogo()).toBe("Descartar o que você escreveu e usar a versão do arquivo?");
+    expect(botaoConfirmarDoDialogo().className).toContain("tom-irreversivel");
+    responderDialogo(false);
+    await avancar(0);
     expect(campo.value).toBe("rascunho meu");
     expect(screen.getByText("No arquivo agora:")).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "Usar a versão do arquivo" }));
+    await avancar(0);
+    responderDialogo(true);
     await avancar(0);
     expect(campo.value).toBe("do disco");
     expect(screen.queryByText("No arquivo agora:")).toBeNull();

@@ -1,5 +1,6 @@
 import { CSSProperties, KeyboardEvent, MouseEvent, useEffect, useId, useRef, useState } from "react";
 import { Momento, tempoTexto } from "../api";
+import { descreverRemocao, ehPausa, segundosTexto, useRemocoes } from "./remocoes";
 
 interface Props {
   /** O <video> do corte na tela agora (ele é trocado quando muda o vídeo ou durante a montagem). */
@@ -7,6 +8,11 @@ interface Props {
   momentos: Momento[];
   /** Põe o player no tempo (em segundos) e dá play. */
   irPara: (segundos: number) => void;
+  /** Com o episódio e o corte, a linha marca também o que a limpeza tirou (pausas, hesitações, repetições). */
+  ep?: string;
+  n?: number | string;
+  /** Muda quando o corte é montado de novo: as remoções são lidas outra vez. */
+  versao?: string | null;
 }
 
 interface Trecho {
@@ -19,6 +25,9 @@ interface Trecho {
 }
 
 const TIPO: Record<string, string> = { foto: "foto", ia: "imagem de IA", noticia: "notícia" };
+
+/** Ir a uma remoção começa um pouco antes, para ouvir a emenda. */
+const ANTES_DA_EMENDA = 2;
 
 /** Os momentos que aparecem na tela, com o tempo depois do ajuste; os descartados ficam de fora. */
 function trechos(momentos: Momento[]): Trecho[] {
@@ -35,7 +44,7 @@ function trechos(momentos: Momento[]): Trecho[] {
  * A linha do corte: uma régua com o tempo do vídeo, os trechos onde entram as imagens e a cabeça
  * de leitura acompanhando o player. Clicar num trecho (ou na régua) leva o player até lá.
  */
-export function LinhaDoCorte({ video, momentos, irPara }: Props) {
+export function LinhaDoCorte({ video, momentos, irPara, ep, n, versao }: Props) {
   const [duracao, setDuracao] = useState(0);
   const [agora, setAgora] = useState<string | null>(null);
   const cabeca = useRef<HTMLDivElement>(null);
@@ -44,6 +53,7 @@ export function LinhaDoCorte({ video, momentos, irPara }: Props) {
   listaRef.current = lista;
   const duracaoRef = useRef(0);
   const prefixo = useId();
+  const dadosRemocoes = useRemocoes(ep, n, versao);
 
   useEffect(() => {
     if (!video) return;
@@ -107,7 +117,9 @@ export function LinhaDoCorte({ video, momentos, irPara }: Props) {
     };
   }, [video]);
 
-  if (duracao <= 0 || lista.length === 0) return null;
+  const remocoes = (dadosRemocoes?.remocoes ?? []).filter((r) => r.tempo <= duracao + 0.05);
+  if (duracao <= 0 || (lista.length === 0 && remocoes.length === 0)) return null;
+  const removido = remocoes.reduce((soma, r) => soma + r.duracao, 0);
 
   function clicarNaRegua(e: MouseEvent<HTMLDivElement>) {
     const caixa = e.currentTarget.getBoundingClientRect();
@@ -166,6 +178,14 @@ export function LinhaDoCorte({ video, momentos, irPara }: Props) {
             }}
           />
         ))}
+        {remocoes.map((r) => (
+          <span
+            key={`${r.tempo}-${r.episodio}`}
+            className={ehPausa(r) ? "linha-remocao pausa" : "linha-remocao"}
+            style={{ left: `${Math.min(100, (r.tempo / duracao) * 100)}%` }}
+            aria-hidden="true"
+          />
+        ))}
         <div className="linha-cabeca" ref={cabeca} aria-hidden="true" />
       </div>
       <div className="so-leitor">
@@ -181,6 +201,42 @@ export function LinhaDoCorte({ video, momentos, irPara }: Props) {
         <span>0:00</span>
         <span>{tempoTexto(duracao)}</span>
       </div>
+      {remocoes.length > 0 && (
+        <>
+          <ul className="legenda-linha" aria-hidden="true">
+            {lista.length > 0 && <li className="chave-imagem">imagem</li>}
+            {remocoes.some((r) => !ehPausa(r)) && <li className="chave-corte">fala tirada</li>}
+            {remocoes.some(ehPausa) && <li className="chave-pausa">pausa tirada</li>}
+          </ul>
+          <details className="remocoes">
+            <summary>
+              O que a limpeza tirou: {remocoes.length} {remocoes.length === 1 ? "trecho" : "trechos"},{" "}
+              {segundosTexto(removido)}
+            </summary>
+            {dadosRemocoes?.avisos.map((aviso) => (
+              <p key={aviso} className="nota-remocoes">
+                {aviso}
+              </p>
+            ))}
+            <ul>
+              {remocoes.map((r) => (
+                <li key={`${r.tempo}-${r.episodio}`}>
+                  <button
+                    type="button"
+                    aria-label={`${tempoTexto(r.tempo)}: ${descreverRemocao(r)}, ${segundosTexto(r.duracao)}`}
+                    title={`Ouvir a partir de ${tempoTexto(Math.max(0, r.tempo - ANTES_DA_EMENDA))}`}
+                    onClick={() => irPara(Math.max(0, r.tempo - ANTES_DA_EMENDA))}
+                  >
+                    <span className="remocao-tempo">{tempoTexto(r.tempo)}</span>
+                    <span className="remocao-texto">{descreverRemocao(r)}</span>
+                    <span className="remocao-duracao">{segundosTexto(r.duracao)}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </details>
+        </>
+      )}
     </div>
   );
 }

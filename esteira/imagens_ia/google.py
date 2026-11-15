@@ -4,6 +4,8 @@ from esteira.publicar import http
 
 URL = "https://generativelanguage.googleapis.com/v1beta/interactions"
 REVISAO_API = "2026-05-20"
+# 9:16 conferido em 15/11/2026 na documentação do Gemini (aistudio.google.com/docs/image-generation): o
+# gemini-nano-banana-2.1 aceita 9:16 e devolve 768x1376 em 1K, 1536x2752 em 2K e 3072x5504 em 4K.
 PROPORCAO = "9:16"
 
 

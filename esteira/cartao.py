@@ -2,8 +2,9 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
 
-from esteira import config
+from esteira import config, idiomas
 from esteira.caminhos import FONTES, LOGO
+from esteira.midia import ErroMidia
 
 LARGURA = 1080
 ALTURA = 1920
@@ -17,8 +18,9 @@ ARROBA = "@tudoepoliticabr"
 AZUL = "#1E50DC"
 
 
-def linha_fonte(veiculo: str, data: str) -> str:
-    return f"Fonte: {veiculo}, {data}"
+def linha_fonte(veiculo: str, data: str, idioma: str | None = None) -> str:
+    idioma = idioma or config.atual().transcricao_idioma
+    return f"{idiomas.texto_fixo(idioma, 'fonte')}: {veiculo}, {data}"
 
 
 def _quebrar(texto: str, fonte: ImageFont.FreeTypeFont) -> list[str]:
@@ -46,23 +48,27 @@ def ajustar_manchete(manchete: str) -> tuple[list[str], ImageFont.FreeTypeFont]:
 
 
 def gerar_sobreposicao(saida: Path) -> Path:
+    """Logo no topo e "SIGA @arroba" embaixo, em fundo transparente: vai por cima do vídeo de encerramento."""
+    if not LOGO.is_file():
+        raise ErroMidia(f"logo não encontrada: {LOGO}; coloque a logo lá ou ajuste [identidade] logo no clipline.toml")
     imagem = Image.new("RGBA", (LARGURA, ALTURA), (0, 0, 0, 0))
     logo = Image.open(LOGO).convert("RGBA")
     logo.thumbnail((500, 500))
     imagem.alpha_composite(logo, ((LARGURA - logo.width) // 2, 70))
 
-    desenho = ImageDraw.Draw(imagem)
-    fonte = ImageFont.truetype(str(ARQUIVO_FONTE), 66)
-    siga = "SIGA "
-    arroba = config.atual().arroba or ARROBA
-    largura = fonte.getlength(siga + arroba)
-    x = (LARGURA - largura) / 2
-    y = 70 + logo.height + 30
-    desenho.text((x, y), siga, font=fonte, fill=AZUL, stroke_width=3, stroke_fill="#000000")
-    desenho.text(
-        (x + fonte.getlength(siga), y), arroba, font=fonte, fill="#FFFFFF",
-        stroke_width=3, stroke_fill="#000000",
-    )
+    arroba = config.atual().arroba
+    if arroba:  # sem arroba no clipline.toml, só a logo
+        desenho = ImageDraw.Draw(imagem)
+        fonte = ImageFont.truetype(str(ARQUIVO_FONTE), 66)
+        siga = idiomas.texto_fixo(config.atual().transcricao_idioma, "siga") + " "
+        largura = fonte.getlength(siga + arroba)
+        x = (LARGURA - largura) / 2
+        y = 70 + logo.height + 30
+        desenho.text((x, y), siga, font=fonte, fill=AZUL, stroke_width=3, stroke_fill="#000000")
+        desenho.text(
+            (x + fonte.getlength(siga), y), arroba, font=fonte, fill="#FFFFFF",
+            stroke_width=3, stroke_fill="#000000",
+        )
     imagem.save(saida)
     return Path(saida)
 

@@ -24,3 +24,5 @@ publicar.trava
 *.tmp
 trabalho/.sugeridas-anteriores/
 clipline.egg-info/
+assets/encerramento-*.png
+*.whl

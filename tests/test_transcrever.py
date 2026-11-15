@@ -1,4 +1,5 @@
 import json
+import sys
 import weakref
 from types import SimpleNamespace as N
 
@@ -128,3 +129,135 @@ def test_versao_antiga_sem_hotwords():
 
     assert "hotwords" not in opcoes_de_nomes(transcribe, ["Ana"])
     assert opcoes_de_nomes(transcribe, [])["initial_prompt"] is None
+
+
+def _sem_chamar():
+    raise AssertionError("não devia perguntar pela GPU")
+
+
+@pytest.mark.parametrize("dispositivo,tem_gpu,primeiro", [
+    ("auto", True, ("large-v3", "cuda", "float16")),
+    ("auto", False, ("medium", "cpu", "int8")),
+    ("cpu", True, ("medium", "cpu", "int8")),
+    ("cuda", False, ("large-v3", "cuda", "float16")),  # como sempre: o erro, se houver, vem do CTranslate2
+])
+def test_escolher_modos(dispositivo, tem_gpu, primeiro):
+    from esteira.transcrever import escolher_modos
+
+    assert escolher_modos(dispositivo, lambda: tem_gpu)[0] == primeiro
+
+
+def test_cpu_e_cuda_explicitos_nao_consultam_a_gpu():
+    from esteira.transcrever import MODOS, MODOS_CPU, escolher_modos
+
+    assert escolher_modos("cpu", _sem_chamar) == MODOS_CPU
+    assert escolher_modos("cuda", _sem_chamar) == MODOS
+
+
+def test_dispositivo_desconhecido():
+    from esteira.transcrever import escolher_modos
+
+    with pytest.raises(ValueError, match="auto, cuda, cpu"):
+        escolher_modos("tpu", lambda: True)
+
+
+def test_aviso_so_na_cpu():
+    from esteira.transcrever import MODOS, MODOS_CPU, aviso_de_dispositivo
+
+    assert aviso_de_dispositivo(MODOS) is None
+    assert "CPU" in aviso_de_dispositivo(MODOS_CPU) and "medium" in aviso_de_dispositivo(MODOS_CPU)
+
+
+def test_na_cpu_carrega_int8_e_recua_para_o_small_sem_memoria(tmp_path):
+    from esteira.transcrever import MODOS_CPU
+
+    pedidos = []
+
+    def criar(modo):
+        pedidos.append(modo)
+        return Modelo([MemoryError()]) if len(pedidos) == 1 else Modelo([SEG])
+
+    assert transcrever(tmp_path / "v.mp4", tmp_path, [], criar, modos=MODOS_CPU)
+    assert pedidos == [("medium", "cpu", "int8"), ("small", "cpu", "int8")]
+
+
+def test_bad_alloc_da_cpu_conta_como_falta_de_memoria(tmp_path):
+    from esteira.transcrever import MODOS_CPU
+
+    falha = Modelo([RuntimeError("std::bad_alloc")])
+    assert transcrever(tmp_path / "v.mp4", tmp_path, [], fabrica(falha, Modelo([SEG])), modos=MODOS_CPU)
+
+
+def test_sem_modos_usa_os_de_cuda_como_sempre(tmp_path):
+    from esteira.transcrever import MODOS
+
+    pedidos = []
+
+    def criar(modo):
+        pedidos.append(modo)
+        return Modelo([SEG])
+
+    transcrever(tmp_path / "v.mp4", tmp_path, [], criar)
+    assert pedidos == [MODOS[0]]
+
+
+def test_idioma_vai_para_o_whisper(tmp_path):
+    modelo = Modelo([SEG])
+    transcrever(tmp_path / "v.mp4", tmp_path, [], fabrica(modelo), idioma="es")
+    assert modelo.opcoes["language"] == "es"
+
+
+def test_cli_transcrever_escolhe_dispositivo_e_idioma(tmp_path, monkeypatch, capsys):
+    from esteira import cli, config
+
+    chamada = {}
+    monkeypatch.setattr(cli, "criar_episodio", lambda video, quadro, numero, convidado: tmp_path)
+    monkeypatch.setattr(cli, "carregar_glossario", lambda caminho: [])
+    monkeypatch.setattr(config, "atual", lambda: config.Config(transcricao_idioma="en"))
+
+    def falso(video, pasta, nomes, forcar=False, modos=None, idioma="pt"):
+        chamada.update(modos=modos, idioma=idioma)
+        return []
+
+    monkeypatch.setattr(cli, "transcrever", falso)
+    argv = ["transcrever", str(tmp_path / "v.mp4"), "--quadro", "Q", "--numero", "1", "--convidado", "C"]
+    assert cli.principal(argv + ["--dispositivo", "cpu"]) == 0
+    assert chamada["modos"][0] == ("medium", "cpu", "int8") and chamada["idioma"] == "en"
+    assert "CPU" in capsys.readouterr().out
+
+
+def test_auto_com_gpu_guarda_a_cpu_de_reserva():
+    from esteira.transcrever import MODOS, MODOS_CPU, escolher_modos
+
+    assert escolher_modos("auto", lambda: True) == MODOS + MODOS_CPU
+
+
+def test_sem_cublas_o_auto_pula_para_a_cpu(tmp_path, capsys):
+    from esteira.transcrever import MODOS, MODOS_CPU
+
+    usados = []
+    modelos = [Modelo([RuntimeError("Library cublas64_12.dll is not found or cannot be loaded")]), Modelo([SEG])]
+
+    def criar(modo):
+        usados.append(modo)
+        return modelos.pop(0)
+
+    assert transcrever(tmp_path / "v.mp4", tmp_path, [], criar, modos=MODOS + MODOS_CPU)
+    assert usados == [MODOS[0], MODOS_CPU[0]]  # não tenta os outros modos de CUDA
+    assert "CPU" in capsys.readouterr().err
+
+
+def test_sem_cublas_e_cuda_explicito_o_erro_continua(tmp_path):
+    from esteira.transcrever import MODOS
+
+    falha = Modelo([RuntimeError("Library cublas64_12.dll is not found or cannot be loaded")])
+    with pytest.raises(RuntimeError, match="cublas"):
+        transcrever(tmp_path / "v.mp4", tmp_path, [], fabrica(falha), modos=MODOS)
+
+
+def test_gpu_visivel_sem_cublas_nao_conta_como_cuda(monkeypatch):
+    from esteira import transcrever as modulo
+
+    monkeypatch.setattr(modulo, "_cublas_carrega", lambda: False)
+    monkeypatch.setitem(sys.modules, "ctranslate2", N(get_cuda_device_count=lambda: 1))
+    assert modulo.cuda_disponivel() is False

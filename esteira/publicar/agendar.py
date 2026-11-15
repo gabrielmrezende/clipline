@@ -9,9 +9,19 @@ from esteira.fluxo_imagens import ler_creditos, ler_ia
 from esteira.midia import ErroMidia, sondar
 from esteira.publicar.envio import assinatura, enviar
 from esteira.publicar.fila import Item, gravar_fila, ler_fila
-from esteira.publicar.post import ErroPost, Textos, conferir_textos, faltando_aviso_ia, ler_post
+from esteira.publicar.post import (
+    ErroPost,
+    ExtrasYouTube,
+    Textos,
+    conferir_extras_youtube,
+    conferir_textos,
+    faltando_aviso_ia,
+    ler_extras_youtube,
+    ler_post,
+)
 from esteira.receita import ler_receita
 from esteira.revisao import video_final_desatualizado
+from esteira.wikimedia import aviso_compartilha_igual
 
 FUSO = timezone(timedelta(hours=-3))
 REDES = ("youtube", "instagram", "tiktok")
@@ -45,6 +55,7 @@ class Pedido:
     imagens_ia: int = 0
     imagens_no_video: list[dict] | None = None  # do vídeo aprovado pelo painel; None = desconhecidas (CapCut)
     creditos: list[str] = field(default_factory=list)
+    extras: ExtrasYouTube = field(default_factory=ExtrasYouTube)  # tags, playlist e miniatura do post.md
 
     @property
     def ia(self) -> bool:
@@ -113,6 +124,7 @@ def _credito(pasta_corte: Path) -> str | None:
 def _creditos_das_fotos(pasta_corte: Path, imagens: list[dict]) -> list[str]:
     creditos = ler_creditos(pasta_corte / TRABALHO)
     linhas = []
+    usados = []
     for imagem in imagens:
         if imagem.get("tipo") != "foto":
             continue
@@ -121,8 +133,11 @@ def _creditos_das_fotos(pasta_corte: Path, imagens: list[dict]) -> list[str]:
         c = imagem.get("credito") if isinstance(imagem.get("credito"), dict) else creditos.get(nome)
         if c:
             linhas.append(f"- {c.get('autor', '')}, {c.get('licenca', '')}, {c.get('pagina', '')}")
+            usados.append(c)
         else:
             linhas.append(f"- {nome}: crédito não encontrado (confira o guia.md)")
+    if aviso := aviso_compartilha_igual(usados):
+        linhas.append(aviso)
     return linhas
 
 
@@ -164,12 +179,16 @@ def preparar_pedido(pasta_episodio: Path, numero: int, data: str, redes: list[st
         no_video = imagens_aprovadas(pasta_corte, video)
 
     textos = None
+    extras = ExtrasYouTube()
     try:
         textos = ler_post(pasta_corte / "post.md")
     except ErroPost as erro:
         problemas.append(str(erro))
     else:
         problemas += conferir_textos(textos, _credito(pasta_corte), set(redes))
+        if "youtube" in redes:
+            extras = ler_extras_youtube(pasta_corte / "post.md")
+            problemas += conferir_extras_youtube(extras, pasta_corte)
         if no_video and any(i.get("tipo") == "ia" for i in no_video):
             problemas += faltando_aviso_ia(textos, set(redes))
         if no_video:
@@ -189,7 +208,7 @@ def preparar_pedido(pasta_episodio: Path, numero: int, data: str, redes: list[st
         raise ErroAgendar("\n".join(problemas))
     return Pedido(
         pasta_episodio, numero, corte.titulo, video, duracao, textos, quando, redes, len(ler_ia(pasta_corte / TRABALHO)),
-        no_video, _creditos_das_fotos(pasta_corte, no_video or []),
+        no_video, _creditos_das_fotos(pasta_corte, no_video or []), extras,
     )
 
 
@@ -222,7 +241,7 @@ def resumo(pedido: Pedido, modos: dict) -> str:
         linhas.append(texto + ".")
     t = pedido.textos
     corpos = {
-        "youtube": f"Título: {t.youtube_titulo}\n\n{t.youtube_descricao}",
+        "youtube": f"Título: {t.youtube_titulo}\n{_linhas_extras(pedido.extras)}\n{t.youtube_descricao}",
         "instagram": t.instagram,
         "tiktok": t.tiktok,
     }
@@ -233,18 +252,32 @@ def resumo(pedido: Pedido, modos: dict) -> str:
     return "\n".join(linhas)
 
 
+def _linhas_extras(extras: ExtrasYouTube) -> str:
+    """Tags, playlist e miniatura no resumo; sem eles, nada (o resumo fica como sempre foi)."""
+    linhas = []
+    if extras.tags:
+        linhas.append(f"Tags: {', '.join(extras.tags)}")
+    if extras.playlist:
+        linhas.append(f"Playlist: {extras.playlist} (o vídeo entra nela depois do envio)")
+    if extras.miniatura is not None:
+        linhas.append(f"Miniatura: {extras.miniatura.name} (aplicada depois que o YouTube processa o vídeo)")
+    return "".join(linha + "\n" for linha in linhas)
+
+
 def confirmar(pedido: Pedido, modos: dict, redes_api: dict[str, object], base: Path | None = None) -> list[Item]:
     itens = [
         i for i in ler_fila(pedido.pasta)
         if not (i.numero == pedido.numero and i.rede in pedido.redes and i.estado in INATIVOS)
     ]
     novos = [
-        Item(pedido.numero, rede, pedido.data.isoformat(), assinatura=assinatura(pedido.video, pedido.textos, rede), ia=pedido.ia)
+        Item(pedido.numero, rede, pedido.data.isoformat(), ia=pedido.ia,
+             assinatura=assinatura(pedido.video, pedido.textos, rede, pedido.extras))
         for rede in pedido.redes
     ]
     itens += novos
     gravar_fila(pedido.pasta, itens, base)
     for item in novos:
         if item.rede == "youtube":
-            enviar(pedido.pasta, itens, item, pedido.video, pedido.textos, modos["youtube"], redes_api["youtube"], base)
+            enviar(pedido.pasta, itens, item, pedido.video, pedido.textos, modos["youtube"], redes_api["youtube"], base,
+                   extras_youtube=pedido.extras)
     return novos

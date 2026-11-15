@@ -1,9 +1,9 @@
 import json
 from collections.abc import Sequence
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from pathlib import Path
 
-from esteira.caminhos import SOBREPOSICAO
+from esteira import caminhos, config
 from esteira.cartao import gerar_sobreposicao
 from esteira.cortar import (
     CORTE_MP4,
@@ -35,18 +35,28 @@ def _planos_do_corte(destino: Path, receita: Receita) -> list[Plano]:
     return planos
 
 
+def _sobreposicao() -> Path | None:
+    """A imagem por cima do encerramento. A da esteira (em assets/) é gerada da logo e da arroba na primeira montagem;
+    a apontada em [identidade] sobreposicao, se faltar, é erro: a esteira não grava na pasta de identidade."""
+    caminho = caminhos.sobreposicao_do_canal(config.atual().arroba, config.Config().arroba)
+    if caminho is None or caminho.exists():
+        return caminho
+    if caminho.parent != caminhos.AUTOMACAO / "assets":
+        raise ErroMidia(f"sobreposição não encontrada: {caminho}; confira [identidade] sobreposicao no clipline.toml")
+    return gerar_sobreposicao(caminho)
+
+
 def _renderizar(
     receita: Receita, destino: Path, video: Path, numero: int, cartao: Path | None, imagens: Sequence[ImagemNoVideo]
 ) -> list[str]:
     problemas = validar_receita(receita, destino)
     if problemas:
         raise ErroMidia("; ".join(problemas))
-    if not SOBREPOSICAO.exists():
-        gerar_sobreposicao(SOBREPOSICAO)
-    return renderizar_final(
-        receita, video, cartao or escolher_encerramento(numero), destino, destino / CORTE_MP4, SOBREPOSICAO,
-        imagens=imagens,
-    )
+    fim = cartao or escolher_encerramento(numero)
+    if fim is None:  # [identidade] encerramentos = []: o corte termina na última fala
+        receita = replace(receita, encerramento=False)
+    sobreposicao = _sobreposicao() if receita.encerramento else None
+    return renderizar_final(receita, video, fim, destino, destino / CORTE_MP4, sobreposicao, imagens=imagens)
 
 
 def _alertas_gravados(destino: Path) -> tuple[list[str], list[str] | None]:

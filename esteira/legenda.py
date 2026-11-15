@@ -57,9 +57,15 @@ def _disposicao(palavras: list[str]) -> list[str] | None:
     return min(opcoes, key=lambda o: o[0])[1] if opcoes else None
 
 
+# O pronome "I" do inglês e as contrações dele ("I'm", "I'll") são sempre maiúsculos.
+_PRONOME_I = re.compile(r"^[\"“‘(\[]*I(['’][a-z]+)?\W*$")
+
+
 def _caixa(texto: str, inicio_de_frase: bool, nomes: set[str]) -> str:
     letras = re.sub(r"[^\w]", "", texto)
     if not inicio_de_frase or _chave(texto) in nomes or (len(letras) >= 2 and letras.isupper()):
+        return texto
+    if _PRONOME_I.match(texto):
         return texto
     return texto[:1].lower() + texto[1:]
 

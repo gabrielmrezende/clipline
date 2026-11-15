@@ -4,6 +4,9 @@ Grava `transcricao/pessoas.json`, `transcricao/pessoas.jpg` e, por corte,
 `trabalho/enquadramento.json`, `trabalho/alertas-planos.json` e `trabalho/planos.jpg`.
 Os tempos dos alertas são relativos ao início do corte (linha do episódio, antes da
 limpeza de pausas); o `preparar` os passa para o tempo do `corte.mp4`.
+
+Com `[enquadramento]` no clipline.toml, os planos ganham tela dividida (`tela_dividida`) e
+acompanhamento suave do rosto (`suave`); ver docs/enquadramento.md.
 """
 
 import json
@@ -11,10 +14,12 @@ import re
 from dataclasses import asdict
 from pathlib import Path
 
-from esteira import rostos
+from esteira import config, rostos
+from esteira.acompanhar import Amostra, acompanhar_planos, rosto_do_plano
 from esteira.cortar import TRABALHO, ler_aprovados, pasta_de_trabalho, pasta_do_corte
 from esteira.enquadrar import Cena, Rosto, TrechoVoz, _mmss, enquadrar_cena, falante_em
-from esteira.midia import ErroMidia
+from esteira.dividida import dividir_planos
+from esteira.midia import ErroMidia, sondar
 from esteira.modelos import Corte, Palavra
 from esteira.pessoas import folha_pessoas, gravar_pessoas, ler_pessoas, ligar
 from esteira.planos import Plano, gerar_folha, gravar_planos, ler_planos, limites_de_cena
@@ -25,8 +30,8 @@ ALERTAS = "alertas-planos.json"
 ROSTOS = "rostos.json"
 MANTIDO = "mantido (já existe)"
 PALAVRAS_NO_ROTULO = 6
-TOLERANCIA_CAIXA = 0.05  # distância horizontal máxima entre o plano e o rosto da caixa
 ERROS = (ErroMidia, OSError, ValueError)
+PROPORCAO_PADRAO = 16 / 9
 
 
 def _tempo_de_fala(vozes: list[TrechoVoz], cortes: list[Corte]) -> dict[str, float]:
@@ -73,10 +78,8 @@ def _relativo_ao_corte(alerta: str, deslocamento: float) -> str:
 def _caixa(plano: Plano, cenas: list[Cena]) -> tuple[float, float, float, float] | None:
     meio = (plano.inicio + plano.fim) / 2
     cena = next((c for c in cenas if c.inicio <= meio < c.fim), None)
-    if cena is None or not cena.rostos or plano.zoom <= 1.0 and len(cena.rostos) > 1:
-        return None
-    rosto = min(cena.rostos, key=lambda r: abs(r.x - plano.x))
-    if abs(rosto.x - plano.x) > TOLERANCIA_CAIXA:
+    rosto = rosto_do_plano(plano, cena) if cena is not None else None
+    if rosto is None:
         return None
     return rosto.x, rosto.y, rosto.largura, rosto.altura
 
@@ -88,6 +91,9 @@ def _rotulo(
     voz = falante_em(vozes, plano.inicio, plano.fim)
     pessoa = ligacao.get(voz) if voz else None
     quem = nomes.get(pessoa) or pessoa or voz or "sem voz"
+    if plano.divisao:
+        pessoas = [p.get("pessoa") if isinstance(p, dict) else None for p in plano.divisao]
+        quem = " + ".join(nomes.get(p) or p or "?" for p in pessoas)
     texto = [p.texto for p in palavras if plano.inicio <= p.inicio < plano.fim][:PALAVRAS_NO_ROTULO]
     return f"{numero} {quem} · {' '.join(texto)}".rstrip(" ·")
 
@@ -137,6 +143,35 @@ def _enquadrar_corte(
     return planos, alertas + _alertas_de_ligacao(vozes, corte, ligacao)
 
 
+def _amostras_por_pessoa(deteccoes: list[rostos.Deteccao], pessoas: list[str]) -> dict[str, list[Amostra]]:
+    por_pessoa: dict[str, list[Amostra]] = {}
+    for det, pessoa in zip(deteccoes, pessoas):
+        por_pessoa.setdefault(pessoa, []).append(Amostra(det.tempo, det.x, det.y, det.altura))
+    return por_pessoa
+
+
+def _proporcao(video: Path) -> float:
+    """Largura/altura do episódio; sem conseguir ler, 16:9."""
+    try:
+        midia = sondar(video)
+        return midia.largura / midia.altura
+    except (ErroMidia, OSError, ValueError, ZeroDivisionError):
+        return PROPORCAO_PADRAO
+
+
+def enquadramento_dinamico(
+    planos: list[Plano], cenas: list[Cena], vozes: list[TrechoVoz], ligacao: dict[str, str],
+    amostras: dict[str, list[Amostra]], proporcao: float, ajustes: config.Config,
+) -> list[Plano]:
+    """Os recursos de `[enquadramento]`: primeiro a tela dividida, depois o acompanhamento suave
+    (que também vale para as duas metades da tela dividida)."""
+    if ajustes.enquadramento_tela_dividida:
+        planos = dividir_planos(planos, cenas, vozes, ligacao)
+    if ajustes.enquadramento_suave:
+        planos = acompanhar_planos(planos, cenas, amostras, proporcao)
+    return planos
+
+
 def _vozes_nos_cortes(vozes: list[TrechoVoz], cortes: list[Corte]) -> list[TrechoVoz]:
     """Trechos de voz recortados aos intervalos dos cortes (a fala fora deles não conta)."""
     recortados = []
@@ -179,6 +214,11 @@ def planejar_episodio(
     Alertas do episódio (pessoas.jpg, detecção de corte não pedido) vão na chave 0."""
     forcar = forcar or religar
     pasta = Path(pasta)
+    try:
+        ajustes = config.atual()
+    except config.ErroConfig as erro:
+        return {0: f"erro: {erro}"}
+    dinamico = ajustes.enquadramento_suave or ajustes.enquadramento_tela_dividida
     video = Path(json.loads((pasta / "episodio.json").read_text("utf-8"))["video"])
     try:
         vozes = ler_vozes(pasta)
@@ -218,10 +258,12 @@ def planejar_episodio(
     todas = [d for _, _, deteccoes in lidos for d in deteccoes]
     pessoas, assinaturas = rostos.agrupar(todas, existente[1] if existente else {})
     cenas_por_corte: dict[int, list[Cena]] = {}
+    amostras_por_corte: dict[int, dict[str, list[Amostra]]] = {}
     inicio = 0
     for corte, limites, deteccoes in lidos:
         fim = inicio + len(deteccoes)
         cenas_por_corte[corte.numero] = rostos.cenas_com_rostos(deteccoes, pessoas[inicio:fim], limites)
+        amostras_por_corte[corte.numero] = _amostras_por_pessoa(deteccoes, pessoas[inicio:fim])
         inicio = fim
 
     cortes_lidos = [corte for corte, _, _ in lidos]
@@ -243,6 +285,7 @@ def planejar_episodio(
     if globais:
         resultados[0] = f"ok com alertas: {'; '.join(globais)}"
 
+    proporcao = _proporcao(video) if dinamico else PROPORCAO_PADRAO
     for corte in cortes_lidos:
         if not pedido(corte):
             continue
@@ -254,6 +297,10 @@ def planejar_episodio(
                 resultado = MANTIDO
             else:
                 planos, alertas = _enquadrar_corte(corte, cenas, vozes, ligacao)
+                if dinamico:
+                    planos = enquadramento_dinamico(
+                        planos, cenas, vozes, ligacao, amostras_por_corte[corte.numero], proporcao, ajustes
+                    )
                 trabalho = pasta_de_trabalho(destino)
                 gravar_planos(trabalho, planos)
                 (trabalho / ALERTAS).write_text(json.dumps(alertas, ensure_ascii=False, indent=1), "utf-8")

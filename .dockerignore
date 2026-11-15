@@ -1,0 +1,34 @@
+# Fora do contexto do build da imagem: ambientes locais, builds, mídia e dados do canal.
+# A mídia, os modelos e a configuração do canal entram como volumes (ver compose.yaml).
+.git
+.venv
+**/__pycache__
+**/*.pyc
+.pytest_cache
+.ruff_cache
+*.egg-info
+*.tmp
+*.whl
+bin/
+logs/
+publicar.trava
+clipline.toml
+
+# o painel é construído dentro da imagem
+painel-web/node_modules
+painel-web/test-results
+painel-web/playwright-report
+painel-web/tsconfig.tsbuildinfo
+painel-web/e2e/.cortes
+painel-web/e2e/.musicas
+esteira/painel/estatico
+
+# mídia e modelos (não vão para o git nem para a imagem)
+**/*.mp4
+**/*.mov
+**/*.MOV
+**/*.wav
+**/*.WAV
+**/*.mp3
+modelos/*.onnx
+trabalho/

@@ -153,7 +153,8 @@ def baixar_musicas(
     erros = []
     for clima in CLIMAS_VALIDOS:
         for nome in aprovadas.get(clima, []):
-            if f"{clima}/{nome}" in catalogo:
+            # Catalogada e no disco: nada a fazer. Num clone novo, o catálogo vem do git e os .mp3 não: baixa de novo.
+            if f"{clima}/{nome}" in catalogo and (pasta / clima / nome).is_file():
                 continue
             try:
                 if nome not in por_arquivo:

@@ -38,6 +38,9 @@ Crédito: <crédito exato>
 <redes e data>
 ```
 
+- Opcional, só se `../Contexto/redes-e-publicacao.md` pedir: na seção `## YouTube`, entre `Título:` e
+  `Descrição:`, as linhas `Tags: a, b, c` (até 500 caracteres no total) e `Playlist: <ID ou link>`. Não escreva
+  `Miniatura:`: a imagem é escolha do dono. Formato e limites em `docs/publicacao.md`.
 - Nenhuma linha dos textos começa com `## `.
 - Sem aviso de IA e sem crédito de foto: os dois entram na publicação, a partir do vídeo aprovado. O `agendar`
   e o painel cobram o que faltar.

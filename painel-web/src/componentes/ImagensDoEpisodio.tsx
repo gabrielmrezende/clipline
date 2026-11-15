@@ -14,18 +14,21 @@ import {
   plural,
   resumoDeFotosDoEpisodio,
 } from "../api";
+import { useConfirmar } from "./Confirmacao";
 import {
   Alerta,
   AndamentoPedido,
   AvisosDoResumo,
+  NADA_PARA_REFAZER,
   PEDIDO_PERDIDO,
   ativo,
+  confirmacaoDeFotos,
+  confirmacaoDeIa,
   ehDeImagens,
   mensagem,
+  paraRetomar,
   rotuloDeFotos,
   rotuloDeIa,
-  textoDeFotos,
-  textoDeIa,
   useAcompanhamento,
   useUmaPorVez,
 } from "./imagensComum";
@@ -68,6 +71,7 @@ export function ImagensDoEpisodio({ ep, cortes }: Props) {
   const [erroOrcamento, setErroOrcamento] = useState<string | null>(null);
   const [avisoGlossario, setAvisoGlossario] = useState<string | null>(null);
   const [preparando, umaPorVez] = useUmaPorVez();
+  const confirmar = useConfirmar();
   const vivo = useRef(true);
   const numeros = cortes.map((c) => c.numero).join(",");
 
@@ -126,7 +130,7 @@ export function ImagensDoEpisodio({ ep, cortes }: Props) {
     void lerOrcamento();
     listarTarefas()
       .then((ts) => {
-        const retomar = ts.find((t) => ehDeImagens(t) && t.episodio === ep && ativo(t));
+        const retomar = paraRetomar(ts.filter((t) => ehDeImagens(t) && t.episodio === ep));
         if (vivo.current && retomar) setPedido(retomar);
       })
       .catch(() => {
@@ -170,7 +174,7 @@ export function ImagensDoEpisodio({ ep, cortes }: Props) {
       setErroPedido(null);
       const r = await lerResumo();
       if (!r) return;
-      if (window.confirm(textoDeFotos(r, SUBSTITUIDAS))) await enviarPedido(() => baixarFotosDoEpisodio(ep));
+      if (await confirmar(confirmacaoDeFotos(r, SUBSTITUIDAS))) await enviarPedido(() => baixarFotosDoEpisodio(ep));
     });
   }
 
@@ -180,11 +184,17 @@ export function ImagensDoEpisodio({ ep, cortes }: Props) {
       const o = await lerOrcamento();
       if (!o || o.imagens === 0) return;
       // Só o que estava no orçamento confirmado: o que for aprovado depois fica para o próximo clique.
-      if (window.confirm(textoDeIa(o))) await enviarPedido(() => gerarImagensIaDoEpisodio(ep, o.itens));
+      if (await confirmar(confirmacaoDeIa(o))) await enviarPedido(() => gerarImagensIaDoEpisodio(ep, o.itens));
     });
   }
 
   const ocupado = ativo(pedido) || enviando || preparando;
+
+  /** Refaz um pedido interrompido pelo mesmo caminho do botão (e a mesma confirmação); montar é por corte. */
+  const refazer: Record<string, (() => void) | undefined> = {
+    fotos: () => (resumo?.fotos === 0 ? setErroPedido(NADA_PARA_REFAZER) : void baixar()),
+    ia: () => (orcamento?.imagens === 0 ? setErroPedido(NADA_PARA_REFAZER) : void gerar()),
+  };
 
   return (
     <section aria-label="Imagens do episódio" className="bloco-imagens">
@@ -201,7 +211,9 @@ export function ImagensDoEpisodio({ ep, cortes }: Props) {
       <Alerta texto={erroResumo === avisoGlossario ? null : erroResumo} />
       <Alerta texto={erroOrcamento} />
       <Alerta texto={erroPedido} />
-      {pedido ? <AndamentoPedido pedido={pedido} /> : null}
+      {pedido ? (
+        <AndamentoPedido pedido={pedido} aoMudar={setPedido} aoTentarDeNovo={refazer[pedido.tipo ?? ""]} />
+      ) : null}
       {cortes.length === 0 ? <p>Nenhum corte neste episódio.</p> : null}
       <ul className="resumo-cortes">
         {cortes.map((c) => {

@@ -187,7 +187,7 @@ export function BlocoPublicacao({ ep, n }: Props) {
           </button>
         </div>
       ) : null}
-      {pedido ? <AndamentoPedido pedido={pedido} /> : null}
+      {pedido ? <AndamentoPedido pedido={pedido} aoMudar={setPedido} /> : null}
     </section>
   );
 }

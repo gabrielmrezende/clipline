@@ -3,19 +3,24 @@
 Tudo o que é decisão editorial ou identidade do canal, e não lógica, mora aqui. Sem o arquivo, valem os padrões,
 que são exatamente os valores com que a esteira sempre rodou. Modelo comentado em `clipline.exemplo.toml`.
 
-Os nomes dos serviços no Gerenciador de Credenciais NÃO estão aqui de propósito: trocá-los esconderia as chaves já
-guardadas.
+As pastas ([pastas]) e os arquivos de identidade ([identidade]) são lidos por `caminhos.py`, que este módulo importa.
+
+Os nomes dos serviços no Gerenciador de Credenciais só mudam por `[credenciais] prefixo`, pensado para um canal novo
+(o `clipline init` preenche): trocar o prefixo de um canal que já guardou chaves e contas esconde todas elas, que
+continuam lá com o nome antigo até alguém conectar de novo.
 """
 
+import re
 import tomllib
 from dataclasses import dataclass, field, fields
 from functools import lru_cache
 from pathlib import Path
 
-from esteira.caminhos import AUTOMACAO
+from esteira.caminhos import AUTOMACAO, ErroPastas, resolver
 
 ARQUIVO = AUTOMACAO / "clipline.toml"
 ESTILOS_LEGENDA = ("fixa", "palavra")
+LICENCAS_WIKIMEDIA = ("cc0", "dominio-publico", "cc-by", "cc-by-sa")  # todas aceitas por padrão, como sempre
 
 
 class ErroConfig(ValueError):
@@ -40,7 +45,19 @@ class Config:
     # YouTube
     youtube_categoria: str = "22"
     limite_shorts: float = 180.0
+    # Canal (clipline init): prefixo dos serviços no Gerenciador de Credenciais (ver docs/configuracao.md)
+    credenciais_prefixo: str = "tudo-e-politica"
+    # IA da Anthropic (revisão visual e classificador de pessoa real). Desligada sem chave; a revisão só com --confirmar.
+    ia_classificador: bool = False
+    ia_modelo_classificador: str = "claude-haiku-5-5"
+    ia_modelo_revisao: str = "claude-sonnet-5-5"
+    # Enquadramento: o recorte acompanha o rosto dentro do plano; diálogo rápido sai em tela dividida
+    enquadramento_suave: bool = False
+    enquadramento_tela_dividida: bool = False
     extras: dict = field(default_factory=dict, compare=False)
+    # Entrada e idiomas (docs/entrada-e-idiomas.md)
+    transcricao_idioma: str = "pt"  # código do Whisper; também escolhe as listas de esteira/idiomas.py
+    imagens_licencas: tuple = LICENCAS_WIKIMEDIA  # licenças aceitas na busca de fotos do Wikimedia
 
 
 _TIPOS = {f.name: f.type for f in fields(Config) if f.name != "extras"}
@@ -51,7 +68,16 @@ SECOES = {
     ("legenda", "estilo"): "legenda_estilo", ("legenda", "cor_destaque"): "legenda_cor_destaque",
     ("voz", "normalizar"): "normalizar_voz", ("voz", "lufs"): "voz_lufs",
     ("youtube", "categoria"): "youtube_categoria", ("youtube", "limite_shorts"): "limite_shorts",
+    ("credenciais", "prefixo"): "credenciais_prefixo",
+    ("enquadramento", "suave"): "enquadramento_suave",
+    ("enquadramento", "tela_dividida"): "enquadramento_tela_dividida",
 }
+SECOES.update({("transcricao", "idioma"): "transcricao_idioma", ("imagens", "licencas"): "imagens_licencas"})
+SECOES_DE_CAMINHOS = ("pastas", "identidade")  # lidas e conferidas por caminhos.py, fora da Config
+SECOES.update({
+    ("ia", "classificador"): "ia_classificador", ("ia", "modelo_classificador"): "ia_modelo_classificador",
+    ("ia", "modelo_revisao"): "ia_modelo_revisao",
+})
 
 
 def _converter(nome: str, valor, tipo):
@@ -61,6 +87,8 @@ def _converter(nome: str, valor, tipo):
         return valor
     if tipo in ("str", str) and isinstance(valor, str):
         return valor
+    if tipo in ("tuple", tuple) and isinstance(valor, list) and all(isinstance(v, str) for v in valor):
+        return tuple(valor)
     raise ErroConfig(f"clipline.toml: {nome} com tipo errado ({type(valor).__name__})")
 
 
@@ -72,8 +100,14 @@ def ler(caminho: Path = ARQUIVO) -> Config:
         dados = tomllib.loads(caminho.read_text("utf-8"))
     except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as erro:
         raise ErroConfig(f"clipline.toml ilegível: {erro}") from None
+    try:
+        resolver(dados, {})
+    except ErroPastas as erro:
+        raise ErroConfig(str(erro)) from None
     planos = {}
     for secao, valores in dados.items():
+        if secao in SECOES_DE_CAMINHOS:
+            continue
         if isinstance(valores, dict):
             for chave, valor in valores.items():
                 planos[SECOES.get((secao, chave), f"{secao}.{chave}")] = valor
@@ -85,10 +119,30 @@ def ler(caminho: Path = ARQUIVO) -> Config:
         raise ErroConfig(f"clipline.toml: legenda_estilo deve ser um destes: {', '.join(ESTILOS_LEGENDA)}")
     if not 0 < config.duracao_minima < config.duracao_maxima:
         raise ErroConfig("clipline.toml: duracao_minima precisa ser positiva e menor que duracao_maxima")
+    _validar_entrada_e_idiomas(config)
+    if not config.credenciais_prefixo.strip():
+        raise ErroConfig("clipline.toml: [credenciais] prefixo não pode ser vazio")
     return config
+
+
+def _validar_entrada_e_idiomas(config: Config) -> None:
+    if not re.fullmatch(r"[a-z]{2,3}", config.transcricao_idioma):
+        raise ErroConfig('clipline.toml: [transcricao] idioma deve ser um código do Whisper, como "pt", "en" ou "es"')
+    if not config.imagens_licencas or any(nome not in LICENCAS_WIKIMEDIA for nome in config.imagens_licencas):
+        validas = ", ".join(LICENCAS_WIKIMEDIA)
+        raise ErroConfig(f"clipline.toml: [imagens] licencas deve listar uma ou mais destas: {validas}")
 
 
 @lru_cache(maxsize=1)
 def atual() -> Config:
     """A configuração do canal, lida uma vez por processo."""
     return ler()
+
+
+def servico_de_credenciais(sufixo: str = "") -> str:
+    """Nome do serviço no Gerenciador de Credenciais: o prefixo do canal, com "-sufixo" quando houver.
+
+    Sem `[credenciais] prefixo`, os nomes de sempre: tudo-e-politica, tudo-e-politica-imagens e tudo-e-politica-painel.
+    """
+    prefixo = atual().credenciais_prefixo.strip()
+    return f"{prefixo}-{sufixo}" if sufixo else prefixo

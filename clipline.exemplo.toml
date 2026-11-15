@@ -1,9 +1,10 @@
-# Configuração do canal. Copie para clipline.toml (que fica fora do git) e ajuste.
-# Sem o arquivo, valem estes mesmos valores.
+# Configuração do canal. Para um canal novo, rode `clipline init`, que cria as pastas e preenche o clipline.toml.
+# Ou copie este arquivo para clipline.toml (que fica fora do git) e ajuste. Sem o arquivo, valem estes mesmos
+# valores, que são os do canal original. Todas as chaves explicadas em docs/configuracao.md.
 
 [canal]
 nome = "Tudo é Política"          # vira "canal"
-arroba = "@tudoepoliticabr"        # aparece nos cartões de notícia
+arroba = "@tudoepoliticabr"        # aparece nos cartões de notícia e na sobreposição do encerramento
 perfil_tiktok = "https://www.tiktok.com/@tudoepoliticabr"
 
 [duracao]
@@ -21,3 +22,49 @@ lufs = -14.0                       # alvo de volume integrado
 [youtube]
 categoria = "22"
 limite_shorts = 180
+
+[transcricao]
+idioma = "pt"                      # código do Whisper ("pt", "en", "es"...); escolhe também as listas da limpeza
+                                   # e do filtro de pessoa real (docs/entrada-e-idiomas.md)
+
+[imagens]
+licencas = ["cc0", "dominio-publico", "cc-by", "cc-by-sa"]   # licenças aceitas nas fotos do Wikimedia
+
+[pastas]
+# Onde ficam as pastas do canal. A raiz é relativa a este repositório (ou absoluta); as outras, à raiz.
+# A variável de ambiente CLIPLINE_RAIZ, quando definida, vale mais que a raiz daqui.
+# raiz = "D:/Canais/Meu Canal"     # sem a chave: a pasta acima do repositório
+contexto = "Contexto"              # regras editoriais e glossario.md
+programas = "1 - Programas"        # episódios gravados; a esteira só lê
+cortes = "2 - Cortes"              # saída; a esteira só grava aqui e no próprio repositório
+identidade = "3 - Identidade"      # logo e vídeos de encerramento
+# entrada = "0 - Entrada"          # vídeos baixados por link com `baixar` (só existe se você baixar)
+
+[identidade]
+# Relativos à pasta de identidade (ou absolutos).
+# Um vídeo de encerramento por corte, em rodízio: o corte 1 usa o primeiro, o 2 o segundo...
+# [] = cortes sem encerramento.
+encerramentos = [
+    "Encerramentos/Final Corte (Gabriel 1).mp4",
+    "Encerramentos/Final Corte (Tigas 1).mp4",
+    "Encerramentos/Final Corte (Gabriel 2).mp4",
+    "Encerramentos/Final Corte (Tigas 2).mp4",
+]
+logo = "Logos/Logo sem Fundo.png"  # PNG transparente: cartão de notícia e sobreposição
+# sobreposicao = "Encerramentos/sobreposicao.png"
+#   Imagem 1080x1920 transparente por cima do encerramento. Sem a chave, a esteira gera uma em assets/
+#   (logo + "SIGA @arroba") na primeira montagem. "" = nada por cima.
+
+[credenciais]
+# Prefixo dos nomes no Gerenciador de Credenciais (chaves de IA, contas das redes, código do painel).
+# Serve para um canal novo: trocar depois de conectar esconde o que já foi guardado com o nome antigo.
+prefixo = "tudo-e-politica"
+
+[ia]                               # Claude pela API; a chave o dono guarda com: esteira imagens conectar anthropic
+classificador = false              # true: um modelo confere se o prompt de IA retrata pessoa real antes de gerar
+modelo_classificador = "claude-haiku-5-5"
+modelo_revisao = "claude-sonnet-5-5"  # revisao-visual
+
+[enquadramento]                    # ver docs/enquadramento.md; vale no próximo `planos` (ou `planos --forcar`)
+suave = false                      # true: dentro de cada plano, o recorte acompanha o rosto de quem fala
+tela_dividida = false              # true: diálogo rápido entre duas pessoas na mesma cena sai empilhado

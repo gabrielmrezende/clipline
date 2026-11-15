@@ -23,7 +23,7 @@ def _ffmpeg_falso(monkeypatch):
 
 
 def _criar_falso(registro):
-    def criar():
+    def criar(dispositivo="auto"):
         def pipeline(wav, pessoas):
             registro.append((wav.name, pessoas))
             return [(0.0, 5.0, "SPEAKER_01"), (5.0, 9.0, "SPEAKER_00"), (9.0, 12.0, "SPEAKER_01")]
@@ -160,7 +160,7 @@ def test_cli_vozes_erro_com_prefixo_e_sem_traceback(tmp_path, monkeypatch, capsy
     monkeypatch.setenv("HF_TOKEN", "hf_SENTINELA")
     _ffmpeg_falso(monkeypatch)
 
-    def criar():
+    def criar(dispositivo="auto"):
         def pipeline(wav, pessoas):
             raise RuntimeError("sem memória")
 
@@ -198,3 +198,71 @@ def test_cli_vozes_recusa_pessoas_nao_positivo(tmp_path, monkeypatch, capsys, va
         cli.principal(["vozes", str(tmp_path / "v.mp4"), str(tmp_path), "--pessoas", valor])
     assert saida.value.code == 2
     assert "--pessoas" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("pedido,tem_gpu,esperado", [
+    ("auto", True, "cuda"), ("auto", False, "cpu"), ("cpu", True, "cpu"), ("cpu", False, "cpu"), ("cuda", True, "cuda"),
+])
+def test_escolher_dispositivo(pedido, tem_gpu, esperado):
+    assert vozes.escolher_dispositivo(pedido, tem_gpu) == esperado
+
+
+def test_cuda_sem_gpu_e_erro_claro():
+    with pytest.raises(ErroVozes, match="--dispositivo cpu"):
+        vozes.escolher_dispositivo("cuda", False)
+
+
+class _PipelineFalsa:
+    def __init__(self):
+        self.destino = None
+
+    def to(self, destino):
+        self.destino = destino
+
+
+def _torch_com_gpu(monkeypatch, tem_gpu: bool):
+    torch = sys.modules["torch"]
+    torch.cuda = types.SimpleNamespace(is_available=lambda: tem_gpu)
+    torch.device = lambda nome: f"device:{nome}"
+
+
+@pytest.mark.parametrize("pedido,tem_gpu,destino,avisou", [
+    ("auto", True, "device:cuda", False),
+    ("auto", False, None, True),
+    ("cpu", True, None, True),
+])
+def test_criar_pipeline_respeita_o_dispositivo(monkeypatch, pedido, tem_gpu, destino, avisou):
+    monkeypatch.setenv("HF_TOKEN", "hf_SENTINELA")
+    pipeline = _PipelineFalsa()
+    _modulos_falsos(monkeypatch, pipeline)
+    _torch_com_gpu(monkeypatch, tem_gpu)
+    avisos = []
+    vozes.criar_pipeline(pedido, avisar=avisos.append)
+    assert pipeline.destino == destino
+    assert bool(avisos) is avisou
+
+
+def test_cuda_sem_gpu_nao_baixa_o_modelo(monkeypatch):
+    monkeypatch.setenv("HF_TOKEN", "hf_SENTINELA")
+    _modulos_falsos(monkeypatch, _PipelineFalsa())
+    _torch_com_gpu(monkeypatch, False)
+    baixou = []
+    sys.modules["pyannote.audio"].Pipeline.from_pretrained = lambda *a, **k: baixou.append(a)
+    with pytest.raises(ErroVozes):
+        vozes.criar_pipeline("cuda")
+    assert baixou == []
+
+
+def test_cli_vozes_repassa_o_dispositivo(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(cli, "garantir_escrita", lambda caminho: caminho)
+    _ffmpeg_falso(monkeypatch)
+    pedidos = []
+
+    def criar(dispositivo="auto"):
+        pedidos.append(dispositivo)
+        return _criar_falso([])()
+
+    monkeypatch.setattr(vozes, "criar_pipeline", criar)
+    assert cli.principal(["vozes", str(tmp_path / "v.mp4"), str(tmp_path), "--dispositivo", "cpu"]) == 0
+    assert cli.principal(["vozes", str(tmp_path / "v.mp4"), str(tmp_path), "--forcar"]) == 0
+    assert pedidos == ["cpu", "auto"]

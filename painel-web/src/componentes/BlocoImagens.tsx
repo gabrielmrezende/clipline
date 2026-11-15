@@ -22,18 +22,21 @@ import {
   resumoDeFotos,
 } from "../api";
 import { CartaoMomento } from "./CartaoMomento";
+import { OpcoesConfirmacao, useConfirmar } from "./Confirmacao";
 import {
   Alerta,
   AndamentoPedido,
   AvisosDoResumo,
+  NADA_PARA_REFAZER,
   PEDIDO_PERDIDO,
   ativo,
+  confirmacaoDeFotos,
+  confirmacaoDeIa,
   ehDeImagens,
   mensagem,
+  paraRetomar,
   rotuloDeFotos,
   rotuloDeIa,
-  textoDeFotos,
-  textoDeIa,
   useAcompanhamento,
   useUmaPorVez,
 } from "./imagensComum";
@@ -61,8 +64,12 @@ const ESPERA_RESUMOS_MS = 500;
 const SUBSTITUIDAS = "As fotos baixadas antes neste corte serão substituídas.";
 const DESATUALIZADA = "As imagens mudaram desde a última montagem.";
 
-export function textoDeMontar(imagens: number): string {
-  return `Montar o corte de novo com ${plural(imagens, "imagem", "imagens")}? O corte.mp4 atual será substituído (leva cerca de 1 minuto).`;
+export function confirmacaoDeMontar(imagens: number): OpcoesConfirmacao {
+  return {
+    titulo: `Montar o corte de novo com ${plural(imagens, "imagem", "imagens")}?`,
+    resumo: "O corte.mp4 atual será substituído (leva cerca de 1 minuto).",
+    confirmar: "Montar",
+  };
 }
 
 const emOrdem = (lista: Momento[]) => [...lista].sort((a, b) => a.inicio - b.inicio);
@@ -88,6 +95,7 @@ export function BlocoImagens({
   const [erroOrcamento, setErroOrcamento] = useState<string | null>(null);
   const [avisoGlossario, setAvisoGlossario] = useState<string | null>(null);
   const [preparando, umaPorVez] = useUmaPorVez();
+  const confirmar = useConfirmar();
   const [config, setConfig] = useState<ConfigImagens | null>(null);
   const [pedido, setPedido] = useState<Pedido | null>(null);
   const [erroPedido, setErroPedido] = useState<string | null>(null);
@@ -180,12 +188,13 @@ export function BlocoImagens({
       });
     listarTarefas()
       .then((ts) => {
-        const retomar = ts.find(
-          (t) => ehDeImagens(t) && t.episodio === ep && (t.cortes ?? []).includes(Number(n)) && ativo(t),
+        // O que anda neste corte ou, se o último pedido foi interrompido pelo fechamento do painel, ele.
+        const retomar = paraRetomar(
+          ts.filter((t) => ehDeImagens(t) && t.episodio === ep && (t.cortes ?? []).includes(Number(n))),
         );
         if (vivo && retomar) {
           setPedido(retomar);
-          if (retomar.tipo === "montar") {
+          if (retomar.tipo === "montar" && ativo(retomar)) {
             montandoAgora.current = true;
             montagemRef.current.aoMudarAndamento?.(true);
           }
@@ -282,7 +291,7 @@ export function BlocoImagens({
       await cadeia.current;
       const r = await lerResumo();
       if (!r) return;
-      if (window.confirm(textoDeFotos(r, SUBSTITUIDAS))) await enviarPedido(() => baixarFotos(ep, n));
+      if (await confirmar(confirmacaoDeFotos(r, SUBSTITUIDAS))) await enviarPedido(() => baixarFotos(ep, n));
     });
   }
 
@@ -292,7 +301,7 @@ export function BlocoImagens({
       await cadeia.current;
       const o = await lerOrcamento();
       if (!o || o.imagens === 0) return;
-      if (window.confirm(textoDeIa(o))) await enviarPedido(() => gerarImagensIa(ep, n, o.itens));
+      if (await confirmar(confirmacaoDeIa(o))) await enviarPedido(() => gerarImagensIa(ep, n, o.itens));
     });
   }
 
@@ -302,7 +311,7 @@ export function BlocoImagens({
       setErroPedido(null);
       await cadeia.current;
       const imagens = (momentos ?? []).filter((m) => !m.descartar && m.no_video).length;
-      if (!window.confirm(textoDeMontar(imagens))) return;
+      if (!(await confirmar(confirmacaoDeMontar(imagens)))) return;
       soltarVideo?.();
       montandoAgora.current = true;
       aoMudarAndamento?.(true);
@@ -325,6 +334,14 @@ export function BlocoImagens({
       await cadeia.current;
       await enviarPedido(() => gerarDeNovoIa(ep, n, chave), chave);
     });
+  }
+
+  /** Refaz um pedido interrompido pelo mesmo caminho do botão (e a mesma confirmação). */
+  function tentarDeNovo(tipo: string | undefined) {
+    if (tipo === "montar") return void montarDeNovo();
+    const nada = tipo === "fotos" ? resumo?.fotos === 0 : orcamento?.imagens === 0;
+    if (nada) return setErroPedido(NADA_PARA_REFAZER);
+    void (tipo === "fotos" ? baixar() : gerar());
   }
 
   if (momentos === null || momentos.length === 0) {
@@ -362,7 +379,9 @@ export function BlocoImagens({
       <Alerta texto={erroResumo === avisoGlossario ? null : erroResumo} />
       <Alerta texto={erroOrcamento} />
       <Alerta texto={erroPedido} />
-      {pedido ? <AndamentoPedido pedido={pedido} /> : null}
+      {pedido ? (
+        <AndamentoPedido pedido={pedido} aoMudar={setPedido} aoTentarDeNovo={() => tentarDeNovo(pedido.tipo)} />
+      ) : null}
       <ul className="momentos">
         {momentos.map((m) => (
           <CartaoMomento

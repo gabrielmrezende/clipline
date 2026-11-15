@@ -2,6 +2,8 @@ import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, vi } from "vitest";
 import type { Bloco, Momento, Pedido } from "../api";
+import { haDialogo, responderDialogo, textoDoDialogo, tituloDoDialogo } from "../testes/dialogo";
+import { ProvedorConfirmacao } from "./Confirmacao";
 import { ImagensDoEpisodio } from "./ImagensDoEpisodio";
 
 function momento(extra: Partial<Momento> = {}): Momento {
@@ -38,7 +40,6 @@ let tarefa: Pedido[];
 let chamadas: { url: string; metodo: string; corpo: any }[];
 let postFotos: () => Promise<Response>;
 let avisoGlossario: string | null;
-let confirmar: ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
   vi.useFakeTimers();
@@ -82,8 +83,6 @@ beforeEach(() => {
     pedido({ estado: "pronto", mensagem: "2 fotos baixadas." }),
   ];
   postFotos = () => resposta(pedido(), 202);
-  confirmar = vi.fn(() => true);
-  vi.stubGlobal("confirm", confirmar);
   vi.stubGlobal(
     "fetch",
     vi.fn((url: string, init?: RequestInit) => {
@@ -118,9 +117,18 @@ async function avancar(ms: number) {
 async function montar(cortes = [corte(1), corte(2), corte(3)]) {
   render(
     <MemoryRouter>
-      <ImagensDoEpisodio ep="Ep 1" cortes={cortes} />
+      <ProvedorConfirmacao>
+        <ImagensDoEpisodio ep="Ep 1" cortes={cortes} />
+      </ProvedorConfirmacao>
     </MemoryRouter>,
   );
+  await avancar(0);
+  await avancar(0);
+}
+
+/** Responde à confirmação aberta e deixa o pedido seguir. */
+async function responder(sim: boolean) {
+  responderDialogo(sim);
   await avancar(0);
   await avancar(0);
 }
@@ -155,11 +163,12 @@ describe("ImagensDoEpisodio", () => {
     expect(botaoIa().textContent).toBe("Gerar as aprovadas (2 imagens, ~US$ 0,10)");
     fireEvent.click(botaoFotos());
     await avancar(0);
-    expect(confirmar).toHaveBeenCalledTimes(1);
-    const texto = confirmar.mock.calls[0][0] as string;
-    expect(texto).toContain("Baixar 1 foto (1,5 MB) de Wikimedia Commons?");
+    expect(screen.getAllByRole("alertdialog")).toHaveLength(1);
+    expect(tituloDoDialogo()).toBe("Baixar 1 foto (1,5 MB) de Wikimedia Commons?");
+    const texto = textoDoDialogo();
     expect(texto).toContain("tamanho desconhecido: a-2.jpg");
     expect(texto).toContain("As fotos baixadas antes nestes cortes serão substituídas.");
+    await responder(true);
     expect(chamadas.filter((c) => c.url === `${EP}/fotos` && c.metodo === "POST").map((c) => c.corpo)).toEqual([
       { confirmado: true },
     ]);
@@ -174,11 +183,12 @@ describe("ImagensDoEpisodio", () => {
   });
 
   it("recusar a confirmação não envia o pedido", async () => {
-    confirmar.mockReturnValue(false);
     await montar();
     fireEvent.click(botaoIa());
     await avancar(0);
-    expect(confirmar.mock.calls[0][0]).toBe("Gerar 2 imagens com openai (gpt-image-1), ~US$ 0,10?");
+    expect(tituloDoDialogo()).toBe("Gerar 2 imagens com openai (gpt-image-1), ~US$ 0,10?");
+    expect(textoDoDialogo()).toContain("Custo estimado~US$ 0,10");
+    await responder(false);
     expect(chamadas.some((c) => c.metodo === "POST")).toBe(false);
   });
 
@@ -187,6 +197,7 @@ describe("ImagensDoEpisodio", () => {
     await montar();
     fireEvent.click(botaoFotos());
     await avancar(0);
+    await responder(true);
     expect(screen.getByText("Já há um pedido de fotos em andamento.")).toBeTruthy();
   });
 
@@ -206,22 +217,26 @@ describe("ImagensDoEpisodio", () => {
     await montar();
     fireEvent.click(botaoIa());
     await avancar(0);
-    expect(confirmar).toHaveBeenCalledTimes(1);
+    await responder(true);
     const posts = chamadas.filter((c) => c.url === `${EP}/ia` && c.metodo === "POST");
     expect(posts.map((c) => c.corpo)).toEqual([{ itens: orcamento.itens }]);
   });
 
   it("clique duplo em Baixar e em Gerar abre uma confirmação só", async () => {
-    confirmar.mockReturnValue(false);
     await montar();
     fireEvent.click(botaoFotos());
     fireEvent.click(botaoFotos());
     await avancar(0);
-    expect(confirmar).toHaveBeenCalledTimes(1);
+    expect(screen.getAllByRole("alertdialog")).toHaveLength(1);
+    await responder(false);
+    expect(haDialogo()).toBe(false);
     fireEvent.click(botaoIa());
     fireEvent.click(botaoIa());
     await avancar(0);
-    expect(confirmar).toHaveBeenCalledTimes(2);
+    expect(screen.getAllByRole("alertdialog")).toHaveLength(1);
+    await responder(false);
+    expect(haDialogo()).toBe(false);
+    expect(chamadas.some((c) => c.metodo === "POST")).toBe(false);
   });
 
   it("mostra os avisos do resumo, o erro do orçamento e o aviso do glossário", async () => {

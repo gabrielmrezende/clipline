@@ -1,10 +1,12 @@
 import "./imagensNoVideo.css";
 import { useState } from "react";
 import { Aprovacao as EstadoAprovacao, CorteDetalhe, aprovarCorte, caminhoCorte, pedir } from "../api";
+import { useConfirmar } from "./Confirmacao";
 import { mensagem } from "./imagensComum";
 
+const PERGUNTA = "Aprovar este corte?";
 const CONFIRMA =
-  "Aprovar este corte? O corte.mp4 vai para video-final/ como corte-aprovado.mp4 e passa a ser o vídeo que o agendar publica.";
+  "O corte.mp4 vai para video-final/ como corte-aprovado.mp4 e passa a ser o vídeo que o agendar publica.";
 const DESATUALIZADA = "As imagens mudaram desde a última montagem.";
 
 interface Props {
@@ -23,6 +25,7 @@ export function Aprovacao({ ep, n, aprovacao, montando, aoMudar }: Props) {
   const [enviando, setEnviando] = useState(false);
   // Só carimba quando a aprovação acabou de acontecer nesta tela, não ao abrir um corte já aprovado.
   const [carimbar, setCarimbar] = useState(false);
+  const confirmar = useConfirmar();
   if (!aprovacao) return null;
   if (aprovacao.estado === "aprovado") {
     return <span className={carimbar ? "selo selo-pronto carimbo" : "selo selo-pronto"}>Aprovado</span>;
@@ -36,8 +39,13 @@ export function Aprovacao({ ep, n, aprovacao, montando, aoMudar }: Props) {
     try {
       // O estado de agora (o dono pode ter mudado as imagens depois de abrir a tela).
       const atual = await pedir<Pick<CorteDetalhe, "montagem_desatualizada">>(caminhoCorte(ep, n));
-      const texto = atual.montagem_desatualizada ? `${DESATUALIZADA}\n${CONFIRMA}` : CONFIRMA;
-      if (!window.confirm(texto)) return;
+      const sim = await confirmar({
+        titulo: PERGUNTA,
+        resumo: CONFIRMA,
+        aviso: atual.montagem_desatualizada ? DESATUALIZADA : undefined,
+        confirmar: rotulo,
+      });
+      if (!sim) return;
       await aprovarCorte(ep, n);
       setCarimbar(true);
       aoMudar();

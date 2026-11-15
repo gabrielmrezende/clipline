@@ -1,0 +1,21 @@
+# Conferências antes de cada commit: pip install pre-commit && pre-commit install
+# Só conferem: nenhum hook reescreve arquivo (formatação do projeto fica para uma rodada própria).
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.17.5 # o mesmo ruff do requirements-ci.txt
+    hooks:
+      - id: ruff-check
+        # as mesmas pastas da CI e do CONTRIBUTING.md; as regras vêm do pyproject.toml
+        files: ^(esteira|tests|scripts|\.claude/hooks)/
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: check-added-large-files # vídeo, música, modelo ou .whl esquecido
+        args: ["--maxkb=1024"]
+      - id: check-case-conflict
+      - id: check-illegal-windows-names
+      - id: check-merge-conflict
+      - id: check-json
+      - id: check-toml
+      - id: check-yaml

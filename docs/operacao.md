@@ -149,6 +149,11 @@ Se algo estiver errado, editar `trabalho/enquadramento.json` (cada plano tem
 `inicio`, `fim`, `x`, `y` e `zoom`, com `x` e `y` entre 0 e 1 na imagem
 original e `zoom` de 1,0 a 2,0) e seguir.
 
+Com `[enquadramento]` no `clipline.toml`, um plano pode ter também `trajeto`
+(acompanhamento suave; o trajeto manda sobre `x` e `y`) ou `divisao` (tela
+dividida), marcados como SUAVE e DIVIDIDA no `planos.jpg`. Ver
+[`enquadramento.md`](enquadramento.md).
+
 Rodar `planos` de novo não sobrescreve `enquadramento.json` editado à mão.
 `--forcar` refaz o enquadramento, mas preserva a `ligacao` e os `nomes` de
 `pessoas.json` (só acrescenta vozes ainda sem pessoa). `--religar` recalcula a

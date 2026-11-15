@@ -31,3 +31,44 @@ def test_erros_claros(tmp_path, texto):
     arquivo.write_text(texto, "utf-8")
     with pytest.raises(config.ErroConfig, match="clipline.toml"):
         config.ler(arquivo)
+
+
+def test_idioma_e_licencas(tmp_path):
+    arquivo = tmp_path / "clipline.toml"
+    arquivo.write_text('[transcricao]\nidioma = "es"\n[imagens]\nlicencas = ["cc0", "cc-by"]\n', "utf-8")
+    c = config.ler(arquivo)
+    assert (c.transcricao_idioma, c.imagens_licencas) == ("es", ("cc0", "cc-by"))
+
+
+def test_padrao_de_idioma_e_licencas_e_o_de_sempre(tmp_path):
+    c = config.ler(tmp_path / "nao-existe.toml")
+    assert c.transcricao_idioma == "pt"
+    assert c.imagens_licencas == ("cc0", "dominio-publico", "cc-by", "cc-by-sa")
+
+
+@pytest.mark.parametrize("texto", [
+    '[transcricao]\nidioma = "pt-BR"\n', '[transcricao]\nidioma = 1\n', '[imagens]\nlicencas = ["cc-by-nc"]\n',
+    '[imagens]\nlicencas = []\n', '[imagens]\nlicencas = "cc0"\n',
+])
+def test_idioma_e_licencas_invalidos(tmp_path, texto):
+    arquivo = tmp_path / "clipline.toml"
+    arquivo.write_text(texto, "utf-8")
+    with pytest.raises(config.ErroConfig, match="clipline.toml"):
+        config.ler(arquivo)
+
+
+def test_secao_enquadramento(tmp_path):
+    arquivo = tmp_path / "clipline.toml"
+    arquivo.write_text("[enquadramento]\nsuave = true\ntela_dividida = true\n", "utf-8")
+    c = config.ler(arquivo)
+    assert (c.enquadramento_suave, c.enquadramento_tela_dividida) == (True, True)
+    assert c.extras == {}
+    padrao = config.Config()
+    assert (padrao.enquadramento_suave, padrao.enquadramento_tela_dividida) == (False, False)
+
+
+def test_enquadramento_com_tipo_errado(tmp_path):
+    arquivo = tmp_path / "clipline.toml"
+    arquivo.write_text('[enquadramento]\nsuave = "sim"\n', "utf-8")
+    with pytest.raises(config.ErroConfig, match="enquadramento_suave"):
+        config.ler(arquivo)

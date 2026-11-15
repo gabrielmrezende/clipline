@@ -1,6 +1,7 @@
 import "./imagensNoVideo.css";
 import { useEffect, useState } from "react";
 import { AlteracaoMomento, Momento, formatarDolar, plural, tempoTexto, urlImagem } from "../api";
+import { useConfirmar } from "./Confirmacao";
 
 const MAXIMO_ESCOLHAS = 3;
 const MAXIMO_VERSOES = 3;
@@ -100,6 +101,7 @@ function CorpoIa({
 }: Pick<Props, "m" | "ep" | "n" | "bloqueado" | "alterar" | "gerando" | "precoIa" | "gerarDeNovo">) {
   const [rascunho, setRascunho] = useState(m.prompt);
   useEffect(() => setRascunho(m.prompt), [m.prompt]);
+  const confirmar = useConfirmar();
   const salvo = rascunho === m.prompt;
   const aprovado = m.aprovado && salvo;
   const rotuloGerar = m.ia.length > 0 ? "Gerar de novo" : "Gerar";
@@ -125,10 +127,10 @@ function CorpoIa({
     }
   }
 
-  function novaVersao() {
+  async function novaVersao() {
     if (!podeGerar || precoIa === null) return;
-    const texto = `${rotuloGerar} esta imagem: ${plural(1, "imagem", "imagens")}, ${formatarDolar(precoIa)}?`;
-    if (window.confirm(texto)) gerarDeNovo();
+    const titulo = `${rotuloGerar} esta imagem: ${plural(1, "imagem", "imagens")}, ${formatarDolar(precoIa)}?`;
+    if (await confirmar({ titulo, custo: formatarDolar(precoIa), confirmar: rotuloGerar })) gerarDeNovo();
   }
 
   return (
@@ -169,7 +171,7 @@ function CorpoIa({
         </ul>
       ) : null}
       <div className="acoes-musica">
-        <button type="button" disabled={!podeGerar} onClick={novaVersao}>
+        <button type="button" disabled={!podeGerar} onClick={() => void novaVersao()}>
           {rotuloGerar}
         </button>
       </div>
