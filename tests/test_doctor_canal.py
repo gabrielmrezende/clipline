@@ -141,3 +141,21 @@ def test_prefixo_vazio_e_recusado(tmp_path):
     arquivo.write_text('[credenciais]\nprefixo = " "\n', "utf-8")
     with pytest.raises(config.ErroConfig, match="prefixo"):
         config.ler(arquivo)
+
+
+def test_doctor_lista_os_extras_opcionais(monkeypatch):
+    instalados = {"yt_dlp", "mcp"}
+    monkeypatch.setattr(diagnostico, "_tem_modulo", lambda nome: nome in instalados)
+    itens = {i.nome: i for i in diagnostico._opcionais()}
+    assert itens["extra entrada"].estado == "ok"
+    assert itens["extra mcp"].estado == "ok"
+    assert itens["extra ia"].estado == "aviso" and ".[ia]" in itens["extra ia"].detalhe
+
+
+def test_doctor_diz_se_a_chave_anthropic_existe_sem_mostrar():
+    def ler(servico, campo):
+        return "segredo" if campo == "anthropic:chave" else None
+
+    itens = _por_nome(diagnostico.doctor(ler_credencial=ler))
+    assert itens["chave anthropic"].estado == "ok"
+    assert "segredo" not in str([i.detalhe for i in itens.values()])

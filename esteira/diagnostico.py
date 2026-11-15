@@ -175,6 +175,24 @@ def _arquivos() -> list[Item]:
     estatico = Path(__file__).parent / "painel" / "estatico" / "index.html"
     itens.append(Item("build do painel", "ok" if estatico.is_file() else "aviso", "npm run build em painel-web/"))
     itens.append(Item("fastapi e uvicorn", "ok" if _tem_modulo("fastapi") and _tem_modulo("uvicorn") else "aviso", "painel"))
+    return itens + _opcionais()
+
+
+# Extras do pyproject.toml que só alguns usam: faltar não é erro, mas o doctor diz o que fica sem funcionar.
+OPCIONAIS = (
+    ("yt_dlp", "entrada", "baixar <url>"),
+    ("mcp", "mcp", "servidor MCP (esteira mcp)"),
+    ("anthropic", "ia", "revisão visual e classificador de pessoa real"),
+)  # o pyannote (extra vozes) já tem item próprio, junto da GPU
+
+
+def _opcionais() -> list[Item]:
+    itens = []
+    for modulo, extra, uso in OPCIONAIS:
+        if _tem_modulo(modulo):
+            itens.append(Item(f"extra {extra}", "ok", uso))
+        else:
+            itens.append(Item(f"extra {extra}", "aviso", f'{uso}: pip install -e ".[{extra}]"'))
     return itens
 
 
@@ -200,6 +218,8 @@ def _credenciais(ler=None) -> list[Item]:
     itens = []
     for provedor in ("openai", "google"):
         itens.append(Item(f"chave {provedor}", "ok" if ler(SERVICO_IA, f"{provedor}:chave") else "aviso", "imagens de IA"))
+    itens.append(Item("chave anthropic", "ok" if ler(SERVICO_IA, "anthropic:chave") else "aviso",
+                      "revisão visual e classificador (imagens conectar anthropic)"))
     for rede, campo in (("youtube", "refresh_token"), ("instagram", "token"), ("tiktok", "refresh_token")):
         itens.append(Item(f"conta {rede}", "ok" if ler(SERVICO_REDES, f"{rede}:{campo}") else "aviso", f"publicar conectar {rede}"))
     return itens
@@ -220,7 +240,8 @@ def _tarefa_publicacao(executar=None) -> list[Item]:
 
 def doctor(ler_credencial=None, executar_tarefa=None) -> list[Item]:
     versao = f"{sys.version_info.major}.{sys.version_info.minor}"
-    itens = [Item("Python", "ok" if sys.version_info[:2] == (3, 12) else "aviso", f"{versao} (o projeto é testado no 3.12)")]
+    testado = sys.version_info[:2] in ((3, 12), (3, 13))
+    itens = [Item("Python", "ok" if testado else "aviso", f"{versao} (o projeto é testado no 3.12 e no 3.13)")]
     configuracao, ajustes = _configuracao()
     return (itens + _ffmpeg() + _gpu() + configuracao + _pastas() + _identidade(ajustes) + _arquivos()
             + _credenciais(ler_credencial) + _tarefa_publicacao(executar_tarefa))
