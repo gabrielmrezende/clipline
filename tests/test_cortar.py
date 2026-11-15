@@ -246,3 +246,8 @@ def test_sem_medir_silencio_avisa_e_corta_pela_transcricao(tmp_path):
     r = preparar_episodio(pasta, None, False, [], pasta.parent / "musicas", medir_silencio=quebrado)
     assert "não consegui medir o silêncio" in r[1]
     assert len(ler_receita(pasta / "01-bom-corte" / "trabalho").faixas) == 2
+
+
+def test_sem_videos_de_encerramento_nao_escolhe_nenhum(monkeypatch):
+    monkeypatch.setattr(cortar, "ENCERRAMENTOS", [])
+    assert cortar.escolher_encerramento(1) is None

@@ -5,7 +5,7 @@ import os
 import sys
 from pathlib import Path
 
-from esteira import agente, contrato, diagnostico, falantes
+from esteira import agente, caminhos, config, contrato, diagnostico, falantes
 
 from esteira.caminhos import CONTEXTO, CORTES, MUSICAS, EscritaProibida, garantir_escrita
 from esteira.cartao import gerar_cartao
@@ -151,7 +151,7 @@ def _status(args) -> int:
     if args.json:
         print(json.dumps(todos if not args.pasta else todos[0], ensure_ascii=False, indent=2))
     else:
-        print("\n\n".join(diagnostico.texto_do_status(s) for s in todos) or "Nenhum episódio em 2 - Cortes.")
+        print("\n\n".join(diagnostico.texto_do_status(s) for s in todos) or f"Nenhum episódio em {CORTES.name}.")
     return 0
 
 
@@ -385,6 +385,17 @@ def _painel(args, servir=None, cofre=None) -> int:
     return 0
 
 
+def _erro_de_configuracao() -> str | None:
+    """clipline.toml quebrado: melhor parar do que rodar com as pastas ou a identidade erradas."""
+    if caminhos.ERRO_CONFIG:
+        return caminhos.ERRO_CONFIG
+    try:
+        config.atual()
+    except config.ErroConfig as erro:
+        return str(erro)
+    return None
+
+
 def principal(argv: list[str] | None = None) -> int:
     sys.stdout.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser(prog="esteira")
@@ -495,6 +506,11 @@ def principal(argv: list[str] | None = None) -> int:
     publicar.registrar(comandos)
 
     args = parser.parse_args(argv)
+    erro_config = None if args.funcao is _doctor else _erro_de_configuracao()
+    if erro_config:  # doctor mostra o erro
+        print(f"Erro: {erro_config}. Corrija o clipline.toml (clipline doctor mostra o que está em uso).",
+              file=sys.stderr)
+        return 1
     try:
         return args.funcao(args)
     except (ErroMidia, ErroBusca, FileExistsError, EscritaProibida, ErroAgendar, ErroPost, ErroConexao, ErroRede, ErroImagem,

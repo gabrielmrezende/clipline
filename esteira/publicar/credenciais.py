@@ -7,7 +7,9 @@ import urllib.parse
 import webbrowser
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
-SERVICO = "tudo-e-politica"
+from esteira import config
+
+SERVICO = "tudo-e-politica"  # o nome padrão; o que vale é servico(), que segue [credenciais] prefixo
 PORTA = 8765
 REDIRECIONAMENTO = f"http://localhost:{PORTA}/retorno"
 
@@ -21,6 +23,10 @@ class ErroConexao(Exception):
         super().__init__(motivo)
 
 
+def servico() -> str:
+    return config.servico_de_credenciais()
+
+
 def _keyring():
     import keyring  # importado aqui: os testes não precisam do pacote
 
@@ -28,11 +34,11 @@ def _keyring():
 
 
 def ler(rede: str, campo: str) -> str | None:
-    return _keyring().get_password(SERVICO, f"{rede}:{campo}")
+    return _keyring().get_password(servico(), f"{rede}:{campo}")
 
 
 def gravar(rede: str, campo: str, valor: str) -> None:
-    _keyring().set_password(SERVICO, f"{rede}:{campo}", valor)
+    _keyring().set_password(servico(), f"{rede}:{campo}", valor)
 
 
 def pedir_segredo(rotulo: str) -> str:
