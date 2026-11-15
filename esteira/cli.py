@@ -385,6 +385,37 @@ def _painel(args, servir=None, cofre=None) -> int:
     return 0
 
 
+# --- agente: revisão visual por IA ------------------------------------------------------------------------
+
+
+def _revisao_visual(args) -> int:
+    from esteira import config, revisao_visual
+
+    pasta = garantir_escrita(Path(args.pasta))
+    numeros = set(args.numero) if args.numero else None
+    plano = revisao_visual.planejar(pasta, numeros, config.atual().ia_modelo_revisao, args.quadros)
+    print(revisao_visual.texto_do_resumo(plano))
+    if not args.confirmar:
+        print("\nNada foi enviado. Para pedir a revisão, rode de novo com --confirmar.")
+        return 0
+    if not plano.pendentes:
+        print(f"Nada a revisar. Relatório em {revisao_visual.escrever_relatorio(pasta)}")
+        return 0
+    resultados = revisao_visual.revisar(pasta, plano, agente.cliente_anthropic(), progresso=print)
+    codigo = _imprimir(resultados)
+    print(f"Relatório em {pasta / revisao_visual.ARQUIVO}")
+    return codigo
+
+
+def _registrar_agente(comandos) -> None:
+    c = comandos.add_parser("revisao-visual", help="quadros de cada corte.mp4 revisados por IA (revisao-visual.md)")
+    c.add_argument("pasta")
+    c.add_argument("--numero", type=int, action="append")
+    c.add_argument("--quadros", type=int, choices=[4, 5, 6], default=5, help="quadros por corte")
+    c.add_argument("--confirmar", action="store_true", help="manda os quadros ao modelo (gasta; ato do dono)")
+    c.set_defaults(funcao=_revisao_visual)
+
+
 def principal(argv: list[str] | None = None) -> int:
     sys.stdout.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser(prog="esteira")
@@ -493,6 +524,7 @@ def principal(argv: list[str] | None = None) -> int:
     c.set_defaults(funcao=_painel)
 
     publicar.registrar(comandos)
+    _registrar_agente(comandos)
 
     args = parser.parse_args(argv)
     try:
