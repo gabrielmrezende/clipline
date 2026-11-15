@@ -174,14 +174,32 @@ def _identidade(ajustes) -> list[Item]:
     return itens
 
 
+def _musicas(pasta: Path) -> list[Item]:
+    """O catálogo vem do git; os .mp3, não. Sem eles, o montar para com "música não encontrada"."""
+    from esteira.musica import ler_catalogo
+
+    if not (pasta / "catalogo.json").is_file():
+        return [Item("musicas/catalogo.json", "aviso", "biblioteca de música: musicas propor e musicas baixar")]
+    try:
+        faixas = ler_catalogo(pasta)
+    except (OSError, ValueError, TypeError) as erro:
+        return [Item("musicas/catalogo.json", "falta", f"ilegível: {erro}")]
+    no_disco = sum((pasta / f.arquivo).is_file() for f in faixas)
+    if faixas and no_disco == len(faixas):
+        return [Item("músicas", "ok", f"{len(faixas)} faixas no disco")]
+    faltam = len(faixas) - no_disco
+    estado = "falta" if faixas and no_disco == 0 else "aviso"
+    return [Item("músicas", estado, f"{faltam} de {len(faixas)} faixas do catálogo sem o .mp3: rode musicas baixar "
+                 "(o montar para nos cortes que escolherem uma delas)")]
+
+
 def _arquivos() -> list[Item]:
     from esteira.rostos import MODELO_DETECTOR, MODELO_RECONHECEDOR, MODELOS
 
     itens = []
     for modelo in (MODELO_DETECTOR, MODELO_RECONHECEDOR):
         itens.append(Item(f"modelos/{modelo}", "ok" if (MODELOS / modelo).is_file() else "falta", "ver modelos/LEIA.md"))
-    catalogo = caminhos.MUSICAS / "catalogo.json"
-    itens.append(Item("musicas/catalogo.json", "ok" if catalogo.is_file() else "aviso", "biblioteca de música"))
+    itens += _musicas(caminhos.MUSICAS)
     estatico = Path(__file__).parent / "painel" / "estatico" / "index.html"
     itens.append(Item("build do painel", "ok" if estatico.is_file() else "aviso", "npm run build em painel-web/"))
     itens.append(Item("fastapi e uvicorn", "ok" if _tem_modulo("fastapi") and _tem_modulo("uvicorn") else "aviso", "painel"))

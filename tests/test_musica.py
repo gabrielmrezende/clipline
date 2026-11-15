@@ -146,6 +146,18 @@ def test_faixa_ja_catalogada_nao_baixa_de_novo(tmp_path):
     assert len(ler_catalogo(tmp_path)) == 1
 
 
+def test_faixa_catalogada_sem_o_mp3_baixa_de_novo(tmp_path):
+    # Clone novo: o catalogo.json vem do git, os .mp3 não.
+    _aprovar(tmp_path, {"leve": ["Alegre.mp3"], "reflexivo": ["Calma.mp3"]})
+    baixar_musicas(tmp_path, PECAS, _baixar_falso())
+    (tmp_path / "leve" / "Alegre.mp3").unlink()
+    urls = []
+    assert baixar_musicas(tmp_path, PECAS, _baixar_falso(urls)) == []
+    assert len(urls) == 1 and "Alegre" in urls[0]
+    assert (tmp_path / "leve" / "Alegre.mp3").exists()
+    assert [f.arquivo for f in ler_catalogo(tmp_path)] == ["leve/Alegre.mp3", "reflexivo/Calma.mp3"]
+
+
 def test_catalogo_ausente_e_ordem(tmp_path):
     assert ler_catalogo(tmp_path) == []
     _aprovar(tmp_path, {"leve": ["Alegre.mp3"], "reflexivo": ["Calma.mp3"]})

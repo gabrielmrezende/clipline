@@ -169,3 +169,19 @@ def test_doctor_diz_onde_o_transcrever_vai_rodar(monkeypatch):
     assert sem_gpu["GPU da transcrição"].estado == "aviso" and "CPU" in sem_gpu["GPU da transcrição"].detalhe
     monkeypatch.setattr(diagnostico, "_tem_modulo", lambda nome: False)
     assert "GPU da transcrição" not in _por_nome(diagnostico._gpu(tem_cuda=lambda: True))
+
+
+def test_doctor_conta_as_musicas_no_disco(tmp_path):
+    from esteira.musica import Faixa, credito, gravar_catalogo
+
+    assert diagnostico._musicas(tmp_path)[0].estado == "aviso"  # sem catálogo
+    gravar_catalogo(tmp_path, [Faixa(t, "leve", 60.0, f"leve/{t}.mp3", credito(t)) for t in ("Um", "Dois")])
+    sem_nenhuma = diagnostico._musicas(tmp_path)[0]
+    assert sem_nenhuma.estado == "falta" and "2 de 2" in sem_nenhuma.detalhe and "musicas baixar" in sem_nenhuma.detalhe
+    (tmp_path / "leve").mkdir()
+    (tmp_path / "leve" / "Um.mp3").write_bytes(b"")
+    assert diagnostico._musicas(tmp_path)[0].estado == "aviso"
+    (tmp_path / "leve" / "Dois.mp3").write_bytes(b"")
+    assert diagnostico._musicas(tmp_path)[0] == diagnostico.Item("músicas", "ok", "2 faixas no disco")
+    (tmp_path / "catalogo.json").write_text("{quebrado", "utf-8")
+    assert diagnostico._musicas(tmp_path)[0].estado == "falta"
