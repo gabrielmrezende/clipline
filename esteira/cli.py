@@ -396,6 +396,7 @@ def _mcp(args) -> int:
         print('O servidor MCP precisa do pacote mcp: rode ".venv\\Scripts\\python.exe -m pip install -e .[mcp]"',
               file=sys.stderr)
         return 1
+    sys.stderr.reconfigure(encoding="utf-8")  # o log do servidor (stderr) vai para o cliente MCP, que lê UTF-8
     mcp_servidor.rodar(Path(args.cortes).resolve() if args.cortes else CORTES)
     return 0
 
