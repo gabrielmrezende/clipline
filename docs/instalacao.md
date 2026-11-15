@@ -20,8 +20,11 @@ O script:
 2. cria o `.venv` e instala o pacote com os extras `painel` e `dev`;
 3. gera o build do painel (`npm ci` e `npm run build` em `painel-web/`);
 4. cria `1 - Programas/`, `2 - Cortes/`, `3 - Identidade/` e `Contexto/` ao lado do repositório se faltarem. Usa o
-   `esteira init` quando ele existe; senão copia as regras de exemplo de `Contexto.exemplo/`, mas só para um
-   `Contexto/` que ainda não existe ou está vazio;
+   `esteira init --sem-perguntas` quando ele existe (que também grava um `clipline.toml` para o canal novo); senão
+   cria as pastas e copia as regras de exemplo de `Contexto.exemplo/`, mas só para um `Contexto/` que ainda não existe
+   ou está vazio. Com um `clipline.toml` ou a variável `CLIPLINE_RAIZ`, as pastas são as da configuração e o script
+   não mexe nelas; com as pastas já no lugar e sem `clipline.toml`, também não (nenhum `clipline.toml` aparece onde
+   hoje não há);
 5. roda o `esteira doctor`, que diz o que ainda falta (os modelos de rosto, por exemplo; veja `modelos/LEIA.md`).
 
 Rodar de novo não estraga nada: o `.venv` é reaproveitado, os pacotes só são atualizados e nenhuma pasta ou regra do

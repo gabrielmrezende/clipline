@@ -181,19 +181,23 @@ if (-not $SemPainel) {
     Passo 'Build do painel: pulado (-SemPainel)'
 }
 
-Passo "Pastas do canal em $Raiz"
+Passo 'Pastas do canal'
+# Com clipline.toml ou CLIPLINE_RAIZ, quem escolhe as pastas é a configuração do dono; o doctor diz o que falta.
+# Sem eles e com as pastas no lugar, nada roda: o esteira init criaria um clipline.toml onde hoje não há.
 # Dentro do repositório: "python -m esteira" pega primeiro a pasta esteira\ do diretório atual.
 Push-Location $Repo
 try {
-    if (Layout-Completo) {
-        Write-Host 'já existem; nada mudou'
+    if ((Test-Path -LiteralPath (Join-Path $Repo 'clipline.toml')) -or $env:CLIPLINE_RAIZ) {
+        Write-Host 'definidas pelo clipline.toml ou pela CLIPLINE_RAIZ; nada mudou'
+    } elseif (Layout-Completo) {
+        Write-Host "já existem em $Raiz; nada mudou"
     } elseif (Funciona $VenvPy @('-m', 'esteira', 'init', '--help')) {
         $argumentos = @('-m', 'esteira', 'init', $Raiz, '--sem-perguntas')
         if ($Canal) { $argumentos += @('--canal', $Canal) }
         Exigir $VenvPy $argumentos 'falhou o esteira init'
     } else {
         Criar-Layout
-        Write-Host '1 - Programas\, 2 - Cortes\, 3 - Identidade\ e Contexto\ prontos'
+        Write-Host "1 - Programas\, 2 - Cortes\, 3 - Identidade\ e Contexto\ prontos em $Raiz"
     }
 } finally {
     Pop-Location

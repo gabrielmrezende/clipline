@@ -134,16 +134,20 @@ else
   passo "Build do painel: pulado (--sem-painel)"
 fi
 
-passo "Pastas do canal em $RAIZ"
-if layout_completo; then
-  echo "já existem; nada mudou"
+passo "Pastas do canal"
+# Com clipline.toml ou CLIPLINE_RAIZ, quem escolhe as pastas é a configuração do dono; o doctor diz o que falta.
+# Sem eles e com as pastas no lugar, nada roda: o esteira init criaria um clipline.toml onde hoje não há.
+if [ -f "$REPO/clipline.toml" ] || [ -n "${CLIPLINE_RAIZ:-}" ]; then
+  echo "definidas pelo clipline.toml ou pela CLIPLINE_RAIZ; nada mudou"
+elif layout_completo; then
+  echo "já existem em $RAIZ; nada mudou"
 elif "$VENV_PY" -m esteira init --help >/dev/null 2>&1; then
   ARGS=(init "$RAIZ" --sem-perguntas)
   [ -z "$CANAL" ] || ARGS+=(--canal "$CANAL")
   "$VENV_PY" -m esteira "${ARGS[@]}"
 else
   criar_layout_do_canal
-  echo "1 - Programas/, 2 - Cortes/, 3 - Identidade/ e Contexto/ prontos"
+  echo "1 - Programas/, 2 - Cortes/, 3 - Identidade/ e Contexto/ prontos em $RAIZ"
 fi
 
 passo "Diagnóstico (esteira doctor)"
