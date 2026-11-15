@@ -53,11 +53,15 @@ def registro(log: Path | None = None, saida=None):
     log = Path(log or LOG)
     saida = saida if saida is not None else sys.stdout
     antiga = saida_e_o_log(log, saida)
+    manipulador: logging.Handler
     if antiga:
-        manipulador: logging.Handler = logging.StreamHandler(saida)
+        manipulador = logging.StreamHandler(saida)
     else:
-        log.parent.mkdir(parents=True, exist_ok=True)
-        manipulador = RotacaoTolerante(log, maxBytes=TAMANHO_MAXIMO, backupCount=COPIAS, encoding="utf-8")
+        try:
+            log.parent.mkdir(parents=True, exist_ok=True)
+            manipulador = RotacaoTolerante(log, maxBytes=TAMANHO_MAXIMO, backupCount=COPIAS, encoding="utf-8")
+        except OSError:  # sem como abrir o log, a publicação segue e o registro vai para a saída
+            manipulador = logging.StreamHandler(saida)
     manipulador.setFormatter(logging.Formatter(FORMATO, FORMATO_DATA))
     logger = logging.getLogger(NOME)
     logger.setLevel(logging.INFO)

@@ -83,3 +83,12 @@ def test_registro_nao_acumula_manipuladores(tmp_path):
     assert log.read_text("utf-8").count("uma linha") == 3
     import logging
     assert not any(isinstance(h, RotacaoTolerante) for h in logging.getLogger(registro.NOME).handlers)
+
+
+def test_log_que_nao_abre_vai_para_a_saida(tmp_path):
+    bloqueio = tmp_path / "logs"
+    bloqueio.write_text("um arquivo no lugar da pasta", "utf-8")
+    saida = io.StringIO()
+    with registro.registro(bloqueio / "publicar.log", saida=saida) as (logger, antiga):
+        logger.info("01 youtube: privado L")
+    assert antiga is False and saida.getvalue().endswith(" 01 youtube: privado L\n")
