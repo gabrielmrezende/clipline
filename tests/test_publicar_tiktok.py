@@ -126,3 +126,38 @@ def test_direto_com_ia_marca_is_aigc(monkeypatch, video):
     ])
     TikTok(esperar=lambda s: None).publicar(video, TEXTOS, DATA, "direto", ia=True)
     assert json.loads(servidor.pedidos[2].data)["post_info"]["is_aigc"] is True
+
+
+def test_pkce_hex_do_login_kit_para_desktop():
+    """Login Kit for Desktop: desafio = SHA-256 do verificador em hexadecimal; verificador de 43 a 128 caracteres
+    não reservados (A-Z a-z 0-9 - . _ ~)."""
+    import hashlib
+    import re
+
+    from esteira.publicar.tiktok import pkce_hex
+
+    verificador, desafio = pkce_hex()
+    assert 43 <= len(verificador) <= 128 and re.fullmatch(r"[A-Za-z0-9\-._~]+", verificador)
+    assert desafio == hashlib.sha256(verificador.encode("ascii")).hexdigest()
+    assert re.fullmatch(r"[0-9a-f]{64}", desafio)
+    assert pkce_hex()[0] != verificador  # um novo a cada autorização
+
+
+def test_conectar_manda_desafio_e_verificador(monkeypatch):
+    import hashlib
+    from urllib.parse import parse_qs, urlsplit
+
+    from esteira.publicar import tiktok
+
+    gravados, urls, trocas = {}, [], []
+    monkeypatch.setattr(tiktok, "pedir_segredo", lambda rotulo: "valor")
+    monkeypatch.setattr(credenciais, "gravar", lambda rede, campo, valor: gravados.update({campo: valor}))
+    monkeypatch.setattr(tiktok, "esperar_codigo", lambda porta, estado, url: urls.append(url) or "CODIGO")
+    resposta = {"refresh_token": "rt", "open_id": "o"}
+    monkeypatch.setattr(tiktok, "_token", lambda campos: trocas.append(campos) or resposta)
+    tiktok.conectar()
+    consulta = {k: v[0] for k, v in parse_qs(urlsplit(urls[0]).query).items()}
+    assert consulta["code_challenge_method"] == "S256"
+    assert consulta["code_challenge"] == hashlib.sha256(trocas[0]["code_verifier"].encode()).hexdigest()
+    assert trocas[0]["code"] == "CODIGO" and trocas[0]["grant_type"] == "authorization_code"
+    assert gravados["refresh_token"] == "rt"

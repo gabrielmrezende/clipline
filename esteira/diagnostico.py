@@ -119,10 +119,23 @@ def _credenciais(ler=None) -> list[Item]:
     return itens
 
 
-def doctor(ler_credencial=None) -> list[Item]:
+def _tarefa_publicacao(executar=None) -> list[Item]:
+    """A tarefa agendada de publicação: instalada? É a antiga, que grava o log pelo cmd? Só consulta."""
+    from esteira import config
+    from esteira.publicar import agendador
+
+    try:
+        feito = agendador.situacao(agendador.sistema_atual(), config.ler().canal, Path.home(),
+                                   executar or agendador.executar_no_sistema)
+    except Exception as erro:  # o doctor nunca para por causa de um item
+        return [Item("tarefa de publicação", "aviso", f"não deu para conferir ({type(erro).__name__})")]
+    return [Item("tarefa de publicação", feito.estado, feito.detalhe)]
+
+
+def doctor(ler_credencial=None, executar_tarefa=None) -> list[Item]:
     versao = f"{sys.version_info.major}.{sys.version_info.minor}"
     itens = [Item("Python", "ok" if sys.version_info[:2] == (3, 12) else "aviso", f"{versao} (o projeto é testado no 3.12)")]
-    return itens + _ffmpeg() + _gpu() + _arquivos() + _credenciais(ler_credencial)
+    return itens + _ffmpeg() + _gpu() + _arquivos() + _credenciais(ler_credencial) + _tarefa_publicacao(executar_tarefa)
 
 
 def hash_das_regras(contexto: Path | None = None) -> str:
