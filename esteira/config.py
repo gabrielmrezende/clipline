@@ -40,6 +40,9 @@ class Config:
     # YouTube
     youtube_categoria: str = "22"
     limite_shorts: float = 180.0
+    # Enquadramento: o recorte acompanha o rosto dentro do plano; diálogo rápido sai em tela dividida
+    enquadramento_suave: bool = False
+    enquadramento_tela_dividida: bool = False
     extras: dict = field(default_factory=dict, compare=False)
 
 
@@ -51,6 +54,8 @@ SECOES = {
     ("legenda", "estilo"): "legenda_estilo", ("legenda", "cor_destaque"): "legenda_cor_destaque",
     ("voz", "normalizar"): "normalizar_voz", ("voz", "lufs"): "voz_lufs",
     ("youtube", "categoria"): "youtube_categoria", ("youtube", "limite_shorts"): "limite_shorts",
+    ("enquadramento", "suave"): "enquadramento_suave",
+    ("enquadramento", "tela_dividida"): "enquadramento_tela_dividida",
 }
 
 

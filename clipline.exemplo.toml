@@ -21,3 +21,7 @@ lufs = -14.0                       # alvo de volume integrado
 [youtube]
 categoria = "22"
 limite_shorts = 180
+
+[enquadramento]                    # ver docs/enquadramento.md; vale no próximo `planos` (ou `planos --forcar`)
+suave = false                      # true: dentro de cada plano, o recorte acompanha o rosto de quem fala
+tela_dividida = false              # true: diálogo rápido entre duas pessoas na mesma cena sai empilhado

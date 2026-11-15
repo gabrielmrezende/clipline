@@ -31,3 +31,20 @@ def test_erros_claros(tmp_path, texto):
     arquivo.write_text(texto, "utf-8")
     with pytest.raises(config.ErroConfig, match="clipline.toml"):
         config.ler(arquivo)
+
+
+def test_secao_enquadramento(tmp_path):
+    arquivo = tmp_path / "clipline.toml"
+    arquivo.write_text("[enquadramento]\nsuave = true\ntela_dividida = true\n", "utf-8")
+    c = config.ler(arquivo)
+    assert (c.enquadramento_suave, c.enquadramento_tela_dividida) == (True, True)
+    assert c.extras == {}
+    padrao = config.Config()
+    assert (padrao.enquadramento_suave, padrao.enquadramento_tela_dividida) == (False, False)
+
+
+def test_enquadramento_com_tipo_errado(tmp_path):
+    arquivo = tmp_path / "clipline.toml"
+    arquivo.write_text('[enquadramento]\nsuave = "sim"\n', "utf-8")
+    with pytest.raises(config.ErroConfig, match="enquadramento_suave"):
+        config.ler(arquivo)

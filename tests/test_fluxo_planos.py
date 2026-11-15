@@ -291,3 +291,120 @@ def test_convidado_e_quem_mais_fala():
     vozes = [TrechoVoz(0, 30, "V3"), TrechoVoz(30, 40, "V1"), TrechoVoz(40, 45, "V2"), TrechoVoz(45, 50, "V9")]
     assert convidado_do_episodio(vozes, {"V1": "P1", "V2": "P3", "V3": "P2"}) == "P2"
     assert convidado_do_episodio(vozes, {}) is None
+
+
+# [enquadramento] no clipline.toml (docs/enquadramento.md)
+
+
+@pytest.fixture
+def enquadramento(monkeypatch):
+    from esteira import config
+    from esteira.midia import Midia
+
+    sondados = []
+
+    def ligar(**campos):
+        monkeypatch.setattr(config, "atual", lambda: config.Config(**campos))
+
+    def sondar(video):
+        sondados.append(video)
+        return Midia(20.0, 1920, 1080, True)
+
+    monkeypatch.setattr(fluxo_planos, "sondar", sondar)
+    return ligar, sondados
+
+
+def detectar_andando(video, inicio, fim):
+    """Como detectar_falso, mas a pessoa A anda da esquerda (0,3) para 0,4 a partir de 4 s."""
+    return [
+        Deteccao(d.tempo, 0.3 if d.tempo < 4 else 0.4, d.y, d.largura, d.altura, d.assinatura) if d.tempo < 10 else d
+        for d in detectar_falso(video, inicio, fim)
+    ]
+
+
+def test_sem_enquadramento_nao_sonda_o_video_nem_muda_o_arquivo(episodio, enquadramento):
+    pasta, _ = episodio
+    ligar, sondados = enquadramento
+    ligar()
+    planejar_episodio(pasta, None, detectar=detectar_andando)
+    assert sondados == []
+    texto = (_trabalho(pasta) / "enquadramento.json").read_text("utf-8")
+    assert "trajeto" not in texto and "divisao" not in texto
+
+
+def test_suave_grava_trajeto_de_quem_anda(episodio, enquadramento):
+    pasta, folhas = episodio
+    ligar, sondados = enquadramento
+    ligar(enquadramento_suave=True)
+    assert planejar_episodio(pasta, None, detectar=detectar_andando) == {1: "ok"}
+    andando, parado = ler_planos(_trabalho(pasta))
+    assert (andando.inicio, andando.fim, andando.x, andando.zoom) == (0.0, 10.0, pytest.approx(0.36), 1.35)
+    assert andando.trajeto[0][1] == pytest.approx(0.3, abs=0.002)
+    assert andando.trajeto[-1][1] == pytest.approx(0.4, abs=0.002)
+    assert parado.trajeto is None
+    assert len(sondados) == 1
+    assert folhas["planos"][0][0].trajeto == andando.trajeto  # a folha recebe o plano suave
+
+
+ROSTO_DIREITA = [0.0, 1.0, 0.0]
+
+
+def detectar_os_dois(video, inicio, fim):
+    """As duas pessoas na tela o tempo todo: A à esquerda, B à direita."""
+    deteccoes = []
+    t = inicio
+    while t < fim:
+        deteccoes.append(Deteccao(t, 0.3, 0.4, 0.1, 0.2, ROSTO_A))
+        deteccoes.append(Deteccao(t, 0.7, 0.4, 0.1, 0.2, ROSTO_DIREITA))
+        t += 0.5
+    return deteccoes
+
+
+def _dialogo_rapido(pasta):
+    """Corte de 0 a 30 s: V1 fala 8 s, três turnos curtos alternando, V1 fala 16 s."""
+    (pasta / "aprovados.json").write_text(json.dumps({"cortes": [{**CORTE, "fim": 30.0}]}), "utf-8")
+    trechos = [(0.0, 8.0, "V1"), (8.0, 10.0, "V2"), (10.0, 12.0, "V1"), (12.0, 14.0, "V2"), (14.0, 30.0, "V1")]
+    vozes = {"trechos": [{"inicio": a, "fim": b, "voz": v} for a, b, v in trechos]}
+    (pasta / "transcricao" / "vozes.json").write_text(json.dumps(vozes), "utf-8")
+    gravar_pessoas(pasta, {"V1": "P1", "V2": "P2"}, {"P1": ROSTO_A, "P2": ROSTO_DIREITA}, {"P1": "Arthur"})
+
+
+def test_tela_dividida_no_dialogo_rapido(episodio, enquadramento, monkeypatch):
+    pasta, folhas = episodio
+    monkeypatch.setattr(planos, "detectar_cortes", lambda video, inicio, fim: [])
+    _dialogo_rapido(pasta)
+    ligar, _ = enquadramento
+    ligar(enquadramento_tela_dividida=True)
+    assert planejar_episodio(pasta, None, detectar=detectar_os_dois) == {1: "ok"}
+    lista = ler_planos(_trabalho(pasta))
+    assert [(p.inicio, p.fim, bool(p.divisao)) for p in lista] == [(0.0, 8.0, False), (8.0, 14.0, True),
+                                                                    (14.0, 30.0, False)]
+    cima, baixo = lista[1].divisao
+    assert (cima["pessoa"], cima["x"], baixo["pessoa"], baixo["x"]) == ("P1", 0.3, "P2", 0.7)
+    texto = (_trabalho(pasta) / "enquadramento.json").read_text("utf-8")
+    assert texto.count('"divisao"') == 1 and "trajeto" not in texto
+    rotulos = folhas["planos"][1]
+    assert rotulos[1] == "2 Arthur + P2 · p8 p9 p10 p11 p12 p13"
+
+
+def test_sem_tela_dividida_o_dialogo_fica_como_sempre(episodio, enquadramento, monkeypatch):
+    pasta, _ = episodio
+    monkeypatch.setattr(planos, "detectar_cortes", lambda video, inicio, fim: [])
+    _dialogo_rapido(pasta)
+    ligar, _ = enquadramento
+    ligar(enquadramento_suave=True)  # rostos parados: nada de trajeto
+    planejar_episodio(pasta, None, detectar=detectar_os_dois)
+    lista = ler_planos(_trabalho(pasta))
+    assert not any(p.divisao or p.trajeto for p in lista)
+
+
+def test_clipline_toml_ilegivel_para_o_planos(episodio, monkeypatch):
+    from esteira import config
+
+    pasta, _ = episodio
+
+    def quebrado():
+        raise config.ErroConfig("clipline.toml ilegível: x")
+
+    monkeypatch.setattr(config, "atual", quebrado)
+    assert planejar_episodio(pasta, None, detectar=detectar_falso) == {0: "erro: clipline.toml ilegível: x"}
