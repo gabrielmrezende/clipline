@@ -385,7 +385,19 @@ def _painel(args, servir=None, cofre=None) -> int:
     return 0
 
 
-# --- agente: revisão visual por IA ------------------------------------------------------------------------
+# --- agente: servidor MCP e revisão visual por IA ---------------------------------------------------------
+
+
+def _mcp(args) -> int:
+    try:
+        from esteira import mcp_servidor
+        import mcp  # noqa: F401
+    except ImportError:
+        print('O servidor MCP precisa do pacote mcp: rode ".venv\\Scripts\\python.exe -m pip install -e .[mcp]"',
+              file=sys.stderr)
+        return 1
+    mcp_servidor.rodar(Path(args.cortes).resolve() if args.cortes else CORTES)
+    return 0
 
 
 def _revisao_visual(args) -> int:
@@ -408,6 +420,10 @@ def _revisao_visual(args) -> int:
 
 
 def _registrar_agente(comandos) -> None:
+    c = comandos.add_parser("mcp", help="servidor MCP (stdio): a esteira como ferramentas para o agente, sem shell")
+    c.add_argument("--cortes", help="pasta dos episódios (padrão: ../2 - Cortes)")
+    c.set_defaults(funcao=_mcp)
+
     c = comandos.add_parser("revisao-visual", help="quadros de cada corte.mp4 revisados por IA (revisao-visual.md)")
     c.add_argument("pasta")
     c.add_argument("--numero", type=int, action="append")
