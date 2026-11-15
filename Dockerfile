@@ -6,8 +6,9 @@
 #   docker compose run --rm clipline python -m esteira status "/canal/2 - Cortes/<episódio>"
 #
 # A esteira usa a pasta acima do repositório como raiz do canal, então o código fica em /canal/Automacao e as
-# pastas do canal entram como volumes em /canal (ver compose.yaml). Sem GPU: o render usa libx264, e transcrever e
-# vozes, que hoje pedem CUDA, ficam para o Windows com a placa NVIDIA.
+# pastas do canal entram como volumes em /canal (ver compose.yaml). Sem GPU: o render usa libx264 e o transcrever
+# roda na CPU (modelo medium em int8, bem mais lento que na placa). O vozes precisa do extra pesado (torch e
+# pyannote) e fica de fora da imagem.
 
 # ---- 1. build do painel (React + Vite) -----------------------------------------------------------------------
 FROM node:22-slim AS painel
@@ -39,7 +40,7 @@ WORKDIR /canal/Automacao
 # Dependências primeiro (camada que só muda com o pyproject.toml), sem as bibliotecas CUDA.
 COPY pyproject.toml ./
 COPY scripts/requisitos_cpu.py scripts/
-RUN python scripts/requisitos_cpu.py painel > /tmp/requisitos.txt \
+RUN python scripts/requisitos_cpu.py painel entrada > /tmp/requisitos.txt \
     && pip install -r /tmp/requisitos.txt \
     && rm /tmp/requisitos.txt
 

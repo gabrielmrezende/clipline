@@ -40,8 +40,9 @@ O `torch` e o `pyannote` do comando `vozes` continuam à parte (extra `vozes`; v
 
 ## Docker
 
-A imagem tem a esteira em CPU (com o ffmpeg do Debian, que renderiza com `libx264`) e o painel. Os comandos
-`transcrever` e `vozes` hoje pedem uma GPU NVIDIA e ficam para a instalação no Windows.
+A imagem tem a esteira em CPU (com o ffmpeg do Debian, que renderiza com `libx264`), o painel e o `baixar` (yt-dlp).
+O `transcrever` roda na CPU (`--dispositivo auto` escolhe sozinho: modelo `medium` em int8, bem mais lento que numa
+GPU NVIDIA). O `vozes` precisa do `torch` e do `pyannote`, que não entram na imagem: rode-o fora dela.
 
 ```bash
 docker compose up --build                                   # painel em http://localhost:8765
