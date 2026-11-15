@@ -41,7 +41,7 @@ jobs:
         run: cp -r Contexto.exemplo ../Contexto
       - name: ruff
         if: matrix.python == '3.12'
-        run: ruff check esteira tests .claude/hooks
+        run: ruff check esteira tests scripts .claude/hooks
       - name: pytest
         run: python -m pytest -q -n auto
 

@@ -6,7 +6,7 @@ repos:
     hooks:
       - id: ruff-check
         # as mesmas pastas da CI e do CONTRIBUTING.md; as regras vêm do pyproject.toml
-        files: ^(esteira|tests|\.claude/hooks)/
+        files: ^(esteira|tests|scripts|\.claude/hooks)/
 
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
