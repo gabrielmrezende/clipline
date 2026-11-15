@@ -10,7 +10,10 @@
   }
 }
 
-/* Velocidade, áreas e atalhos, logo abaixo do vídeo. */
+/* Velocidade, áreas e atalhos, logo abaixo do vídeo. A borda dos controles tem 4:1 sobre o monitor. */
+.monitor {
+  --borda-monitor: #66749a;
+}
 .barra-player {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) auto;
@@ -30,7 +33,7 @@
   min-height: 36px;
   margin: 0;
   padding: 0.3rem 0.5rem;
-  border-color: var(--monitor-linha);
+  border-color: var(--borda-monitor);
   border-radius: 9px;
   background: var(--monitor-2);
   color: var(--monitor-texto);
@@ -47,7 +50,7 @@
   min-width: 36px;
   min-height: 36px;
   padding: 0;
-  border-color: var(--monitor-linha);
+  border-color: var(--borda-monitor);
   border-radius: 9px;
   background: var(--monitor-2);
   color: var(--monitor-texto);
@@ -234,6 +237,10 @@
 .remocoes button:hover:not(:disabled) {
   background: var(--monitor-2);
   color: #ffffff;
+}
+/* A lista rola: o contorno do foco vai para dentro, senão a rolagem o corta. */
+.remocoes button:focus-visible {
+  outline-offset: -2px;
 }
 .remocao-tempo,
 .remocao-duracao {
