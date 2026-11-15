@@ -11,7 +11,7 @@ authors:
   - given-names: Gabriel
     family-names: Rezende
     alias: gabrielmrezende
-version: 0.2.0
+version: 0.3.0
 license: MIT
 repository-code: "https://github.com/gabrielmrezende/clipline"
 url: "https://github.com/gabrielmrezende/clipline"
