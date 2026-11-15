@@ -1,4 +1,5 @@
 import json
+import sys
 import weakref
 from types import SimpleNamespace as N
 
@@ -223,3 +224,40 @@ def test_cli_transcrever_escolhe_dispositivo_e_idioma(tmp_path, monkeypatch, cap
     assert cli.principal(argv + ["--dispositivo", "cpu"]) == 0
     assert chamada["modos"][0] == ("medium", "cpu", "int8") and chamada["idioma"] == "en"
     assert "CPU" in capsys.readouterr().out
+
+
+def test_auto_com_gpu_guarda_a_cpu_de_reserva():
+    from esteira.transcrever import MODOS, MODOS_CPU, escolher_modos
+
+    assert escolher_modos("auto", lambda: True) == MODOS + MODOS_CPU
+
+
+def test_sem_cublas_o_auto_pula_para_a_cpu(tmp_path, capsys):
+    from esteira.transcrever import MODOS, MODOS_CPU
+
+    usados = []
+    modelos = [Modelo([RuntimeError("Library cublas64_12.dll is not found or cannot be loaded")]), Modelo([SEG])]
+
+    def criar(modo):
+        usados.append(modo)
+        return modelos.pop(0)
+
+    assert transcrever(tmp_path / "v.mp4", tmp_path, [], criar, modos=MODOS + MODOS_CPU)
+    assert usados == [MODOS[0], MODOS_CPU[0]]  # não tenta os outros modos de CUDA
+    assert "CPU" in capsys.readouterr().err
+
+
+def test_sem_cublas_e_cuda_explicito_o_erro_continua(tmp_path):
+    from esteira.transcrever import MODOS
+
+    falha = Modelo([RuntimeError("Library cublas64_12.dll is not found or cannot be loaded")])
+    with pytest.raises(RuntimeError, match="cublas"):
+        transcrever(tmp_path / "v.mp4", tmp_path, [], fabrica(falha), modos=MODOS)
+
+
+def test_gpu_visivel_sem_cublas_nao_conta_como_cuda(monkeypatch):
+    from esteira import transcrever as modulo
+
+    monkeypatch.setattr(modulo, "_cublas_carrega", lambda: False)
+    monkeypatch.setitem(sys.modules, "ctranslate2", N(get_cuda_device_count=lambda: 1))
+    assert modulo.cuda_disponivel() is False

@@ -21,6 +21,9 @@ MODOS_CPU = [
 ]
 DISPOSITIVOS = ("auto", "cuda", "cpu")
 FALTA_DE_MEMORIA = ("out of memory", "alloc_failed", "status_not_initialized", "bad_alloc", "cannot allocate memory")
+# A GPU aparece, mas falta a biblioteca do CUDA (cuBLAS/cuDNN) que o CTranslate2 carrega na hora de rodar: quem
+# instalou só o pacote base, ou o driver sem o toolkit. No modo auto, isso recua para a CPU em vez de parar.
+FALTA_DE_BIBLIOTECA = ("cublas", "cudnn", "cannot be loaded", "is not found", "cuda driver", "no cuda-capable")
 LIMITE_PROMPT = 200  # caracteres do initial_prompt (o Whisper usa só o fim de um prompt longo)
 
 
@@ -69,13 +72,29 @@ def _registrar_dlls_nvidia() -> None:
             os.environ["PATH"] = f"{caminho}{os.pathsep}{os.environ['PATH']}"
 
 
+def _cublas_carrega() -> bool:
+    """O CTranslate2 só usa a GPU com o cuBLAS do CUDA 12. Ver a placa não basta: sem a biblioteca, ele quebra depois
+    de baixar o modelo grande."""
+    import ctypes
+
+    nomes = ("cublas64_12.dll",) if os.name == "nt" else ("libcublas.so.12", "libcublas.so")
+    for nome in nomes:
+        try:
+            ctypes.CDLL(nome)
+            return True
+        except OSError:
+            continue
+    return False
+
+
 def cuda_disponivel() -> bool:
-    """Há GPU NVIDIA que o faster-whisper (CTranslate2) enxerga? Só pergunta ao driver, não carrega modelo."""
+    """Há GPU NVIDIA que o faster-whisper (CTranslate2) consegue usar? Pergunta ao driver e confere o cuBLAS, sem
+    carregar modelo."""
     _registrar_dlls_nvidia()
     try:
         import ctranslate2
 
-        return ctranslate2.get_cuda_device_count() > 0
+        return ctranslate2.get_cuda_device_count() > 0 and _cublas_carrega()
     except Exception:  # sem o pacote, sem driver ou com DLL quebrada: trata como sem GPU
         return False
 
@@ -84,8 +103,10 @@ def escolher_modos(dispositivo: str, tem_cuda: Callable[[], bool] = cuda_disponi
     """Os modos a tentar, do mais pesado ao mais leve. `cuda` é o de sempre; `auto` recua para a CPU sem GPU."""
     if dispositivo not in DISPOSITIVOS:
         raise ValueError(f"dispositivo deve ser um destes: {', '.join(DISPOSITIVOS)}")
-    if dispositivo == "cuda" or (dispositivo == "auto" and tem_cuda()):
+    if dispositivo == "cuda":
         return list(MODOS)
+    if dispositivo == "auto" and tem_cuda():
+        return list(MODOS) + list(MODOS_CPU)  # a CPU fica de reserva se a biblioteca do CUDA falhar na hora
     return list(MODOS_CPU)
 
 
@@ -128,7 +149,9 @@ def transcrever(
         raise FileExistsError(f"Transcrição já existe: {arquivo}")
 
     modelo = segmentos = None
-    for indice, modo in enumerate(modos):
+    indice = 0
+    while indice < len(modos):
+        modo = modos[indice]
         modelo = segmentos = None
         gc.collect()
         try:
@@ -146,9 +169,17 @@ def transcrever(
             break
         except (RuntimeError, MemoryError) as erro:
             mensagem = str(erro).lower()
+            cpu = next((i for i in range(indice + 1, len(modos)) if modos[i][1] == "cpu"), None)
+            if modo[1] == "cuda" and cpu is not None and any(m in mensagem for m in FALTA_DE_BIBLIOTECA):
+                print(f"Aviso: a GPU não pôde ser usada ({str(erro).strip()[:120]}). Seguindo na CPU, bem mais "
+                      "lenta; para usar a GPU, instale as bibliotecas do CUDA 12 (nvidia-cublas-cu12 e "
+                      "nvidia-cudnn-cu12).", file=sys.stderr)
+                indice = cpu
+                continue
             memoria = isinstance(erro, MemoryError) or any(m in mensagem for m in FALTA_DE_MEMORIA)
             if not memoria or indice == len(modos) - 1:
                 raise
+            indice += 1
 
     saida.mkdir(parents=True, exist_ok=True)
     palavras = [p for bloco in blocos for p in bloco]
