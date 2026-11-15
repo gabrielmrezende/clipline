@@ -944,7 +944,7 @@ def test_fechar_o_painel_no_meio_nao_comeca_a_proxima_geracao(ambiente):
     parada.join(10)
     assert not parada.is_alive()
     final = fila.pedido(r.json()["id"])
-    assert final.estado == "erro" and final.mensagem == "o painel foi fechado no meio deste pedido"
+    assert final.estado == "interrompido" and final.mensagem == "o painel foi fechado no meio deste pedido"
     assert provedor.prompts == ["Ruas vazias ao amanhecer Um"]  # a segunda geração paga não começou
     assert [i["arquivo"] for i in ler_ia(trabalho)] == [f"{CHAVE_UM}-ia-1.jpg"]  # a primeira ficou registrada
 
