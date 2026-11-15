@@ -28,7 +28,24 @@ def _erro_da_pipeline(acao: str, erro: Exception) -> ErroVozes:
     return ErroVozes(_sem_token(f"{acao}: {type(erro).__name__}: {erro}"))
 
 
-def criar_pipeline() -> Callable[[Path, int], list[tuple[float, float, str]]]:
+DISPOSITIVOS = ("auto", "cuda", "cpu")
+AVISO_CPU = "Separação de vozes na CPU, sem GPU NVIDIA: funciona, mas um episódio longo pode levar bem mais tempo."
+
+
+def escolher_dispositivo(pedido: str, cuda_disponivel: bool) -> str:
+    """`auto`: a GPU se houver (como sempre), senão a CPU. `cuda` sem GPU é erro, para não demorar sem avisar."""
+    if pedido not in DISPOSITIVOS:
+        raise ErroVozes(f"dispositivo deve ser um destes: {', '.join(DISPOSITIVOS)}")
+    if pedido == "cuda" and not cuda_disponivel:
+        raise ErroVozes("GPU NVIDIA não encontrada pelo torch: use --dispositivo cpu ou auto.")
+    if pedido == "cpu" or not cuda_disponivel:
+        return "cpu"
+    return "cuda"
+
+
+def criar_pipeline(
+    dispositivo: str = "auto", avisar: Callable[[str], None] = print
+) -> Callable[[Path, int], list[tuple[float, float, str]]]:
     token = os.environ.get("HF_TOKEN")
     if not token:
         raise ErroVozes(MENSAGEM_SEM_TOKEN)
@@ -40,6 +57,7 @@ def criar_pipeline() -> Callable[[Path, int], list[tuple[float, float, str]]]:
         raise ErroVozes(
             'instale o extra vozes: python -m pip install -e ".[vozes]"'
         ) from erro
+    alvo = escolher_dispositivo(dispositivo, torch.cuda.is_available())  # antes de baixar o modelo
 
     try:
         pipeline = Pipeline.from_pretrained(MODELO, use_auth_token=token)
@@ -50,8 +68,10 @@ def criar_pipeline() -> Callable[[Path, int], list[tuple[float, float, str]]]:
             f"não foi possível carregar {MODELO}: aceite os termos de {MODELO} e de "
             "pyannote/segmentation-3.0 no Hugging Face e confira o HF_TOKEN."
         )
-    if torch.cuda.is_available():
+    if alvo == "cuda":
         pipeline.to(torch.device("cuda"))
+    else:
+        avisar(AVISO_CPU)
 
     def diarizar(wav: Path, pessoas: int) -> list[tuple[float, float, str]]:
         resultado = pipeline(str(wav), num_speakers=pessoas)
