@@ -7,6 +7,8 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 ### Dependências
 - `av` aceita a 18 (o teto era 17). O 18.1 decodifica wav e mp4 igual ao 17 pelo faster-whisper; o 19 quebra a
   transcrição (`metadata_errors`) e continua fora.
+- Painel no TypeScript 7. Ele confere as importações de `.css` só de efeito, que ganharam a declaração
+  `painel-web/src/estilos.d.ts`.
 - Ações do CI na versão 7 (`checkout`, `setup-python`, `setup-node`).
 - O Dependabot não propõe mais o `av` 19 nem a pilha do `vozes` (`torch`, `torchaudio`, `pyannote.audio`,
   `huggingface_hub`): o CI não instala nenhum dos dois e passaria verde com versões que quebram.
