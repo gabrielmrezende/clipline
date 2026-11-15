@@ -1,4 +1,5 @@
 import { Link, NavLink, Route, Routes, useLocation } from "react-router-dom";
+import { AlternarTema } from "./componentes/AlternarTema";
 import { ErroDaTela } from "./componentes/ErroDaTela";
 import { MarcaClipline } from "./componentes/MarcaClipline";
 import { Configuracoes } from "./telas/Configuracoes";
@@ -19,11 +20,14 @@ export function App() {
           <Link to="/" className="marca-link" title="Episódios">
             <MarcaClipline />
           </Link>
-          {naEntrada ? null : (
-            <NavLink to="/configuracoes" className="topo-link">
-              Configurações
-            </NavLink>
-          )}
+          <div className="topo-acoes">
+            <AlternarTema />
+            {naEntrada ? null : (
+              <NavLink to="/configuracoes" className="topo-link">
+                Configurações
+              </NavLink>
+            )}
+          </div>
         </div>
       </header>
       <ErroDaTela key={pathname}>

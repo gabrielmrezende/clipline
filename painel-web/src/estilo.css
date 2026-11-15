@@ -41,7 +41,7 @@
   --largura: 68rem;
 }
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-tema="claro"]) {
     color-scheme: dark;
     --papel: #0e1627;
     --nevoa: #152038;
