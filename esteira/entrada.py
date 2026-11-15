@@ -170,7 +170,7 @@ def baixar(
         raise FileExistsError(f"Vídeo já baixado: {destino} (use --forcar para baixar de novo)")
     destino.parent.mkdir(parents=True, exist_ok=True)
     opcoes = {
-        "outtmpl": str(destino.with_suffix("")) + ".%(ext)s",
+        "outtmpl": str(destino.with_suffix("")).replace("%", "%%") + ".%(ext)s",  # % na pasta não vira campo
         "format": FORMATO,
         "merge_output_format": "mp4",
         "noplaylist": True,
