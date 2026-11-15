@@ -134,6 +134,10 @@ def test_ler_trecho_nao_encontrado(ambiente):
     construir, pasta, _ = ambiente
     cliente, _ = construir()
     assert cliente.get(_url(n=9)).status_code == 404
+    (pasta / "episodio.json").unlink()
+    sem_episodio = cliente.get(_url())
+    assert sem_episodio.status_code == 404
+    assert "transcrever" in sem_episodio.json()["detail"] and "Errno" not in sem_episodio.json()["detail"]
     (pasta / "transcricao" / "palavras.json").unlink()
     assert cliente.get(_url()).status_code == 404
 

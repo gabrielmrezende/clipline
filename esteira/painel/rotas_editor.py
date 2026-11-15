@@ -89,6 +89,10 @@ def _contexto(requisicao: Request, ep: str, n: int) -> _Contexto:
         raise HTTPException(422, f"palavras.json ilegível: {erro}") from erro
     try:
         duracao = float(json.loads((pasta / "episodio.json").read_text("utf-8"))["duracao"])
+    except FileNotFoundError:
+        raise HTTPException(
+            404, "Este episódio não tem episodio.json. Ele é criado pelo transcrever: rode-o neste episódio."
+        ) from None
     except (OSError, ValueError, KeyError, TypeError) as erro:
         raise HTTPException(422, f"episodio.json ilegível: {erro}") from erro
     corte = next(c for c in cortes if c.numero == n)

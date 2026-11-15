@@ -31,6 +31,16 @@ mkdirSync(join(episodio, "transcricao"), { recursive: true });
 
 const palavras = Array.from({ length: 30 }, (_, i) => ({ texto: `p${i}`, inicio: i - 0.4, fim: i + 0.4 }));
 gravar(join(episodio, "transcricao", "palavras.json"), palavras);
+// O que o transcrever grava; o vídeo não existe (a montagem e a prévia de música são falsas no e2e).
+gravar(join(episodio, "episodio.json"), {
+  video: join(raiz, "episodio-falso.mp4"),
+  quadro: "Entre Assuntos",
+  numero: 99,
+  convidado: "Convidado (teste)",
+  duracao: 30,
+  tamanho: 0,
+  modificado: 0,
+});
 
 // Imagem minúscula embutida: o navegador não busca nada na internet para as candidatas.
 const PIXEL =
