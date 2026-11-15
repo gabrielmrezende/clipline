@@ -52,16 +52,16 @@ Para acrescentar um idioma, inclua as três listas em `esteira/idiomas.py` com o
 
 ### O que continua em português
 
-Conferido nesta mudança, sem alteração:
+Conferido e ajustado:
 
 - **Glossário** (`Contexto/glossario.md`): os nomes valem em qualquer idioma. Os títulos das seções que contam como
   pessoas reais (`## Apresentadores`, `## Convidados`, `## Pessoas`, `## Apelidos`, `## Cargos`) são parte do formato
   do arquivo e continuam em português.
 - **Legenda**: a quebra em blocos é a mesma em qualquer idioma. O início de frase vai para minúscula (estilo do
-  canal), o que em inglês transforma o pronome "I" em "i" no começo da frase. Correção sugerida, fora desta
-  mudança: em `legenda._caixa`, manter maiúscula a palavra "I" e as contrações ("I'm", "I'll").
-- **Cartões de notícia e encerramento**: os textos fixos "Fonte:" (`cartao.linha_fonte`) e "SIGA"
-  (`cartao.gerar_sobreposicao`) estão em português. A manchete, o veículo e a data são os que o agente escreve.
+  canal), menos o pronome "I" do inglês e as contrações dele ("I'm", "I'll"), que ficam maiúsculos.
+- **Cartões de notícia e encerramento**: os textos fixos seguem o idioma do canal: "Fonte:"/"Source:"/"Fuente:" no
+  cartão e "SIGA"/"FOLLOW"/"SIGUE" no encerramento (`idiomas.TEXTOS_FIXOS`; idioma sem tradução usa o português).
+  A manchete, o veículo e a data são os que o agente escreve.
 - Interface, mensagens, skills e `Contexto/` continuam em português.
 
 ## Entrada por link

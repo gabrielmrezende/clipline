@@ -63,3 +63,9 @@ def test_sobreposicao_sem_logo_e_erro_claro(tmp_path, monkeypatch):
     with pytest.raises(ErroMidia, match="logo não encontrada"):
         cartao.gerar_sobreposicao(tmp_path / "s.png")
     assert not (tmp_path / "s.png").exists()
+
+
+def test_linha_fonte_no_idioma_do_canal():
+    assert cartao.linha_fonte("BBC", "14/08/2002", idioma="en") == "Source: BBC, 14/08/2002"
+    assert cartao.linha_fonte("El País", "14/08/2002", idioma="es") == "Fuente: El País, 14/08/2002"
+    assert cartao.linha_fonte("Le Monde", "14/08/2002", idioma="fr") == "Fonte: Le Monde, 14/08/2002"

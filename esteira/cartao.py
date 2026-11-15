@@ -2,7 +2,7 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
 
-from esteira import config
+from esteira import config, idiomas
 from esteira.caminhos import FONTES, LOGO
 from esteira.midia import ErroMidia
 
@@ -18,8 +18,9 @@ ARROBA = "@tudoepoliticabr"
 AZUL = "#1E50DC"
 
 
-def linha_fonte(veiculo: str, data: str) -> str:
-    return f"Fonte: {veiculo}, {data}"
+def linha_fonte(veiculo: str, data: str, idioma: str | None = None) -> str:
+    idioma = idioma or config.atual().transcricao_idioma
+    return f"{idiomas.texto_fixo(idioma, 'fonte')}: {veiculo}, {data}"
 
 
 def _quebrar(texto: str, fonte: ImageFont.FreeTypeFont) -> list[str]:
@@ -59,7 +60,7 @@ def gerar_sobreposicao(saida: Path) -> Path:
     if arroba:  # sem arroba no clipline.toml, só a logo
         desenho = ImageDraw.Draw(imagem)
         fonte = ImageFont.truetype(str(ARQUIVO_FONTE), 66)
-        siga = "SIGA "
+        siga = idiomas.texto_fixo(config.atual().transcricao_idioma, "siga") + " "
         largura = fonte.getlength(siga + arroba)
         x = (LARGURA - largura) / 2
         y = 70 + logo.height + 30

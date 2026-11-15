@@ -62,3 +62,16 @@ def cargos(idioma: str) -> tuple[str, ...]:
     Idioma sem lista: os de todos os idiomas conhecidos, porque no filtro de pessoa real sobrar é melhor que faltar."""
     grupos = [CARGOS[idioma], CARGOS["en"]] if idioma in CARGOS else list(CARGOS.values())
     return tuple(dict.fromkeys(cargo for grupo in grupos for cargo in grupo))
+
+
+# Textos fixos que a esteira escreve na imagem: a linha da fonte do cartão de notícia e o convite do encerramento.
+# Idioma sem tradução usa o português, como antes.
+TEXTOS_FIXOS: dict[str, dict[str, str]] = {
+    "pt": {"fonte": "Fonte", "siga": "SIGA"},
+    "en": {"fonte": "Source", "siga": "FOLLOW"},
+    "es": {"fonte": "Fuente", "siga": "SIGUE"},
+}
+
+
+def texto_fixo(idioma: str, chave: str) -> str:
+    return TEXTOS_FIXOS.get(idioma, TEXTOS_FIXOS[PADRAO])[chave]

@@ -204,3 +204,17 @@ def test_cue_com_e_sem_tempos_continuam_iguais():
     from esteira.modelos import Cue
 
     assert Cue(0, 1, ["a"]) == Cue(0, 1, ["a"], palavras=[[0, 1]])
+
+
+@pytest.mark.parametrize("palavra", ["I", "I'm", "I'll", "I’ve", '"I'])
+def test_pronome_i_do_ingles_fica_maiusculo_no_comeco_da_frase(palavra):
+    from esteira.legenda import _caixa
+
+    assert _caixa(palavra, True, set()) == palavra
+
+
+def test_comeco_de_frase_comum_continua_em_minuscula():
+    from esteira.legenda import _caixa
+
+    assert _caixa("It", True, set()) == "it"
+    assert _caixa("Isso", True, set()) == "isso"
